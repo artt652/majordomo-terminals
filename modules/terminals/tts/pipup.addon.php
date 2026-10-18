@@ -33,6 +33,8 @@ class pipup extends tts_addon
         $voices['device'] = 'Голос устройства (device)';
         return array(
             array('NAME' => 'PORT', 'TITLE' => 'Порт PiPup', 'HINT' => 'пусто — как у плеера, иначе 7979'),
+            array('NAME' => 'VOLUME', 'TITLE' => 'Громкость сообщений', 'TYPE' => 'number',
+                'HINT' => 'пусто — как у звука устройства; 1–100 — доля от неё'),
             // по умолчанию — прежнее место настройки, «Имя пользователя» плеера
             array('NAME' => 'VOICE', 'TITLE' => 'Голос сообщений', 'TYPE' => 'combo', 'OPTIONS' => $voices,
                 'DEFAULT' => isset($this->terminal['PLAYER_USERNAME']) ? (string)$this->terminal['PLAYER_USERNAME'] : '',
@@ -170,7 +172,10 @@ class pipup extends tts_addon
         if ($local !== false && function_exists('getMediaDurationSeconds')) {
             $duration = max($duration, (int)getMediaDurationSeconds($local) + 2);
         }
-        return $this->sendSound($soundUrl, $phrase, '🔊 Уведомление', $duration, null, $this->messageId($phrase));
+        // «Громкость сообщений» (1–100) — громкость звука окна относительно громкости устройства
+        $settings = function_exists('terminalsAddonSettings') ? terminalsAddonSettings($this->terminal, 'tts', 'pipup') : array();
+        $volume = (isset($settings['VOLUME']) && (int)$settings['VOLUME'] > 0) ? min(100, (int)$settings['VOLUME']) / 100 : null;
+        return $this->sendSound($soundUrl, $phrase, '🔊 Уведомление', $duration, $volume, $this->messageId($phrase));
     }
 
     // Голос устройства: в поле «Голос сообщений» указано device

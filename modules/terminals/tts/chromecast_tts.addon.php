@@ -24,7 +24,8 @@ class chromecast_tts extends mediaplayer
     public function restoreState($state)
     {
         if (empty($state['file'])) {
-            return false;
+            // музыка не играла — mediaplayer вернёт только громкость
+            return parent::restoreState($state);
         }
         include_once(DIR_MODULES . 'app_player/libs/castv2/Chromecast.php');
         $port = empty($this->terminal['PLAYER_PORT']) ? 8009 : $this->terminal['PLAYER_PORT'];

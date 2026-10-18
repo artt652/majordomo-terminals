@@ -1,5 +1,7 @@
 <?php
 
+include_once(DIR_MODULES . 'terminals/terminals_settings.inc.php');
+
 class mediaplayer extends tts_addon
 {
     // Свои свойства: в базовом tts_addon $title объявлен private, запись из наследника
@@ -23,6 +25,7 @@ class mediaplayer extends tts_addon
         if ($cached_file_url == '') {
             return false;
         }
+        $this->applyMessageVolume();
         // очередь, порядок и восстановление плеера ведёт модуль terminals (terminals_queue.inc.php)
         playMedia($cached_file_url, $this->terminal['TITLE']);
         return true;
@@ -50,6 +53,38 @@ class mediaplayer extends tts_addon
         return '';
     }
 
+    // Поля карточки терминала для этого типа TTS (modules/terminals/terminals_settings.inc.php)
+    function settingsFields()
+    {
+        return array(
+            array('NAME' => 'MESSAGE_VOLUME', 'TITLE' => 'Громкость сообщений', 'TYPE' => 'number',
+                'HINT' => 'пусто — не менять; 1–100 — на время сообщений, потом прежняя'),
+        );
+    }
+
+    // Громкость сообщений из настроек (1–100) или 0, если не задана
+    protected function messageVolume()
+    {
+        $settings = function_exists('terminalsAddonSettings') ? terminalsAddonSettings($this->terminal, 'tts', get_class($this)) : array();
+        $volume = isset($settings['MESSAGE_VOLUME']) ? (int)$settings['MESSAGE_VOLUME'] : 0;
+        return ($volume > 0 && $volume <= 100) ? $volume : 0;
+    }
+
+    // Перед сообщением выставить громкость сообщений. Только если плеер сообщает свою громкость:
+    // иначе её нечем будет вернуть после сообщений
+    protected function applyMessageVolume()
+    {
+        $volume = $this->messageVolume();
+        if (!$volume) {
+            return;
+        }
+        $this->playerSession();
+        $played = getPlayerStatus($this->terminal['NAME']);
+        if (is_array($played) && isset($played['volume']) && (int)$played['volume'] != $volume) {
+            setPlayerVolume($this->terminal['TITLE'], $volume);
+        }
+    }
+
     // Сообщения этого терминала идут через очередь модуля terminals
     public function useQueue()
     {
@@ -61,21 +96,33 @@ class mediaplayer extends tts_addon
     {
         $this->playerSession();
         $played = getPlayerStatus($this->terminal['NAME']);
-        if (!is_array($played) || !isset($played['state']) || $played['state'] != 'playing') {
+        if (!is_array($played) || !isset($played['state'])) {
             return false;
         }
-        $file = $this->currentFile($played);
-        if ($file == '' || preg_match('/cms[\\\\\/]cached[\\\\\/]voice/i', $file)) {
-            return false;
+        $volume = (isset($played['volume']) && (int)$played['volume'] > 0) ? (int)$played['volume'] : 0;
+        $file = ($played['state'] == 'playing') ? $this->currentFile($played) : '';
+        if ($file != '' && !preg_match('/cms[\\\\\/]cached[\\\\\/]voice/i', $file)) {
+            $state = array('file' => $file, 'time' => isset($played['time']) ? (int)$played['time'] : 0);
+            $track_id = $this->currentTrackId($played);
+            if ($track_id >= 0) {
+                $state['track_id'] = $track_id;
+            }
+            if ($volume) {
+                $state['volume'] = $volume;
+            }
+            return $state;
         }
-        $state = array('file' => $file, 'time' => isset($played['time']) ? (int)$played['time'] : 0);
-        if (isset($played['track_id']) && (int)$played['track_id'] >= 0) {
-            $state['track_id'] = (int)$played['track_id'];
+        // музыка не играет, но для сообщений своя громкость — запомнить прежнюю, чтобы вернуть её
+        if ($volume && $this->messageVolume()) {
+            return array('volume' => $volume);
         }
-        if (isset($played['volume']) && (int)$played['volume'] > 0) {
-            $state['volume'] = (int)$played['volume'];
-        }
-        return $state;
+        return false;
+    }
+
+    // Номер текущего трека в плейлисте (для возврата через pl_play) или -1
+    protected function currentTrackId($played)
+    {
+        return (isset($played['track_id']) && (int)$played['track_id'] >= 0) ? (int)$played['track_id'] : -1;
     }
 
     // Играет ли плеер сообщение: true — да, false — нет, null — неизвестно (тогда очередь
@@ -118,6 +165,12 @@ class mediaplayer extends tts_addon
     public function restoreState($state)
     {
         if (empty($state['file'])) {
+            // музыка не играла — вернуть только громкость
+            if (!empty($state['volume'])) {
+                $this->playerSession();
+                setPlayerVolume($this->terminal['TITLE'], (int)$state['volume']);
+                return true;
+            }
             return false;
         }
         $title = $this->terminal['TITLE'];
@@ -200,6 +253,7 @@ class mediaplayer extends tts_addon
     // Для плееров, у которых play() заменяет плейлист (mpd_tts, lms_tts, kodi_tts). Возвращает успех
     protected function playInPlaylist($url)
     {
+        $this->applyMessageVolume();
         $this->playerSession();
         // прежние сообщения уже прозвучали — убираем их, чтобы плейлист не рос
         $this->playlistCleanup();
