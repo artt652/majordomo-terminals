@@ -427,6 +427,7 @@ class terminals extends module
         SQLDropTable('terminals_state');
         SQLDropTable('terminals_messages');
         SQLDropTable('terminals_groups');
+        SQLDropTable('terminals_colors');
         unsubscribeFromEvent($this->name, 'SAY');
         unsubscribeFromEvent($this->name, 'SAYTO');
         unsubscribeFromEvent($this->name, 'ASK');
@@ -507,6 +508,10 @@ class terminals extends module
  terminals_messages: CHAT varchar(50) NOT NULL DEFAULT ''
  terminals_messages: SEND_ID varchar(32) NOT NULL DEFAULT ''
  terminals_messages: INDEX (TO_NAME)
+
+ terminals_colors: ID int(10) unsigned NOT NULL auto_increment
+ terminals_colors: CHAT_KEY varchar(100) NOT NULL DEFAULT ''
+ terminals_colors: COLOR varchar(10) NOT NULL DEFAULT ''
 
  terminals_groups: ID int(10) unsigned NOT NULL auto_increment
  terminals_groups: TITLE varchar(255) NOT NULL DEFAULT ''

@@ -169,3 +169,124 @@ function terminalsSaveSettings(&$rec, $kind, $addon, $posted, $others_json = '')
         }
     }
 }
+
+// Статус терминала для страницы «Сообщения»: online — активность не старше 3 минут
+// (страница «Сообщения», shoutbox, command.php, ping каждый час); reachable — устройство на связи
+// по данным ядра (IS_ONLINE); last — время последней активности для показа
+function terminalsStatus($terminal_rec)
+{
+    $last = !empty($terminal_rec['LATEST_ACTIVITY']) ? strtotime($terminal_rec['LATEST_ACTIVITY']) : 0;
+    if ($last <= 0) {
+        $last = 0;
+    }
+    return array(
+        'online' => ($last && time() - $last <= 180) ? 1 : 0,
+        'reachable' => !empty($terminal_rec['IS_ONLINE']) ? 1 : 0,
+        'last' => $last ? (date('Y-m-d', $last) == date('Y-m-d') ? date('H:i', $last) : date('d.m H:i', $last)) : '',
+    );
+}
+
+// Значения полей дополнения для показа: подписи из описания полей, пароли скрыты, пустое — «по умолчанию»
+function terminalsSettingsForView($fields, $values)
+{
+    $result = array();
+    foreach (terminalsFieldsForForm($fields) as $field) {
+        $value = isset($values[$field['NAME']]) ? (string)$values[$field['NAME']] : '';
+        if ($field['TYPE'] == 'password') {
+            $value = ($value != '') ? '••••••' : '';
+        } elseif ($field['TYPE'] == 'checkbox') {
+            $value = ($value == '1') ? terminalsLang('TERMINALS_YES') : terminalsLang('TERMINALS_NO');
+        } elseif (($field['TYPE'] == 'select' || $field['TYPE'] == 'combo') && $value != '') {
+            foreach ($field['OPTIONS'] as $option) {
+                if ($option[0] === $value) {
+                    $value = $option[1];
+                }
+            }
+        }
+        if ($value == '') {
+            $value = ($field['DEFAULT'] != '') ? $field['DEFAULT'] : terminalsLang('TERMINALS_BY_DEFAULT');
+        }
+        $result[] = array('title' => strip_tags($field['TITLE']), 'value' => $value);
+    }
+    return $result;
+}
+
+// Возможности и текущие настройки терминала (только для просмотра) — карточка на странице «Сообщения»
+function terminalsInfo($terminal_rec)
+{
+    $info = array(
+        'name' => $terminal_rec['NAME'],
+        'title' => $terminal_rec['TITLE'],
+        'host' => (string)$terminal_rec['HOST'],
+        'room' => '',
+        'min_level' => (string)$terminal_rec['MIN_MSG_LEVEL'],
+        'status' => terminalsStatus($terminal_rec),
+        'tts' => null,
+        'player' => null,
+    );
+    if (!empty($terminal_rec['LOCATION_ID'])) {
+        $room = SQLSelectOne("SELECT TITLE FROM locations WHERE ID=" . (int)$terminal_rec['LOCATION_ID']);
+        $info['room'] = isset($room['TITLE']) ? $room['TITLE'] : '';
+    }
+    // озвучка (TTS): что умеет дополнение — по его необязательным методам
+    if ($terminal_rec['CANTTS'] && $terminal_rec['TTS_TYPE'] != '') {
+        $type = preg_replace('/[^\w]/', '', $terminal_rec['TTS_TYPE']);
+        $tts = array('type' => $type, 'title' => $type, 'capabilities' => array(), 'settings' => array());
+        $file = DIR_MODULES . 'terminals/tts/' . $type . '.addon.php';
+        // одноимённое дополнение плеера (majordroid) — тот же класс, не подключаем
+        if (is_file($file) && !file_exists(DIR_MODULES . 'app_player/addons/' . $type . '.addon.php')) {
+            include_once DIR_MODULES . 'terminals/tts_addon.class.php';
+            include_once $file;
+            if (class_exists($type)) {
+                $addon = new $type($terminal_rec);
+                if (isset($addon->title) && is_string($addon->title) && $addon->title != '') {
+                    $tts['title'] = $addon->title;
+                }
+                $caps = array('say' => 'TERMINALS_CAP_SAY', 'showMessage' => 'TERMINALS_CAP_IMAGE', 'playFile' => 'TERMINALS_CAP_SOUND',
+                    'sendVideo' => 'TERMINALS_CAP_VIDEO', 'ask' => 'TERMINALS_CAP_ASK', 'useQueue' => 'TERMINALS_CAP_QUEUE',
+                    'restoreState' => 'TERMINALS_CAP_RESTORE');
+                foreach ($caps as $method => $key) {
+                    if (method_exists($addon, $method) && ($method != 'useQueue' || $addon->useQueue())) {
+                        $tts['capabilities'][] = terminalsLang($key);
+                    }
+                }
+                $tts['settings'] = terminalsSettingsForView(terminalsAddonFields($addon, 'tts'), terminalsAddonSettings($terminal_rec, 'tts', $type));
+            }
+        }
+        $info['tts'] = $tts;
+    }
+    // плеер: возможности — публичные методы дополнения app_player (как в карточке терминала)
+    if ($terminal_rec['CANPLAY'] && $terminal_rec['PLAYER_TYPE'] != '') {
+        $type = preg_replace('/[^\w]/', '', $terminal_rec['PLAYER_TYPE']);
+        $player = array('type' => $type, 'title' => $type, 'capabilities' => array(), 'settings' => array());
+        $file = DIR_MODULES . 'app_player/addons/' . $type . '.addon.php';
+        if (is_file($file) && is_file(DIR_MODULES . 'app_player/addons.php')) {
+            include_once DIR_MODULES . 'app_player/addons.php';
+            include_once $file;
+            if (class_exists($type) && is_subclass_of($type, 'app_player_addon', true)) {
+                $addon = new $type(null);
+                if (isset($addon->title) && $addon->title != '') {
+                    $player['title'] = strip_tags($addon->title);
+                }
+                $reflection = new ReflectionClass($addon);
+                foreach ($reflection->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
+                    $name = $method->getName();
+                    if ($method->getDeclaringClass()->getName() == $reflection->getName() && substr($name, 0, 2) != '__'
+                        && !in_array($name, array('destroy', 'command', 'settingsFields'))) {
+                        $player['capabilities'][] = $name;
+                    }
+                }
+                $values = terminalsAddonSettings($terminal_rec, 'player', $type);
+                if (!count($values)) {
+                    // настройки ещё не в JSON — прежние столбцы
+                    foreach (terminalsSettingsColumns() as $column) {
+                        $values[$column] = isset($terminal_rec[$column]) ? $terminal_rec[$column] : '';
+                    }
+                }
+                $player['settings'] = terminalsSettingsForView(terminalsAddonFields($addon, 'player'), $values);
+            }
+        }
+        $info['player'] = $player;
+    }
+    return $info;
+}

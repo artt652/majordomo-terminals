@@ -117,7 +117,12 @@ $upload_name = function ($field) {
 
 // все терминалы: имя => запись
 $all_terminals = array();
-foreach (SQLSelect("SELECT ID, NAME, TITLE, LOCATION_ID FROM terminals ORDER BY TITLE") as $t) {
+// страница открыта — терминал в сети: отметить активность, как shoutbox и command.php (не чаще раза в минуту)
+if (!empty($me['ID']) && (empty($me['LATEST_ACTIVITY']) || strtotime($me['LATEST_ACTIVITY']) < time() - 60)) {
+    $activity = array('ID' => (int)$me['ID'], 'LATEST_ACTIVITY' => date('Y-m-d H:i:s'), 'IS_ONLINE' => 1);
+    SQLUpdate('terminals', $activity);
+}
+foreach (SQLSelect("SELECT ID, NAME, TITLE, LOCATION_ID, LATEST_ACTIVITY, IS_ONLINE FROM terminals ORDER BY TITLE") as $t) {
     $all_terminals[$t['NAME']] = $t;
 }
 $me_name = !empty($me['ID']) ? $me['NAME'] : '';
@@ -187,6 +192,20 @@ foreach ($all_terminals as $name => $t) {
         $chats[] = array('key' => 'term:' . $name, 'type' => 'term', 'title' => $t['TITLE'], 'members' => array($name));
     }
 }
+// свои цвета аватарок (общие для всех устройств): ключ чата => #rrggbb
+$colors = array();
+foreach (SQLSelect("SELECT CHAT_KEY, COLOR FROM terminals_colors") as $row) {
+    $colors[$row['CHAT_KEY']] = $row['COLOR'];
+}
+foreach ($chats as $i => $chat) {
+    $chats[$i]['color'] = isset($colors[$chat['key']]) ? $colors[$chat['key']] : '';
+}
+// статус терминалов: в сети, на связи, последняя активность
+$statuses = array();
+foreach ($all_terminals as $name => $t) {
+    $statuses[$name] = terminalsStatus($t);
+}
+
 $find_chat = function ($key) use (&$chats) {
     foreach ($chats as $chat) {
         if ($chat['key'] === $key) {
@@ -201,6 +220,28 @@ $json_out = function ($data) {
     echo json_encode($data);
     exit;
 };
+
+// цвет аватарки чата (терминала, комнаты, группы…) — общий для всех устройств; пусто — по умолчанию
+if (gr('mode') == 'set_color') {
+    $key = (string)gr('chat');
+    $color = strtolower(trim((string)gr('color')));
+    $ok = 0;
+    if ($find_chat($key) || $key == 'term:' . $me_name) {
+        SQLExec("DELETE FROM terminals_colors WHERE CHAT_KEY='" . DBSafe($key) . "'");
+        if (preg_match('/^#[0-9a-f]{6}$/', $color)) {
+            $row = array('CHAT_KEY' => $key, 'COLOR' => $color);
+            SQLInsert('terminals_colors', $row);
+        }
+        $ok = 1;
+    }
+    $json_out(array('ok' => $ok));
+}
+
+// карточка терминала: возможности и текущие настройки (только просмотр)
+if (gr('ajax') && gr('info') != '') {
+    $terminal_rec = terminalsFind(gr('info'));
+    $json_out(!empty($terminal_rec['ID']) ? terminalsInfo($terminal_rec) : array());
+}
 
 // своя группа: создать или изменить (название, участники); этот терминал всегда в группе
 if (gr('mode') == 'group_save' && $me_name != '') {
@@ -414,7 +455,7 @@ foreach ($shout_chats as $room_id => $chat_key) {
 $conversation = array_merge($conversation, $shout_rows);
 
 if (gr('ajax') && gr('list')) {
-    $json_out(array('messages' => $conversation, 'chats' => $chats));
+    $json_out(array('messages' => $conversation, 'chats' => $chats, 'status' => $statuses, 'colors' => $colors));
 }
 
 $out['ME_NAME'] = $me_name;
@@ -428,6 +469,15 @@ foreach ($all_terminals as $name => $t) {
     $titles[$name] = $t['TITLE'];
 }
 $out['TITLES_JSON'] = json_encode((object)$titles, $flags);
+$out['STATUS_JSON'] = json_encode((object)$statuses, $flags);
+$out['COLORS_JSON'] = json_encode((object)$colors, $flags);
+// кто вошёл на сайт с этого устройства — для карточки общего чата
+$user_name = '';
+if ($user_id) {
+    $user = SQLSelectOne("SELECT NAME, USERNAME FROM users WHERE ID=" . (int)$user_id);
+    $user_name = !empty($user['NAME']) ? $user['NAME'] : (isset($user['USERNAME']) ? $user['USERNAME'] : '');
+}
+$out['USER_NAME_JSON'] = json_encode($user_name, $flags);
 $out['MESSAGES_PAGE'] = 1;
 // пределы размера для проверки в браузере до отправки (МБ)
 $out['MAX_MEDIA_MB'] = round($max_media / 1048576, 1);

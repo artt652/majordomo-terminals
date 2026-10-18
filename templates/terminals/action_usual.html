@@ -45,6 +45,38 @@
 	.tg-avatar { width: 48px; height: 48px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center;
 		color: #fff; font-size: 20px; font-weight: 600; user-select: none; }
 	.tg-head .tg-avatar { width: 40px; height: 40px; font-size: 17px; }
+	.tg-avatar { position: relative; }
+	/* в сети — зелёная точка на аватарке */
+	.tg-avatar.tg-online::after { content: ''; position: absolute; right: 0; bottom: 0; width: 13px; height: 13px; border-radius: 50%;
+		background: #4fce5d; border: 2px solid var(--tg-panel); }
+	.tg-head .tg-avatar.tg-online::after { width: 11px; height: 11px; }
+	.tg-sub.tg-online-text { color: var(--tg-accent); }
+	.tg-clickable { cursor: pointer; }
+	/* индикатор вебсокета */
+	.tg-ws { width: 9px; height: 9px; border-radius: 50%; background: #9aa0a6; flex: none; margin-right: 2px; }
+	.tg-ws.tg-ws-on { background: #4fce5d; }
+	.tg-ws.tg-ws-wait { background: #f4b400; }
+	.tg-ws.tg-ws-off { background: #e53935; }
+	/* карточка чата */
+	.tg-info { width: 400px; }
+	.tg-info-top { display: flex; flex-direction: column; align-items: center; padding: 18px 18px 8px; position: relative; text-align: center; }
+	.tg-info-top .tg-avatar { width: 84px; height: 84px; font-size: 34px; margin-bottom: 8px; }
+	.tg-info-top .tg-avatar.tg-online::after { width: 16px; height: 16px; right: 3px; bottom: 3px; }
+	.tg-info-close { position: absolute; right: 8px; top: 8px; }
+	.tg-info-title { font-size: 19px; font-weight: 600; word-break: break-word; }
+	.tg-info-body { overflow-y: auto; padding: 0 0 12px; }
+	.tg-info-section { padding: 10px 18px 2px; border-top: 1px solid var(--tg-border); }
+	.tg-info-section h4 { margin: 0 0 6px; font-size: 13px; color: var(--tg-accent); font-weight: 600; }
+	.tg-info-row { display: flex; gap: 12px; padding: 3px 0; font-size: 14px; }
+	.tg-info-row span:first-child { color: var(--tg-muted); flex: 0 0 45%; }
+	.tg-info-row span:last-child { word-break: break-word; }
+	.tg-caps { display: flex; flex-wrap: wrap; gap: 5px; padding: 2px 0 6px; }
+	.tg-caps span { font-size: 12px; background: rgba(127,127,127,.15); border-radius: 10px; padding: 2px 9px; }
+	.tg-note { font-size: 13px; color: var(--tg-muted); padding: 2px 0 6px; }
+	.tg-palette { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 0 8px; }
+	.tg-palette button { width: 26px; height: 26px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; color: var(--tg-muted); background: none; font-size: 15px; }
+	.tg-palette button.tg-sel { border-color: var(--tg-text); }
+	.tg-info .tg-member { padding: 5px 0; }
 	.tg-list { flex: 1; overflow-y: auto; padding: 10px 10px 4px; display: flex; flex-direction: column; gap: 4px; }
 	.tg-empty { margin: auto; color: var(--tg-muted); background: rgba(0,0,0,.08); padding: 4px 12px; border-radius: 12px; font-size: 13px; }
 	.tg-app.tg-dark .tg-empty { background: rgba(255,255,255,.08); }
@@ -123,7 +155,7 @@
 	<div class="tg-side">
 		<div class="tg-head">
 			<div class="tg-grow">
-				<div class="tg-title"><#LANG_TERMINALS_MESSAGES#>[#if ME_TITLE!=""#] — [#ME_TITLE#][#endif ME_TITLE#]</div>
+				<div class="tg-title[#if ME_NAME!=""#] tg-clickable[#endif ME_NAME#]" id="tm_me_title"><#LANG_TERMINALS_MESSAGES#>[#if ME_TITLE!=""#] — [#ME_TITLE#][#endif ME_TITLE#]</div>
 				[#if ME_NAME=""#]
 				<div class="tg-sub"><#LANG_TERMINALS_THIS_TERMINAL#>:
 					<select id="tm_from">
@@ -136,6 +168,7 @@
 				<input type="hidden" id="tm_from" value="[#ME_NAME#]">
 				[#endif ME_NAME#]
 			</div>
+			<span class="tg-ws" id="tm_ws" title=""></span>
 			<button type="button" class="tg-icon" id="tm_new_group" title="<#LANG_TERMINALS_NEW_GROUP#>"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M19 8v6M16 11h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
 			<button type="button" class="tg-icon" id="tm_theme" title="<#LANG_TERMINALS_THEME#>"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/></svg></button>
 		</div>
@@ -149,8 +182,8 @@
 		<form id="tm_form" class="tg-chat-view" method="post" enctype="multipart/form-data" action="?" style="display:flex;flex-direction:column;flex:1;min-height:0;margin:0">
 			<div class="tg-head">
 				<button type="button" class="tg-icon tg-back" id="tm_back" title="<#LANG_TERMINALS_BACK#>"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-				<div class="tg-avatar" id="tm_chat_avatar"></div>
-				<div class="tg-grow">
+				<div class="tg-avatar tg-clickable" id="tm_chat_avatar" title="<#LANG_TERMINALS_INFO#>"></div>
+				<div class="tg-grow tg-clickable" id="tm_chat_head" title="<#LANG_TERMINALS_INFO#>">
 					<div class="tg-title" id="tm_chat_title"></div>
 					<div class="tg-sub" id="tm_chat_sub"></div>
 				</div>
@@ -189,6 +222,19 @@
 		</form>
 	</div>
 
+	<!-- карточка чата: возможности и настройки терминала, участники, цвет аватарки -->
+	<div class="tg-modal" id="tm_info_modal">
+		<div class="tg-dialog tg-info">
+			<div class="tg-info-top">
+				<button type="button" class="tg-icon tg-info-close" id="tm_info_close" title="<#LANG_TERMINALS_CANCEL#>"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+				<div class="tg-avatar" id="tm_info_avatar"></div>
+				<div class="tg-info-title" id="tm_info_title"></div>
+				<div class="tg-sub" id="tm_info_status"></div>
+			</div>
+			<div class="tg-info-body" id="tm_info_body"></div>
+		</div>
+	</div>
+
 	<!-- создание и изменение своей группы -->
 	<div class="tg-modal" id="tm_modal">
 		<div class="tg-dialog">
@@ -211,6 +257,9 @@
 	var tmConversation = [#CONVERSATION_JSON#];
 	var tmChats = [#CHATS_JSON#];
 	var tmTitles = [#TITLES_JSON#];
+	var tmStatus = [#STATUS_JSON#];
+	var tmColorsMap = [#COLORS_JSON#];
+	var tmUserName = [#USER_NAME_JSON#];
 	var tmApp = document.getElementById('tg_app');
 	var tmForm = document.getElementById('tm_form');
 	var tmCurrent = '';
@@ -221,7 +270,15 @@
 		chooseThis: '<#LANG_TERMINALS_CHOOSE_THIS#>', sending: '<#LANG_TERMINALS_SENDING#>', notSent: '<#LANG_TERMINALS_NOT_SENT#>',
 		sendError: '<#LANG_TERMINALS_SEND_ERROR#>', file: '<#LANG_TERMINALS_FILE#>', video: '<#LANG_TERMINALS_VIDEO#>', send: '<#LANG_TERMINALS_SEND#>',
 		record: '<#LANG_TERMINALS_RECORD_VOICE#>', tooBig: '<#LANG_TERMINALS_FILE_TOO_BIG#>', badType: '<#LANG_TERMINALS_FILE_TYPE#>',
-		uploadError: '<#LANG_TERMINALS_UPLOAD_ERROR#>', houseSub: '<#LANG_TERMINALS_HOUSE_CHAT#>',
+		uploadError: '<#LANG_TERMINALS_UPLOAD_ERROR#>', houseSub: '<#LANG_TERMINALS_HOUSE_CHAT#>', online: '<#LANG_TERMINALS_ONLINE#>',
+		lastSeen: '<#LANG_TERMINALS_LAST_SEEN#>', activity: '<#LANG_TERMINALS_ACTIVITY#>', reachable: '<#LANG_TERMINALS_REACHABLE#>', offline: '<#LANG_TERMINALS_OFFLINE#>',
+		name: '<#LANG_TERMINALS_SYSTEM_NAME#>', host: '<#LANG_TERMINALS_HOST#>', room: '<#LANG_TERMINALS_ROOM#>',
+		minLevel: '<#LANG_TERMINALS_MIN_LEVEL#>', byDefault: '<#LANG_TERMINALS_BY_DEFAULT#>', tts: '<#LANG_TERMINALS_TTS#>',
+		player: '<#LANG_TERMINALS_PLAYER#>', noTts: '<#LANG_TERMINALS_NO_TTS#>', noPlayer: '<#LANG_TERMINALS_NO_PLAYER#>',
+		settings: '<#LANG_TERMINALS_SETTINGS#>', color: '<#LANG_TERMINALS_AVATAR_COLOR#>', resetColor: '<#LANG_TERMINALS_COLOR_DEFAULT#>',
+		loggedAs: '<#LANG_TERMINALS_LOGGED_AS#>', notLogged: '<#LANG_TERMINALS_NOT_LOGGED#>', loading: '<#LANG_TERMINALS_LOADING#>',
+		thisTerminal: '<#LANG_TERMINALS_THIS_TERMINAL#>', wsOn: '<#LANG_TERMINALS_WS_ON#>', wsOff: '<#LANG_TERMINALS_WS_OFF#>',
+		wsWait: '<#LANG_TERMINALS_WS_WAIT#>', wsNone: '<#LANG_TERMINALS_WS_NONE#>',
 		shoutroomSub: '<#LANG_TERMINALS_SHOUTROOM#>', login: '<#LANG_TERMINALS_LOGIN_TO_WRITE#>', micHttps: '<#LANG_TERMINALS_MIC_HTTPS#>', micDenied: '<#LANG_TERMINALS_MIC_DENIED#>'
 	};
 	var tmMaxMedia = parseFloat('[#MAX_MEDIA_MB#]') || 15, tmMaxFile = parseFloat('[#MAX_FILE_MB#]') || 50;
@@ -270,6 +327,7 @@
 	// аватар: значок для групповых чатов, первая буква для терминала; цвет — по ключу
 	var tmColors = ['#e17076', '#7bc862', '#65aadd', '#a695e7', '#ee7aae', '#6ec9cb', '#faa774', '#5caffa'];
 	function tmColor(key) {
+		if (tmColorsMap[key]) return tmColorsMap[key];
 		var h = 0;
 		for (var i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) % 1000003;
 		return tmColors[h % tmColors.length];
@@ -278,6 +336,17 @@
 		var icons = {all: '📢', room: '🏠', group: '👥', house: '💬', shoutroom: '🗨️'};
 		el.textContent = icons[chat.type] || (chat.title || '?').trim().charAt(0).toUpperCase();
 		el.style.background = tmColor(chat.key);
+		// личный чат: зелёная точка, если терминал в сети
+		var name = (chat.type == 'term') ? chat.key.substr(5) : '';
+		el.classList.toggle('tg-online', !!(name && tmStatus[name] && tmStatus[name].online));
+	}
+	// статус терминала словами: в сети / на связи · активность / был в сети
+	function tmStatusText(name) {
+		var st = tmStatus[name];
+		if (!st) return '';
+		if (st.online) return tmText.online;
+		if (st.reachable) return tmText.reachable + (st.last ? ' · ' + tmText.activity + ' ' + st.last : '');
+		return st.last ? tmText.lastSeen + ' ' + st.last : tmText.offline;
 	}
 	function tmChat(key) {
 		for (var i = 0; i < tmChats.length; i++) if (tmChats[i].key == key) return tmChats[i];
@@ -387,7 +456,14 @@
 		document.getElementById('tm_chat_title').textContent = chat.title;
 		var sub = tmMembersText(chat);
 		var plain = (chat.type == 'term' || chat.type == 'house' || chat.type == 'shoutroom' || !sub);
-		document.getElementById('tm_chat_sub').textContent = plain ? sub : tmText.members + ': ' + sub;
+		var subEl = document.getElementById('tm_chat_sub');
+		subEl.textContent = plain ? sub : tmText.members + ': ' + sub;
+		subEl.classList.remove('tg-online-text');
+		if (chat.type == 'term') {
+			var term = chat.key.substr(5);
+			subEl.textContent = tmStatusText(term);
+			subEl.classList.toggle('tg-online-text', !!(tmStatus[term] && tmStatus[term].online));
+		}
 		// общий чат MajorDoMo: только текст; без входа на сайт — только чтение
 		document.getElementById('tm_compose').classList.toggle('tg-text-only', !!chat.text_only);
 		document.getElementById('tm_compose').style.display = chat.readonly ? 'none' : '';
@@ -640,6 +716,8 @@
 				var changed = JSON.stringify(res.messages) != JSON.stringify(tmConversation) || JSON.stringify(res.chats) != JSON.stringify(tmChats);
 				tmConversation = res.messages;
 				tmChats = res.chats;
+				if (res.status) tmStatus = res.status;
+				if (res.colors) tmColorsMap = Array.isArray(res.colors) ? {} : res.colors;
 				if (then) { then(); return; }
 				if (changed) {
 					if (tmCurrent && !tmChat(tmCurrent)) { tmOpen(''); return; }
@@ -777,17 +855,167 @@
 	});
 	document.addEventListener('keydown', function (e) { if (e.key == 'Escape') tmGroupClose(); });
 
+
+	// Карточка чата (нажатие на аватар или заголовок): терминал — статус, возможности и настройки
+	// (только просмотр); комната, группа, все — участники; общий чат — кто вошёл. Везде — цвет аватарки
+	var tmInfoModal = document.getElementById('tm_info_modal'), tmInfoKey = '';
+	function tmEl(tag, cls, text) {
+		var el = document.createElement(tag);
+		if (cls) el.className = cls;
+		if (text !== undefined) el.textContent = text;
+		return el;
+	}
+	function tmInfoSection(title) {
+		var sec = tmEl('div', 'tg-info-section');
+		if (title) sec.appendChild(tmEl('h4', '', title));
+		document.getElementById('tm_info_body').appendChild(sec);
+		return sec;
+	}
+	function tmInfoRow(sec, title, value) {
+		var row = tmEl('div', 'tg-info-row');
+		row.appendChild(tmEl('span', '', title));
+		row.appendChild(tmEl('span', '', value));
+		sec.appendChild(row);
+	}
+	function tmInfoCaps(sec, caps) {
+		if (!caps || !caps.length) return;
+		var box = tmEl('div', 'tg-caps');
+		caps.forEach(function (c) { box.appendChild(tmEl('span', '', c)); });
+		sec.appendChild(box);
+	}
+	function tmInfoMembers(sec, names) {
+		names.forEach(function (name) {
+			var row = tmEl('div', 'tg-member tg-clickable');
+			var av = tmEl('div', 'tg-avatar');
+			tmAvatar(av, {key: 'term:' + name, type: 'term', title: tmTitle(name)});
+			var box = tmEl('div', 'tg-grow');
+			box.appendChild(tmEl('div', '', tmTitle(name) + (name == tmMe() ? ' (' + tmText.thisTerminal.toLowerCase() + ')' : '')));
+			var st = tmEl('div', 'tg-sub', tmStatusText(name));
+			if (tmStatus[name] && tmStatus[name].online) st.classList.add('tg-online-text');
+			box.appendChild(st);
+			row.appendChild(av);
+			row.appendChild(box);
+			row.addEventListener('click', function () { if (tmChat('term:' + name)) { tmInfoClose(); tmOpen('term:' + name); } });
+			sec.appendChild(row);
+		});
+	}
+	function tmInfoPalette(key) {
+		var sec = tmInfoSection(tmText.color);
+		var box = tmEl('div', 'tg-palette');
+		var current = tmColorsMap[key] || '';
+		tmColors.concat(['#8e9aa6', '#d5a13e']).forEach(function (c) {
+			var b = tmEl('button', c == current ? 'tg-sel' : '');
+			b.type = 'button';
+			b.style.background = c;
+			b.title = c;
+			b.addEventListener('click', function () { tmSetColor(key, c); });
+			box.appendChild(b);
+		});
+		var reset = tmEl('button', current ? '' : 'tg-sel', '↺');
+		reset.type = 'button';
+		reset.title = tmText.resetColor;
+		reset.addEventListener('click', function () { tmSetColor(key, ''); });
+		box.appendChild(reset);
+		sec.appendChild(box);
+	}
+	function tmSetColor(key, color) {
+		tmGroupPost({mode: 'set_color', chat: key, color: color}, function (res) {
+			if (!res.ok) return;
+			if (color) tmColorsMap[key] = color; else delete tmColorsMap[key];
+			tmInfo(key);
+			if (tmCurrent) tmOpen(tmCurrent); else tmRenderChats();
+		});
+	}
+	function tmInfoClose() { tmInfoModal.classList.remove('tg-show'); tmInfoKey = ''; }
+	function tmInfo(key) {
+		var chat = tmChat(key);
+		var me = tmMe();
+		if (!chat && key == 'term:' + me) chat = {key: key, type: 'term', title: tmTitle(me), members: [me]};
+		if (!chat) return;
+		tmInfoKey = key;
+		tmAvatar(document.getElementById('tm_info_avatar'), chat);
+		document.getElementById('tm_info_title').textContent = chat.title;
+		var status = document.getElementById('tm_info_status');
+		status.classList.remove('tg-online-text');
+		var body = document.getElementById('tm_info_body');
+		body.innerHTML = '';
+		if (chat.type == 'term') {
+			var name = key.substr(5);
+			status.textContent = tmStatusText(name);
+			status.classList.toggle('tg-online-text', !!(tmStatus[name] && tmStatus[name].online));
+			var wait = tmInfoSection('');
+			wait.appendChild(tmEl('div', 'tg-note', tmText.loading));
+			fetch(tmUrl('ajax=1&info=' + encodeURIComponent(name)), {credentials: 'same-origin'})
+				.then(function (r) { return r.json(); })
+				.then(function (info) {
+					if (tmInfoKey != key || !info || !info.name) return;
+					body.innerHTML = '';
+					var main = tmInfoSection('');
+					tmInfoRow(main, tmText.name, info.name);
+					if (info.host) tmInfoRow(main, tmText.host, info.host);
+					if (info.room) tmInfoRow(main, tmText.room, info.room);
+					tmInfoRow(main, tmText.minLevel, info.min_level || tmText.byDefault);
+					var tts = tmInfoSection(tmText.tts + (info.tts ? ' — ' + info.tts.title : ''));
+					if (info.tts) {
+						tmInfoCaps(tts, info.tts.capabilities);
+						(info.tts.settings || []).forEach(function (f) { tmInfoRow(tts, f.title, f.value); });
+					} else {
+						tts.appendChild(tmEl('div', 'tg-note', tmText.noTts));
+					}
+					var pl = tmInfoSection(tmText.player + (info.player ? ' — ' + info.player.title : ''));
+					if (info.player) {
+						tmInfoCaps(pl, info.player.capabilities);
+						(info.player.settings || []).forEach(function (f) { tmInfoRow(pl, f.title, f.value); });
+					} else {
+						pl.appendChild(tmEl('div', 'tg-note', tmText.noPlayer));
+					}
+					tmInfoPalette(key);
+				})
+				.catch(function () {});
+		} else if (chat.type == 'house' || chat.type == 'shoutroom') {
+			status.textContent = chat.type == 'house' ? tmText.houseSub : tmText.shoutroomSub;
+			var sec = tmInfoSection('');
+			sec.appendChild(tmEl('div', 'tg-note', tmUserName ? tmText.loggedAs.replace('%s', tmUserName) : tmText.notLogged));
+			tmInfoPalette(key);
+		} else {
+			status.textContent = tmText.members + ': ' + chat.members.length;
+			tmInfoMembers(tmInfoSection(tmText.members), chat.members);
+			if (chat.type == 'group' && me) {
+				var edit = tmEl('button', 'tg-btn', tmText.editGroup);
+				edit.type = 'button';
+				edit.addEventListener('click', function () { tmInfoClose(); tmGroupDialog(chat); });
+				tmInfoSection('').appendChild(edit);
+			}
+			tmInfoPalette(key);
+		}
+		tmInfoModal.classList.add('tg-show');
+	}
+	document.getElementById('tm_chat_avatar').addEventListener('click', function () { tmInfo(tmCurrent); });
+	document.getElementById('tm_chat_head').addEventListener('click', function () { tmInfo(tmCurrent); });
+	document.getElementById('tm_me_title').addEventListener('click', function () { if (tmMe()) tmInfo('term:' + tmMe()); });
+	document.getElementById('tm_info_close').addEventListener('click', tmInfoClose);
+	tmInfoModal.addEventListener('click', function (e) { if (e.target == tmInfoModal) tmInfoClose(); });
+	document.addEventListener('keydown', function (e) { if (e.key == 'Escape') tmInfoClose(); });
+
 	// Вебсокет MajorDoMo: событие TERMINAL_MESSAGE (terminalsSend) — сразу обновить переписку.
 	// Пока вебсокет не подключён, переписка обновляется опросом раз в 15 с, при подключённом — раз в минуту
 	var tmWsPort = '[#WS_PORT#]', tmWsOpen = false, tmLastPoll = Date.now();
+	// индикатор: зелёный — подключён, жёлтый — подключается, красный — нет связи, серый — вебсокет выключен
+	function tmWsState(state) {
+		var dot = document.getElementById('tm_ws');
+		dot.className = 'tg-ws' + (state ? ' tg-ws-' + state : '');
+		dot.title = {on: tmText.wsOn, wait: tmText.wsWait, off: tmText.wsOff}[state] || tmText.wsNone;
+	}
 	function tmWebSocket() {
-		if (!tmWsPort || !window.WebSocket) return;
+		if (!tmWsPort || !window.WebSocket) { tmWsState(''); return; }
 		var ws;
+		tmWsState('wait');
 		try {
 			ws = new WebSocket((location.protocol == 'https:' ? 'wss:' : 'ws:') + '//' + location.hostname + ':' + tmWsPort + '/majordomo');
-		} catch (e) { return; }
+		} catch (e) { tmWsState('off'); return; }
 		ws.onopen = function () {
 			tmWsOpen = true;
+			tmWsState('on');
 			ws.send(JSON.stringify({action: 'Subscribe', data: {TYPE: 'events', EVENTS: 'TERMINAL_MESSAGE'}}));
 			tmRefresh();
 		};
@@ -805,6 +1033,7 @@
 		};
 		ws.onclose = function () {
 			tmWsOpen = false;
+			tmWsState('off');
 			setTimeout(tmWebSocket, 10000);
 		};
 	}
@@ -829,4 +1058,5 @@
 		if (now - tmLastPoll >= (house ? 5000 : (tmWsOpen ? 60000 : 15000))) { tmLastPoll = now; tmRefresh(); }
 	}, 5000);
 	tmWebSocket();
+	if (!tmWsPort) tmWsState('');
 </script>
