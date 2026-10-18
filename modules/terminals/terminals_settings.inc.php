@@ -20,6 +20,42 @@
  * Значения своих полей дополнение читает через terminalsAddonSettings().
  */
 
+// Переводы модуля: languages/terminals_<язык>.php и terminals_default.php (английский).
+// Ядро подключает их само только при выводе модуля в шаблоне; здесь — для фона и дополнений
+function terminalsLoadLanguage()
+{
+    static $loaded = false;
+    if ($loaded) {
+        return;
+    }
+    $loaded = true;
+    if (defined('SETTINGS_SITE_LANGUAGE') && SETTINGS_SITE_LANGUAGE != '' && file_exists(ROOT . 'languages/terminals_' . SETTINGS_SITE_LANGUAGE . '.php')) {
+        include_once(ROOT . 'languages/terminals_' . SETTINGS_SITE_LANGUAGE . '.php');
+    }
+    if (file_exists(ROOT . 'languages/terminals_default.php')) {
+        include_once(ROOT . 'languages/terminals_default.php');
+    }
+}
+
+// Перевод строки модуля по ключу (без LANG_)
+function terminalsLang($key)
+{
+    terminalsLoadLanguage();
+    return defined('LANG_' . $key) ? constant('LANG_' . $key) : $key;
+}
+
+// Поле «Сигнал перед сообщением»: звуки из cms/sounds (дополнения TTS с playFile())
+function terminalsSignalField()
+{
+    $options = array('' => terminalsLang('TERMINALS_NONE'));
+    foreach ((array)@scandir(ROOT . 'cms/sounds') as $file) {
+        if (preg_match('/\.(mp3|wav|ogg)$/i', $file)) {
+            $options['cms/sounds/' . $file] = $file;
+        }
+    }
+    return array('NAME' => 'SIGNAL', 'TITLE' => terminalsLang('TERMINALS_SIGNAL'), 'TYPE' => 'select', 'OPTIONS' => $options);
+}
+
 // Поля, которые хранятся в своих столбцах таблицы terminals
 function terminalsSettingsColumns()
 {

@@ -140,6 +140,24 @@ function terminalsQueueAdd($terminal_rec, $kind, $message, $level, $file, $image
             terminalsQueueSaveState($terminal_rec);
         }
         SQLExec("DELETE FROM terminals_queue WHERE TERMINAL_ID=$tid AND STARTED>0");
+        // сигнал перед первым сообщением серии (настройка TTS «Сигнал перед сообщением»):
+        // звучит сигнал, сообщение ждёт его конца
+        $signal = (!$busy && $kind != 'sound'
+            && (empty($current['ID']) || $now - (int)$current['FINISH'] >= terminals::QUEUE_SIGNAL_PAUSE))
+            ? terminalsQueueSignal($terminal_rec) : '';
+        if ($signal != '') {
+            $sig = terminalsQueuePlay($terminal_rec, 'sound', '', $level, $signal);
+            if ($sig[1] > 0) {
+                $sig_rec = array('TERMINAL_ID' => $tid, 'KIND' => 'sound', 'MESSAGE' => json_encode('sound:' . $signal),
+                    'LEVEL' => (int)$level, 'FILENAME' => $signal, 'IMAGE' => '', 'SENDER' => '',
+                    'ADDED' => $now, 'STARTED' => $now, 'FINISH' => $now + $sig[1]);
+                SQLInsert('terminals_queue', $sig_rec);
+                SQLInsert('terminals_queue', $rec);
+                terminalsQueueSchedule($tid, $sig[1]);
+                terminalsQueueUnlock($tid);
+                return true;
+            }
+        }
         $rec['STARTED'] = $now;
         $played = terminalsQueuePlay($terminal_rec, $kind, $message, $level, $file, $image, $sender);
         $rec['FINISH'] = $now + $played[1];
@@ -313,6 +331,22 @@ function terminalsQueueScheduleAfter($tid, $seconds)
     if (!empty($more['ID']) || !empty($state['ID'])) {
         terminalsQueueSchedule($tid, $seconds);
     }
+}
+
+// Файл сигнала перед сообщением из настроек TTS терминала (путь от веб-корня) или ''.
+// У MAIN не звучит, если включён общий сигнал ядра (SETTINGS_SPEAK_SIGNAL): иначе он прозвучит дважды
+function terminalsQueueSignal($terminal_rec)
+{
+    $settings = terminalsAddonSettings($terminal_rec, 'tts', $terminal_rec['TTS_TYPE']);
+    $signal = isset($settings['SIGNAL']) ? trim((string)$settings['SIGNAL']) : '';
+    if ($signal == '' || !is_file(ROOT . ltrim($signal, '/'))) {
+        return '';
+    }
+    if ($terminal_rec['NAME'] == 'MAIN' && (!defined('SETTINGS_SPEAK_SIGNAL') || SETTINGS_SPEAK_SIGNAL == '1')) {
+        return '';
+    }
+    $tts = terminalsQueueAddon($terminal_rec);
+    return (is_object($tts) && method_exists($tts, 'playFile')) ? $signal : '';
 }
 
 // Удалить ожидающие сообщения старше срока жизни

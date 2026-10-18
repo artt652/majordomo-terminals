@@ -18,7 +18,7 @@ class chromecast_tts extends mediaplayer
     {
         parent::__construct($terminal);
         $this->title = "Chromecast";
-        $this->description = 'Как mediaplayer, для Chromecast: после сообщений трек загружается сразу с прежней позиции.';
+        $this->description = terminalsLang('TERMINALS_DESC_CHROMECAST');
     }
 
     public function restoreState($state)

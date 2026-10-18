@@ -7,12 +7,8 @@ class pipup extends tts_addon
     // Собственное свойство: в базовом tts_addon $title объявлен private,
     // запись в него из наследника создаёт динамическое свойство (Deprecated в PHP 8.2+).
     public $title = 'PiPup';
-    // Описание типа в карточке терминала
-    public $description = 'Текст, картинки и голос сообщений во всплывающем окне PiPup на Android-устройстве (ТВ, приставка, планшет, панель, телефон). '
-        . '<b>Голос сообщений:</b> пусто — голос любого генератора речи; метка генератора — только его голос '
-        . '(<code>sanotts</code>, <code>piper_tts</code>, <code>rh</code>, <code>sapi</code> — речь Windows, <code>yandex</code>, <code>google</code>, <code>ivona</code>, <code>tilde</code>; можно несколько через запятую); '
-        . '<code>device</code> — синтезатор речи самого устройства. <b>Порт PiPup:</b> пусто — порт плеера pipup_play, иначе 7979. '
-        . 'Нужен форк PiPup (mhoogenbosch) 0.27+ — <a href="https://github.com/mhoogenbosch/PiPup/releases/latest/download/PiPup.apk" target="_blank">скачать APK</a>.';
+    // Описание типа в карточке терминала (задаётся в конструкторе — перевод)
+    public $description = '';
 
     // Порт встроенного веб-сервера PiPup по умолчанию
     const DEFAULT_PORT = 7979;
@@ -20,25 +16,27 @@ class pipup extends tts_addon
     function __construct($terminal)
     {
         $this->title = 'PiPup';
+        $this->description = terminalsLang('TERMINALS_DESC_PIPUP') . ' ' . terminalsLang('TERMINALS_DESC_SIGNAL');
         parent::__construct($terminal);
     }
 
     // Поля карточки терминала для этого типа TTS (modules/terminals/terminals_settings.inc.php)
     function settingsFields()
     {
-        $voices = array('' => 'Любой голос — первый готовый файл генератора');
+        $voices = array('' => terminalsLang('TERMINALS_VOICE_ANY'));
         foreach (self::voiceLabels() as $voice) {
-            $voices[$voice['label']] = $voice['title'] . ' — ' . $voice['count'] . ' в кеше';
+            $voices[$voice['label']] = $voice['title'] . ' — ' . $voice['count'] . ' ' . terminalsLang('TERMINALS_IN_CACHE');
         }
-        $voices['device'] = 'Голос устройства (device)';
+        $voices['device'] = terminalsLang('TERMINALS_VOICE_DEVICE');
         return array(
-            array('NAME' => 'PORT', 'TITLE' => 'Порт PiPup', 'HINT' => 'пусто — как у плеера, иначе 7979'),
-            array('NAME' => 'VOLUME', 'TITLE' => 'Громкость сообщений', 'TYPE' => 'number',
-                'HINT' => 'пусто — как у звука устройства; 1–100 — доля от неё'),
+            array('NAME' => 'PORT', 'TITLE' => terminalsLang('TERMINALS_PIPUP_PORT'), 'HINT' => terminalsLang('TERMINALS_PIPUP_PORT_HINT')),
+            array('NAME' => 'VOLUME', 'TITLE' => terminalsLang('TERMINALS_MESSAGE_VOLUME'), 'TYPE' => 'number',
+                'HINT' => terminalsLang('TERMINALS_PIPUP_VOLUME_HINT')),
             // по умолчанию — прежнее место настройки, «Имя пользователя» плеера
-            array('NAME' => 'VOICE', 'TITLE' => 'Голос сообщений', 'TYPE' => 'combo', 'OPTIONS' => $voices,
+            array('NAME' => 'VOICE', 'TITLE' => terminalsLang('TERMINALS_VOICE'), 'TYPE' => 'combo', 'OPTIONS' => $voices,
                 'DEFAULT' => isset($this->terminal['PLAYER_USERNAME']) ? (string)$this->terminal['PLAYER_USERNAME'] : '',
-                'HINT' => 'пусто — любой голос; sanotts, yandex… — только эти; device — голос устройства'),
+                'HINT' => terminalsLang('TERMINALS_VOICE_HINT')),
+            terminalsSignalField(),
         );
     }
 
@@ -57,7 +55,7 @@ class pipup extends tts_addon
     private static function voiceLabels()
     {
         $names = array('sanotts' => 'sanoTTS', 'piper_tts' => 'Piper', 'sapi' => 'Windows SAPI',
-            'yandex' => 'Яндекс', 'google' => 'Google');
+            'yandex' => terminalsLang('TERMINALS_YANDEX'), 'google' => 'Google');
         // Служебные файлы генераторов с другой меткой: piper_dict_<md5> — прослушивание фраз
         // в словаре piper_tts (кнопка ▶). Это тот же голос, считаем их вместе с piper_tts.
         $aliases = array('piper_dict' => 'piper_tts');
@@ -115,7 +113,7 @@ class pipup extends tts_addon
 
     function say($phrase, $level = 0)
     {
-        return $this->sendCommand($phrase, 'Уведомление', $this->messageId($phrase), $this->deviceVoice());
+        return $this->sendCommand($phrase, terminalsLang('TERMINALS_NOTIFICATION'), $this->messageId($phrase), $this->deviceVoice());
     }
 
     // Сообщение с картинкой или от другого терминала (модуль terminals вызывает его вместо
@@ -124,7 +122,7 @@ class pipup extends tts_addon
     // $sender — от кого, пишется в заголовке окна
     function showMessage($phrase, $level = 0, $image = '', $cached_file = '', $sender = '')
     {
-        $title = ($sender != '') ? 'От: ' . $sender : 'Уведомление';
+        $title = ($sender != '') ? terminalsLang('TERMINALS_FROM_PREFIX') . ': ' . $sender : terminalsLang('TERMINALS_NOTIFICATION');
         $imgUrl = ($image != '') ? $this->fileUrl($image) : false;
         if ($image != '' && $imgUrl === false) {
             DebMes("PiPup: image not found: $image", 'terminals');
@@ -195,7 +193,7 @@ class pipup extends tts_addon
      * Окно с текстом, который произносит синтезатор речи самого устройства (поле tts PiPup).
      * Для вызова из сценариев, независимо от настройки терминала.
      */
-    function sayDevice($phrase, $title = 'Уведомление', $duration = 0)
+    function sayDevice($phrase, $title = '', $duration = 0)
     {
         return $this->sendCommand($phrase, $title, $this->messageId($phrase), true, $duration);
     }
@@ -216,7 +214,7 @@ class pipup extends tts_addon
      */
     function sayCached($phrase, $level = 0, $cached_file = '')
     {
-        return $this->soundMessage($phrase, $cached_file, '🔊 Уведомление');
+        return $this->soundMessage($phrase, $cached_file, '🔊 ' . terminalsLang('TERMINALS_NOTIFICATION'));
     }
 
     // Звуковой файл (terminalsSend: звук перед сообщением) — отдельным окном.
@@ -317,8 +315,11 @@ class pipup extends tts_addon
         return 'mdm_' . md5($tid . '|' . (string)$phrase);
     }
 
-    function sendCommand($phrase, $title = 'Уведомление', $id = '', $deviceTts = false, $duration = 0)
+    function sendCommand($phrase, $title = '', $id = '', $deviceTts = false, $duration = 0)
     {
+        if ($title == '') {
+            $title = terminalsLang('TERMINALS_NOTIFICATION');
+        }
         if (empty($this->terminal['HOST'])) {
             return 0;
         }
@@ -390,7 +391,7 @@ class pipup extends tts_addon
         $host = $this->hostPort();
         $url = 'http://' . $host . '/notify';
         if ($title == '') {
-            $title = 'Уведомление';
+            $title = terminalsLang('TERMINALS_NOTIFICATION');
         }
 
         $data = array(
@@ -586,7 +587,7 @@ class pipup extends tts_addon
         if ($id != '') {
             $options['id'] = $id;
         }
-        return $this->sendVideo($page . '?src=' . rawurlencode($src), $text, ($title == '') ? 'Уведомление' : $title, 'web', $options);
+        return $this->sendVideo($page . '?src=' . rawurlencode($src), $text, ($title == '') ? terminalsLang('TERMINALS_NOTIFICATION') : $title, 'web', $options);
     }
 
     // Страница-обёртка для sendWebImage(): без отступов, картинка вписана в окно

@@ -19,7 +19,7 @@ class mpd_tts extends mediaplayer
     {
         parent::__construct($terminal);
         $this->title = "MPD";
-        $this->description = 'Как mediaplayer, для плеера MPD: сообщение добавляется в плейлист, а не заменяет его; после сообщений возвращается прежний трек с той же позиции.';
+        $this->description = terminalsLang('TERMINALS_DESC_MPD');
     }
 
     public function sayCached($phrase, $level = 0, $cached_file = '')

@@ -22,6 +22,8 @@ class terminals extends module
     const QUEUE_TTL = 600;
     const QUEUE_WATCHDOG = 30;
     const QUEUE_PLAYING_CHECKS = 15;
+    // сигнал перед сообщением — если с конца прошлого сообщения прошло не меньше стольких секунд
+    const QUEUE_SIGNAL_PAUSE = 20;
 
     /**
      * terminals
@@ -106,6 +108,7 @@ class terminals extends module
     {
         global $session;
         $out = array();
+        terminalsLoadLanguage();
         if ($this->action == 'admin') {
             $this->admin($out);
         } else {

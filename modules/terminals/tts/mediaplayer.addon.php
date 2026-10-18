@@ -12,10 +12,7 @@ class mediaplayer extends tts_addon
     function __construct($terminal)
     {
         $this->title = "MediaPlayer";
-        $this->description = 'Голос сообщений на плеере терминала (тип плеера — в разделе «Может воспроизводить медиа»). '
-            . 'Файл голоса делает модуль синтеза речи. Сообщения звучат по очереди, а то, что играло до них, '
-            . 'возвращается с того же места. Для MPD, Logitech Media Server, Kodi, Chromecast и DLNA есть свои типы: '
-            . '<b>mpd_tts</b>, <b>lms_tts</b>, <b>kodi_tts</b>, <b>chromecast_tts</b>, <b>dnla_tts</b>.';
+        $this->description = terminalsLang('TERMINALS_DESC_MEDIAPLAYER') . ' ' . terminalsLang('TERMINALS_DESC_SIGNAL');
         parent::__construct($terminal);
     }
 
@@ -86,8 +83,9 @@ class mediaplayer extends tts_addon
     function settingsFields()
     {
         return array(
-            array('NAME' => 'MESSAGE_VOLUME', 'TITLE' => 'Громкость сообщений', 'TYPE' => 'number',
-                'HINT' => 'пусто — не менять; 1–100 — на время сообщений, потом прежняя'),
+            array('NAME' => 'MESSAGE_VOLUME', 'TITLE' => terminalsLang('TERMINALS_MESSAGE_VOLUME'), 'TYPE' => 'number',
+                'HINT' => terminalsLang('TERMINALS_MESSAGE_VOLUME_HINT')),
+            terminalsSignalField(),
         );
     }
 

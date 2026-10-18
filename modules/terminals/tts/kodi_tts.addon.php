@@ -21,7 +21,7 @@ class kodi_tts extends mediaplayer
     {
         parent::__construct($terminal);
         $this->title = "Kodi";
-        $this->description = 'Как mediaplayer, для Kodi: сообщение добавляется в плейлист; после сообщений возвращается прежний трек. Если номера треков в плейлисте неоднозначны, сообщение запускается как в mediaplayer.';
+        $this->description = terminalsLang('TERMINALS_DESC_KODI');
     }
 
     public function sayCached($phrase, $level = 0, $cached_file = '')
