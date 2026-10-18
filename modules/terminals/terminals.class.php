@@ -165,7 +165,8 @@ class terminals extends module
      */
     function usual(&$out)
     {
-        $this->admin($out);
+        // страница «Сообщения»: обмен сообщениями между терминалами (terminals_messages.inc.php)
+        include DIR_MODULES . 'terminals/terminals_messages.inc.php';
     }
 
     /**
@@ -421,6 +422,7 @@ class terminals extends module
         SQLDropTable('terminals');
         SQLDropTable('terminals_queue');
         SQLDropTable('terminals_state');
+        SQLDropTable('terminals_messages');
         unsubscribeFromEvent($this->name, 'SAY');
         unsubscribeFromEvent($this->name, 'SAYTO');
         unsubscribeFromEvent($this->name, 'ASK');
@@ -487,6 +489,15 @@ class terminals extends module
  terminals_state: PLAYER_STATE text
  terminals_state: SAVED int(10) NOT NULL DEFAULT '0'
  terminals_state: INDEX (TERMINAL_ID)
+
+ terminals_messages: ID int(10) unsigned NOT NULL auto_increment
+ terminals_messages: FROM_NAME varchar(255) NOT NULL DEFAULT ''
+ terminals_messages: TO_NAME varchar(255) NOT NULL DEFAULT ''
+ terminals_messages: MESSAGE text
+ terminals_messages: IMAGE varchar(255) NOT NULL DEFAULT ''
+ terminals_messages: SOUND varchar(255) NOT NULL DEFAULT ''
+ terminals_messages: ADDED int(10) NOT NULL DEFAULT '0'
+ terminals_messages: INDEX (TO_NAME)
 EOD;
         parent::dbInstall($data);
 

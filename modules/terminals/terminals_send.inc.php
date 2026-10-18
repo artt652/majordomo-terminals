@@ -34,6 +34,7 @@ function terminalsSend($to, $message, $options = array())
     }
     // отправитель: название терминала, если это терминал, иначе как есть
     $sender = isset($options['from']) ? trim((string)$options['from']) : '';
+    $from = array();
     if ($sender != '') {
         $from = terminalsFind($sender);
         if (!empty($from['ID'])) {
@@ -43,7 +44,8 @@ function terminalsSend($to, $message, $options = array())
     // история сообщений — одна запись на отправку
     if ($message != '') {
         $shout = array(
-            'MESSAGE' => $message,
+            // таблица shouts в utf8 (3 байта): эмодзи и другие 4-байтовые символы она не принимает
+            'MESSAGE' => preg_replace('/[\x{10000}-\x{10FFFF}]/u', '?', $message),
             'IMAGE' => $image,
             'ADDED' => date('Y-m-d H:i:s'),
             'ROOM_ID' => 0,
@@ -85,6 +87,16 @@ function terminalsSend($to, $message, $options = array())
                 $terminals->terminalSay($terminal_rec, $message, $level, $image, $sender);
             }
         }
+        // переписка терминалов (страница «Сообщения»): текст хранится в JSON, чтобы не терять эмодзи
+        $rec = array(
+            'FROM_NAME' => isset($from['NAME']) && !empty($from['ID']) ? $from['NAME'] : $sender,
+            'TO_NAME' => $terminal_rec['NAME'],
+            'MESSAGE' => json_encode($message),
+            'IMAGE' => $image,
+            'SOUND' => $sound,
+            'ADDED' => time(),
+        );
+        SQLInsert('terminals_messages', $rec);
         $sent++;
     }
     return $sent;

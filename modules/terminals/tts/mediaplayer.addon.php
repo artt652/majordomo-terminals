@@ -173,10 +173,11 @@ class mediaplayer extends tts_addon
         return (bool)$this->isMessageFile($file);
     }
 
-    // Файл сообщения, а не музыка: голос из cms/cached/voice или звук из cms/sounds (terminalsSend)
+    // Файл сообщения, а не музыка: голос из cms/cached/voice, звук из cms/sounds или голосовое
+    // сообщение со страницы «Сообщения» (cms/cached/terminals)
     protected function isMessageFile($file)
     {
-        return (bool)preg_match('/cms[\\\\\/](cached[\\\\\/]voice|sounds)[\\\\\/]/i', (string)$file);
+        return (bool)preg_match('/cms[\\\\\/](cached[\\\\\/]voice|cached[\\\\\/]terminals|sounds)[\\\\\/]/i', (string)$file);
     }
 
     // Текущий файл плеера из ответа getPlayerStatus()

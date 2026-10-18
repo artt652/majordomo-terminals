@@ -1,0 +1,162 @@
+<!--#
+ Страница «Сообщения»: обмен сообщениями между терминалами (modules/terminals/terminals_messages.inc.php)
+#-->
+<style type="text/css">
+	.tm-wrap { max-width: 720px; margin: 0 auto; padding: 8px; }
+	.tm-to label { display: inline-block; margin: 0 12px 6px 0; font-weight: normal; }
+	.tm-files { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0; }
+	.tm-files label { font-weight: normal; margin: 0; }
+	.tm-msg { border: 1px solid #ddd; border-radius: 6px; padding: 8px 10px; margin: 8px 0; }
+	.tm-msg.tm-in { border-left: 4px solid #337ab7; }
+	.tm-msg.tm-out { border-left: 4px solid #aaa; opacity: .9; }
+	.tm-head { font-size: 12px; color: #777; margin-bottom: 4px; }
+	.tm-msg img { max-width: 100%; max-height: 240px; display: block; margin-top: 6px; border-radius: 4px; }
+	.tm-msg audio { width: 100%; margin-top: 6px; }
+</style>
+<div class="tm-wrap">
+	<h3 style="margin-top:6px">Сообщения[#if ME_TITLE!=""#] — [#ME_TITLE#][#endif ME_TITLE#]</h3>
+
+	<form id="tm_form" method="post" enctype="multipart/form-data" action="?">
+		[#if ME_NAME=""#]
+		<div class="form-group">
+			<label>Этот терминал:</label>
+			<select name="from" id="tm_from" class="form-control">
+				<option value="">выберите</option>
+				[#begin ALL_TERMINALS#]<option value="[#NAME#]">[#TITLE#]</option>[#end ALL_TERMINALS#]
+			</select>
+			<small class="text-muted">Устройство не узнано по адресу. Можно открыть страницу с ?terminal=ИМЯ — терминал запомнится.</small>
+		</div>
+		[#else ME_NAME#]
+		<input type="hidden" name="from" id="tm_from" value="[#ME_NAME#]">
+		[#endif ME_NAME#]
+
+		<div class="form-group tm-to">
+			<label style="display:block;font-weight:bold">Кому:</label>
+			[#begin MSG_TERMINALS#]<label><input type="checkbox" name="to[]" value="[#NAME#]"> [#TITLE#]</label>[#end MSG_TERMINALS#]
+		</div>
+		<div class="form-group">
+			<textarea name="message" id="tm_text" class="form-control" rows="2" placeholder="Текст сообщения"></textarea>
+		</div>
+		<div class="checkbox" style="margin-top:0">
+			<label><input type="checkbox" name="voice" value="1" checked> Озвучить текст на терминале-получателе</label>
+		</div>
+		<div class="tm-files">
+			<label class="btn btn-default btn-sm">📷 Фото или картинка
+				<input type="file" name="image" accept="image/*" capture="environment" style="display:none" onchange="tmFileName(this, 'tm_image_name')">
+			</label>
+			<span id="tm_image_name" class="text-muted small"></span>
+			<label class="btn btn-default btn-sm">🎤 Голосовое сообщение
+				<input type="file" name="audio" accept="audio/*" capture style="display:none" onchange="tmFileName(this, 'tm_audio_name')">
+			</label>
+			<span id="tm_audio_name" class="text-muted small"></span>
+		</div>
+		<input type="hidden" name="mode" value="send_message">
+		<input type="hidden" name="ajax" value="1">
+		<button type="submit" class="btn btn-primary" id="tm_send">Отправить</button>
+		<span id="tm_status" class="small" style="margin-left:10px"></span>
+	</form>
+
+	<h4 style="margin-top:20px">Переписка</h4>
+	<div id="tm_list"><p class="text-muted">Сообщений пока нет.</p></div>
+</div>
+
+<script type="text/javascript">
+	var tmConversation = [#CONVERSATION_JSON#];
+
+	function tmFileName(input, id) {
+		document.getElementById(id).textContent = (input.files && input.files.length) ? input.files[0].name : '';
+	}
+
+	function tmRender(list) {
+		var box = document.getElementById('tm_list');
+		box.innerHTML = '';
+		if (!list || !list.length) {
+			box.innerHTML = '<p class="text-muted">Сообщений пока нет.</p>';
+			return;
+		}
+		for (var i = 0; i < list.length; i++) {
+			var m = list[i];
+			var div = document.createElement('div');
+			div.className = 'tm-msg ' + (m.incoming ? 'tm-in' : 'tm-out');
+			var head = document.createElement('div');
+			head.className = 'tm-head';
+			head.textContent = (m.incoming ? 'От: ' : 'Кому: ') + m.other_title + ' · ' + m.time;
+			div.appendChild(head);
+			if (m.text) {
+				var p = document.createElement('div');
+				p.textContent = m.text;
+				div.appendChild(p);
+			}
+			if (m.image) {
+				var img = document.createElement('img');
+				img.src = m.image;
+				img.alt = '';
+				div.appendChild(img);
+			}
+			if (m.sound) {
+				var a = document.createElement('audio');
+				a.controls = true;
+				a.preload = 'none';
+				a.src = m.sound;
+				div.appendChild(a);
+			}
+			if (m.incoming) {
+				(function (other) {
+					var b = document.createElement('button');
+					b.type = 'button';
+					b.className = 'btn btn-link btn-xs';
+					b.style.paddingLeft = '0';
+					b.textContent = 'Ответить';
+					b.addEventListener('click', function () {
+						var boxes = document.querySelectorAll('input[name="to[]"]');
+						for (var j = 0; j < boxes.length; j++) boxes[j].checked = (boxes[j].value == other);
+						document.getElementById('tm_text').focus();
+					});
+					div.appendChild(b);
+				})(m.other);
+			}
+			box.appendChild(div);
+		}
+	}
+
+	function tmUrl(params) {
+		var from = document.getElementById('tm_from').value;
+		return location.pathname + '?' + params + (from ? '&from=' + encodeURIComponent(from) : '');
+	}
+
+	function tmRefresh() {
+		var from = document.getElementById('tm_from').value;
+		if (!from || !window.fetch) return;
+		fetch(tmUrl('ajax=1&list=1'), {credentials: 'same-origin'})
+			.then(function (r) { return r.json(); })
+			.then(function (list) { tmConversation = list; tmRender(list); })
+			.catch(function () {});
+	}
+
+	document.getElementById('tm_form').addEventListener('submit', function (e) {
+		if (!window.fetch || !window.FormData) return; // старый браузер — обычная отправка формы
+		e.preventDefault();
+		var form = this, status = document.getElementById('tm_status');
+		if (!document.getElementById('tm_from').value) { status.textContent = 'Выберите этот терминал'; return; }
+		if (!form.querySelector('input[name="to[]"]:checked')) { status.textContent = 'Выберите, кому отправить'; return; }
+		status.textContent = 'Отправка…';
+		document.getElementById('tm_send').disabled = true;
+		fetch(location.pathname, {method: 'POST', body: new FormData(form), credentials: 'same-origin'})
+			.then(function (r) { return r.json(); })
+			.then(function (res) {
+				status.textContent = res.sent ? 'Отправлено' : 'Не отправлено';
+				if (res.sent) {
+					document.getElementById('tm_text').value = '';
+					form.image.value = ''; form.audio.value = '';
+					tmFileName(form.image, 'tm_image_name'); tmFileName(form.audio, 'tm_audio_name');
+				}
+				tmRefresh();
+			})
+			.catch(function () { status.textContent = 'Ошибка отправки'; })
+			.then(function () { document.getElementById('tm_send').disabled = false; });
+	});
+
+	document.getElementById('tm_from').addEventListener('change', tmRefresh);
+	tmRender(tmConversation);
+	setInterval(tmRefresh, 15000);
+</script>
