@@ -313,47 +313,47 @@
 		return row;
 	}
 
-	// Поле с выпадающим списком подсказок: можно выбрать из списка или ввести своё
+	// Поле с выпадающим списком подсказок: можно выбрать из списка или ввести своё.
+	// Под полем ввода лежит обычный select — стрелка и список стандартные, как у соседних списков;
+	// список открывается и стрелкой мыши, и клавишей «вниз»
 	function terminalCombo(input, options) {
 		var wrap = document.createElement('div');
 		wrap.style.position = 'relative';
-		input.style.paddingRight = '36px';
-		input.setAttribute('autocomplete', 'off');
-		wrap.appendChild(input);
-		var arrow = document.createElement('span');
-		arrow.title = '<#LANG_TERMINALS_PICK_FROM_LIST#>';
-		arrow.style.cssText = 'position:absolute;right:1px;top:0;bottom:0;width:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;opacity:.7';
-		arrow.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14" style="display:block" aria-hidden="true"><path d="M3 5l4 4 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-		wrap.appendChild(arrow);
-		var menu = document.createElement('ul');
-		menu.className = 'dropdown-menu';
-		menu.style.cssText = 'display:none;width:100%;max-height:280px;overflow:auto';
-		wrap.appendChild(menu);
-		function fill() {
-			menu.innerHTML = '';
-			var cur = input.value.trim().toLowerCase();
-			for (var i = 0; i < options.length; i++) {
-				(function (v, t) {
-					var li = document.createElement('li');
-					var a = document.createElement('a');
-					a.href = '#';
-					a.textContent = t;
-					if (v.toLowerCase() == cur) li.className = 'active';
-					a.addEventListener('click', function (e) { e.preventDefault(); input.value = v; menu.style.display = 'none'; input.focus(); });
-					li.appendChild(a);
-					menu.appendChild(li);
-				})(options[i][0], options[i][1]);
-			}
+		var select = document.createElement('select');
+		select.className = 'form-control';
+		select.tabIndex = -1;
+		select.title = '<#LANG_TERMINALS_PICK_FROM_LIST#>';
+		var blank = document.createElement('option');
+		blank.value = '';
+		blank.textContent = '';
+		blank.hidden = true;
+		select.appendChild(blank);
+		for (var i = 0; i < options.length; i++) {
+			var o = document.createElement('option');
+			o.value = 'v:' + options[i][0];
+			o.textContent = options[i][1];
+			select.appendChild(o);
 		}
-		arrow.addEventListener('mousedown', function (e) { e.preventDefault(); });
-		arrow.addEventListener('click', function () {
-			if (menu.style.display == 'none') { fill(); menu.style.display = 'block'; } else { menu.style.display = 'none'; }
+		select.selectedIndex = 0;
+		input.setAttribute('autocomplete', 'off');
+		input.style.cssText = 'position:absolute;left:1px;top:1px;height:calc(100% - 2px);width:calc(100% - 32px);border:0;box-shadow:none;background:transparent;padding-right:4px';
+		wrap.appendChild(select);
+		wrap.appendChild(input);
+		select.addEventListener('change', function () {
+			if (select.value.indexOf('v:') === 0) input.value = select.value.substr(2);
+			select.selectedIndex = 0;
+			input.focus();
 		});
-		document.addEventListener('click', function (e) { if (!wrap.contains(e.target)) menu.style.display = 'none'; });
 		input.addEventListener('keydown', function (e) {
-			if (e.key == 'Escape') menu.style.display = 'none';
-			if (e.key == 'ArrowDown' && e.altKey) arrow.click();
+			if (e.key == 'ArrowDown') {
+				e.preventDefault();
+				select.focus();
+				try { if (select.showPicker) select.showPicker(); } catch (err) {}
+			}
 		});
+		// рамка фокуса — как у обычного поля
+		input.addEventListener('focus', function () { select.style.borderColor = '#66afe9'; select.style.boxShadow = 'inset 0 1px 1px rgba(0,0,0,.075), 0 0 8px rgba(102,175,233,.6)'; });
+		input.addEventListener('blur', function () { select.style.borderColor = ''; select.style.boxShadow = ''; });
 		return wrap;
 	}
 

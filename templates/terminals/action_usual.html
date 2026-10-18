@@ -60,6 +60,7 @@
 	.tg-chip { font-size: 12px; background: rgba(127,127,127,.15); border-radius: 12px; padding: 3px 4px 3px 10px; margin-top: 6px; }
 	.tg-chip button { background: none; border: 0; color: var(--tg-muted); cursor: pointer; }
 	.tg-compose { display: flex; align-items: flex-end; gap: 4px; padding: 6px 8px; background: var(--tg-panel); border-top: 1px solid var(--tg-border); position: relative; }
+	.tg-compose .tg-icon, .tg-compose .tg-send { width: 40px; height: 40px; padding: 0; display: flex; align-items: center; justify-content: center; }
 	.tg-compose textarea { flex: 1; resize: none; border: 0; outline: none; background: transparent; color: var(--tg-text); padding: 8px 4px; max-height: 140px; font-size: 15px; line-height: 20px; }
 	.tg-send { background: var(--tg-accent); color: #fff; border: 0; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; flex: none; }
 	.tg-send:disabled { opacity: .5; }
@@ -150,9 +151,9 @@
 					<label>📷 <#LANG_TERMINALS_PHOTO#><input type="file" name="image" accept="image/*" capture="environment" style="display:none"></label>
 					<label>🎤 <#LANG_TERMINALS_VOICE_MESSAGE#><input type="file" name="audio" accept="audio/*" capture style="display:none"></label>
 				</div>
-				<button type="button" class="tg-icon" id="tm_attach" title="<#LANG_TERMINALS_ATTACH#>">📎</button>
+				<button type="button" class="tg-icon" id="tm_attach" title="<#LANG_TERMINALS_ATTACH#>"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5l-7.8 7.8a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
 				<textarea name="message" id="tm_text" rows="1" placeholder="<#LANG_TERMINALS_MESSAGE_TEXT#>"></textarea>
-				<button type="button" class="tg-icon" id="tm_voice" title="<#LANG_TERMINALS_VOICE_ON_RECIPIENT#>">🔊</button>
+				<button type="button" class="tg-icon" id="tm_voice" title="<#LANG_TERMINALS_VOICE_ON_RECIPIENT#>"></button>
 				<input type="hidden" name="voice" id="tm_voice_value" value="1">
 				<input type="hidden" name="mode" value="send_message">
 				<input type="hidden" name="ajax" value="1">
@@ -225,7 +226,10 @@
 	function tmVoice(on) {
 		document.getElementById('tm_voice_value').value = on ? '1' : '0';
 		var b = document.getElementById('tm_voice');
-		b.textContent = on ? '🔊' : '🔇';
+		// динамик с волнами — озвучка включена, перечёркнутый — выключена
+		b.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>'
+			+ (on ? '<path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>'
+				: '<path d="M16 9.5l5 5M21 9.5l-5 5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>') + '</svg>';
 		b.classList.toggle('tg-on', on);
 	}
 	tmVoice(tmStore('voice') !== '0');
