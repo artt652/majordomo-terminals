@@ -4,11 +4,12 @@
  *
  * Дополнение (modules/terminals/tts/*.addon.php или modules/app_player/addons/*.addon.php)
  * может объявить свои поля методом settingsFields(), который возвращает массив описаний:
- *   NAME    — имя поля. Имена прежних столбцов (PLAYER_PORT, PLAYER_USERNAME, PLAYER_PASSWORD,
- *             PLAYER_CONTROL_ADDRESS) хранятся в своих столбцах таблицы terminals, как раньше,
- *             поэтому дополнения app_player читают их без изменений. Остальные поля хранятся
- *             в JSON-полях terminals.TTS_SETTINGS / terminals.PLAYER_SETTINGS по имени дополнения:
- *             {"pipup": {"PORT": "7979", "VOICE": "sanotts"}, "mpd_tts": {...}}.
+ *   NAME    — имя поля. Все значения хранятся в JSON-полях terminals.TTS_SETTINGS /
+ *             terminals.PLAYER_SETTINGS отдельно для каждого дополнения:
+ *             {"pipup": {"PORT": "7979", "VOICE": "sanotts"}, "mpd": {"PLAYER_PORT": "6600"}}.
+ *             Поля плеера с именами прежних столбцов (PLAYER_PORT, PLAYER_USERNAME, PLAYER_PASSWORD,
+ *             PLAYER_CONTROL_ADDRESS) при сохранении ещё и копируются в эти столбцы — значениями
+ *             выбранного плеера, — поэтому дополнения app_player читают их без изменений.
  *   TITLE   — подпись: текст или имя языковой константы (LANG_…);
  *   TYPE    — text | password | number | select | combo | checkbox (по умолчанию text);
  *   DEFAULT — значение, если ничего не сохранено;
@@ -86,8 +87,24 @@ function terminalsFieldsForForm($fields)
     return $result;
 }
 
-// Записать значения из формы в запись терминала: прежние столбцы — в столбцы, остальное — в JSON
-function terminalsSaveSettings(&$rec, $kind, $addon, $posted)
+// Имена полей — латиница, цифры и _, значения — строки
+function terminalsCleanValues($posted)
+{
+    $values = array();
+    foreach ($posted as $name => $value) {
+        $name = strtoupper(preg_replace('/[^A-Za-z0-9_]/', '', $name));
+        if ($name == '' || is_array($value)) {
+            continue;
+        }
+        $values[$name] = trim((string)$value);
+    }
+    return $values;
+}
+
+// Записать значения из формы в запись терминала: всё — в JSON выбранного дополнения;
+// для плеера прежние столбцы получают значения выбранного плеера (что он не показывает — пусто)
+// $others_json — значения других дополнений этого вида, введённые в форме до смены типа (JSON)
+function terminalsSaveSettings(&$rec, $kind, $addon, $posted, $others_json = '')
 {
     if (!is_array($posted)) {
         return;
@@ -97,21 +114,22 @@ function terminalsSaveSettings(&$rec, $kind, $addon, $posted)
     if (!is_array($all)) {
         $all = array();
     }
-    $values = array();
-    foreach ($posted as $name => $value) {
-        $name = strtoupper(preg_replace('/[^A-Za-z0-9_]/', '', $name));
-        if ($name == '' || is_array($value)) {
-            continue;
-        }
-        $value = trim((string)$value);
-        if (in_array($name, terminalsSettingsColumns())) {
-            $rec[$name] = $value;
-        } else {
-            $values[$name] = $value;
+    $key = ($addon != '') ? $addon : '_default';
+    $others = is_string($others_json) ? json_decode($others_json, true) : null;
+    if (is_array($others)) {
+        foreach ($others as $other => $other_values) {
+            $other = preg_replace('/[^A-Za-z0-9_]/', '', (string)$other);
+            if ($other != '' && $other != $key && is_array($other_values)) {
+                $all[$other] = terminalsCleanValues($other_values);
+            }
         }
     }
-    if ($addon != '') {
-        $all[$addon] = $values;
-    }
+    $values = terminalsCleanValues($posted);
+    $all[$key] = $values;
     $rec[$column] = json_encode($all);
+    if ($kind == 'player') {
+        foreach (terminalsSettingsColumns() as $name) {
+            $rec[$name] = isset($values[$name]) ? $values[$name] : '';
+        }
+    }
 }

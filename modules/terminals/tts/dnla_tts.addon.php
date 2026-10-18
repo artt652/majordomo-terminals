@@ -17,6 +17,7 @@ class dnla_tts extends mediaplayer
     {
         parent::__construct($terminal);
         $this->title = "DLNA";
+        $this->description = 'Как mediaplayer, для DLNA-устройств: голос перекодируется из wav в mp3 (нужен ffmpeg).';
     }
 
     public function sayCached($phrase, $level = 0, $cached_file = '')

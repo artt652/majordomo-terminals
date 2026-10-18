@@ -149,6 +149,9 @@
                     <option value="[#NAME#]"[#if NAME="<#TTS_TYPE#>"#] selected[#endif#]>[#NAME#]</option>
                     [#end TTS_ADDONS#]
                 </select>
+                [#begin TTS_ADDONS#]
+                <small id="tts_[#NAME#]_description" class="addon-description tts-description form-text text-muted hidden">[#DESCRIPTION#]</small>
+                [#end TTS_ADDONS#]
             </div>
         </div>
         <div class="form-group ">
@@ -199,14 +202,44 @@
 	var terminalValues = [#SETTINGS_VALUES_JSON#];
 	var terminalColumns = ['PLAYER_PORT', 'PLAYER_USERNAME', 'PLAYER_PASSWORD', 'PLAYER_CONTROL_ADDRESS'];
 
-	function terminalFieldValue(kind, addon, field) {
-		if (terminalColumns.indexOf(field.NAME) >= 0) {
-			var v = terminalValues.columns ? terminalValues.columns[field.NAME] : '';
-			return (v === undefined || v === null) ? '' : v;
+	var terminalPlayerType = '[#PLAYER_TYPE#]';
+	// пустой массив из PHP превращаем в объект: в него пишутся значения по именам дополнений
+	if (Array.isArray(terminalValues.tts)) terminalValues.tts = {};
+	if (Array.isArray(terminalValues.player)) terminalValues.player = {};
+	var terminalCurrent = {tts: null, player: null};
+
+	// Запомнить введённое в полях текущего дополнения: при смене типа и обратно значения не теряются,
+	// при сохранении уходят все (поля tts_settings_json / player_settings_json)
+	function terminalCapture(kind) {
+		var addon = terminalCurrent[kind];
+		var box = document.getElementById(kind + '_settings');
+		if (addon === null || !box) return;
+		var values = {};
+		var inputs = box.querySelectorAll('input, select');
+		for (var i = 0; i < inputs.length; i++) {
+			var m = inputs[i].name.match(/^\w+_setting\[(\w+)\]$/);
+			if (!m) continue;
+			if (inputs[i].type == 'checkbox') {
+				if (inputs[i].checked) values[m[1]] = '1';
+			} else if (inputs[i].type == 'hidden') {
+				if (!values.hasOwnProperty(m[1])) values[m[1]] = inputs[i].value;
+			} else {
+				values[m[1]] = inputs[i].value;
+			}
 		}
-		var saved = terminalValues[kind] && terminalValues[kind][addon];
+		terminalValues[kind][addon || '_default'] = values;
+	}
+
+	// Значение поля: сохранённое для этого дополнения; если для него ещё ничего не сохраняли,
+	// у текущего плеера — из прежнего столбца (PLAYER_PORT и т. п.), иначе значение по умолчанию
+	function terminalFieldValue(kind, addon, field) {
+		var saved = terminalValues[kind] && terminalValues[kind][addon || '_default'];
 		if (saved && saved.hasOwnProperty(field.NAME)) {
 			return saved[field.NAME];
+		}
+		if (kind == 'player' && !saved && addon == terminalPlayerType && terminalColumns.indexOf(field.NAME) >= 0) {
+			var v = terminalValues.columns ? terminalValues.columns[field.NAME] : '';
+			return (v === undefined || v === null) ? '' : v;
 		}
 		return field.DEFAULT;
 	}
@@ -214,6 +247,8 @@
 	function terminalRenderFields(kind, addon) {
 		var box = document.getElementById(kind + '_settings');
 		if (!box) return;
+		terminalCapture(kind);
+		terminalCurrent[kind] = addon;
 		box.innerHTML = '';
 		var list = (terminalFields[kind] && terminalFields[kind][addon]) || [];
 		for (var i = 0; i < list.length; i++) {
@@ -323,18 +358,26 @@
 	}
 
 	function player_type_select(type) {
-		$('small.addon-description').addClass('hidden');
+		$('small.addon-description').not('.tts-description').addClass('hidden');
 		$('small#'+type+'_description').removeClass('hidden');
 		terminalRenderFields('player', type);
 		return true;
 	}
 	function tts_type_select(type) {
+		$('small.tts-description').addClass('hidden');
+		$('small#tts_' + type + '_description').removeClass('hidden');
 		terminalRenderFields('tts', type);
 		return true;
 	}
 	$(document).ready(function() {
 		player_type_select('[#PLAYER_TYPE#]');
 		tts_type_select('[#TTS_TYPE#]');
+		$('form[name=frmEdit]').on('submit', function () {
+			terminalCapture('tts');
+			terminalCapture('player');
+			this.tts_settings_json.value = JSON.stringify(terminalValues.tts);
+			this.player_settings_json.value = JSON.stringify(terminalValues.player);
+		});
 	});
 </script>
 <!-- разграничение прав доступа к терминалам -->		
@@ -365,5 +408,7 @@
 <input type="hidden" name="view_mode" value="<#VIEW_MODE#>">
 <input type="hidden" name="edit_mode" value="<#EDIT_MODE#>">
 <input type="hidden" name="mode" value="update">
+<input type="hidden" name="tts_settings_json" value="">
+<input type="hidden" name="player_settings_json" value="">
 </form>
 

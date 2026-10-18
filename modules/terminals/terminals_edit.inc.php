@@ -55,8 +55,8 @@ if ($this->mode == 'update') {
     $rec['PLAYER_TYPE'] = gr('player_type');
     // поля выбранных дополнений TTS и плеера (terminals_settings.inc.php): прежние столбцы
     // PLAYER_PORT и др. меняются, только если дополнение их показало
-    terminalsSaveSettings($rec, 'tts', $rec['TTS_TYPE'], gr('tts_setting'));
-    terminalsSaveSettings($rec, 'player', $rec['PLAYER_TYPE'], gr('player_setting'));
+    terminalsSaveSettings($rec, 'tts', $rec['TTS_TYPE'], gr('tts_setting'), gr('tts_settings_json'));
+    terminalsSaveSettings($rec, 'player', $rec['PLAYER_TYPE'], gr('player_setting'), gr('player_settings_json'));
     $rec['LINKED_OBJECT'] = gr('linked_object');
     /*
     global $level_linked_property;
@@ -117,15 +117,21 @@ if (is_dir(DIR_MODULES . 'terminals/tts')) {
             if (is_file($addon_file)) {
                 if (strtolower(substr($addon_file, -10)) == '.addon.php') {
                     $addon_name = basename($addon_file, '.addon.php');
-                    $out['TTS_ADDONS'][] = array('NAME'=>$addon_name);
+                    $tts_description = '';
                     // поля дополнения TTS (settingsFields). Дополнение, у которого есть одноимённое
                     // дополнение плеера (majordroid), не подключаем: два класса с одним именем — Fatal
                     if (!file_exists(DIR_MODULES . 'app_player/addons/' . $addon_name . '.addon.php')) {
                         include_once($addon_file);
                         if (class_exists($addon_name)) {
-                            $tts_fields[$addon_name] = terminalsFieldsForForm(terminalsAddonFields(new $addon_name($rec_raw), 'tts'));
+                            $tts_addon = new $addon_name($rec_raw);
+                            $tts_fields[$addon_name] = terminalsFieldsForForm(terminalsAddonFields($tts_addon, 'tts'));
+                            // описание типа TTS (необязательное свойство $description), как у плееров
+                            if (isset($tts_addon->description) && is_string($tts_addon->description)) {
+                                $tts_description = $tts_addon->description;
+                            }
                         }
                     }
+                    $out['TTS_ADDONS'][] = array('NAME' => $addon_name, 'DESCRIPTION' => $tts_description);
                 }
             }
         }

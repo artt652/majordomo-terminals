@@ -2,9 +2,18 @@
 
 class mediaplayer extends tts_addon
 {
+    // Свои свойства: в базовом tts_addon $title объявлен private, запись из наследника
+    // создавала бы динамическое свойство (Deprecated в PHP 8.2+). Описание показывается в карточке терминала
+    public $title = 'MediaPlayer';
+    public $description = '';
+
     function __construct($terminal)
     {
         $this->title = "MediaPlayer";
+        $this->description = 'Голос сообщений на плеере терминала (тип плеера — в разделе «Может воспроизводить медиа»). '
+            . 'Файл голоса делает модуль синтеза речи. Сообщения звучат по очереди, а то, что играло до них, '
+            . 'возвращается с того же места. Для MPD, Logitech Media Server, Kodi, Chromecast и DLNA есть свои типы: '
+            . '<b>mpd_tts</b>, <b>lms_tts</b>, <b>kodi_tts</b>, <b>chromecast_tts</b>, <b>dnla_tts</b>.';
         parent::__construct($terminal);
     }
 

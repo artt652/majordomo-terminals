@@ -46,7 +46,8 @@ function settingsFields()
 ```
 
 - `TYPE`: `text` (по умолчанию), `password`, `number`, `select`, `combo` (список подсказок, можно ввести своё), `checkbox`; ещё `DEFAULT`, `HINT`, `OPTIONS`.
-- Поля с именами прежних столбцов (`PLAYER_PORT`, `PLAYER_USERNAME`, `PLAYER_PASSWORD`, `PLAYER_CONTROL_ADDRESS`) хранятся в них, как раньше. Остальные — в JSON-полях `TTS_SETTINGS` / `PLAYER_SETTINGS` отдельно для каждого дополнения, смена типа их не стирает.
+- Все значения хранятся в JSON-полях `TTS_SETTINGS` / `PLAYER_SETTINGS` отдельно для каждого дополнения: у каждого плеера и каждого TTS свои, смена типа их не стирает. Поля плеера с именами прежних столбцов (`PLAYER_PORT`, `PLAYER_USERNAME`, `PLAYER_PASSWORD`, `PLAYER_CONTROL_ADDRESS`) при сохранении ещё и копируются в эти столбцы, значениями выбранного плеера, поэтому дополнения `app_player` работают без изменений.
+- У дополнения TTS может быть описание (свойство `$description`); оно показывается под выбором типа TTS, как у плееров.
 - Дополнение читает свои значения через `terminalsAddonSettings($this->terminal, 'tts' или 'player', 'имя_дополнения')`.
 - Плеер без `settingsFields()` получает прежний набор: порт, имя пользователя, пароль. TTS без него полей не получает.
 

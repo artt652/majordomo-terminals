@@ -7,6 +7,12 @@ class pipup extends tts_addon
     // Собственное свойство: в базовом tts_addon $title объявлен private,
     // запись в него из наследника создаёт динамическое свойство (Deprecated в PHP 8.2+).
     public $title = 'PiPup';
+    // Описание типа в карточке терминала
+    public $description = 'Текст, картинки и голос сообщений во всплывающем окне PiPup на Android-устройстве (ТВ, приставка, планшет, панель, телефон). '
+        . '<b>Голос сообщений:</b> пусто — голос любого генератора речи; метка генератора — только его голос '
+        . '(<code>sanotts</code>, <code>piper_tts</code>, <code>rh</code>, <code>sapi</code> — речь Windows, <code>yandex</code>, <code>google</code>, <code>ivona</code>, <code>tilde</code>; можно несколько через запятую); '
+        . '<code>device</code> — синтезатор речи самого устройства. <b>Порт PiPup:</b> пусто — порт плеера pipup_play, иначе 7979. '
+        . 'Нужен форк PiPup (mhoogenbosch) 0.27+ — <a href="https://github.com/mhoogenbosch/PiPup/releases/latest/download/PiPup.apk" target="_blank">скачать APK</a>.';
 
     // Порт встроенного веб-сервера PiPup по умолчанию
     const DEFAULT_PORT = 7979;
