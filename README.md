@@ -13,6 +13,7 @@
 | `modules/terminals/terminals_edit.inc.php` | Изменён: поля дополнений в форме терминала и их сохранение |
 | `templates/terminals/terminals_edit.html` | Изменён: поля плеера и TTS строятся по описанию из дополнения, без жёстко прописанного списка |
 | `modules/app_player/addons/{dnla,chromecast,foobar,ghn,majordroid,mpd}.addon.php` | Изменены: объявляют свои поля (`settingsFields()`) вместо перечня в шаблоне |
+| `modules/app_messages/app_messages.class.php`, `modules/app_messages/app`, `img/modules/app_messages.png` | Новые: приложение «Сообщения» — открывает страницу «Сообщения» как приложение MajorDoMo |
 | `modules/terminals/terminals_messages.inc.php` | Новый: страница «Сообщения» — обмен сообщениями между терминалами |
 | `templates/terminals/action_usual.html` | Новый: шаблон страницы «Сообщения» |
 | `templates/terminals/terminals.html` | Изменён: frontend модуля показывает страницу «Сообщения» |
@@ -41,7 +42,7 @@
 
 ## Сообщения между терминалами
 
-Страница «Сообщения» открывается на самом устройстве-терминале (планшет, телефон, ПК): `/module/terminals.html` (не `/popup/terminals.html`: popup-страницы ядро выводит только для модулей `app_*`) или на странице меню `[#module name="terminals" action="messages"#]`.
+Страница «Сообщения» открывается на самом устройстве-терминале (планшет, телефон, ПК) как приложение: `http://сервер/popup/app_messages.html` (или `/module/app_messages.html`, `/apps/app_messages.html`), а также из списка приложений MajorDoMo. Тот же вывод — `/module/terminals.html` и `[#module name="terminals" action="messages"#]` на странице меню.
 
 - Отправитель — этот терминал: ядро узнаёт его по адресу устройства или по `?terminal=ИМЯ` (запоминается в сессии); если не узнало — выбирается на странице.
 - Кому — один или несколько терминалов. Текст (с озвучкой на получателе или без), фото или картинка, голосовое сообщение.
