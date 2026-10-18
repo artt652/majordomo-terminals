@@ -44,19 +44,20 @@ function terminalsQueueUsed($tts)
     return is_object($tts) && method_exists($tts, 'useQueue') && $tts->useQueue();
 }
 
-function terminalsQueueAdd($terminal_rec, $kind, $message, $level, $file, $image = '')
+// $kind: say, ask, cached (голос фразы), sound (звуковой файл — terminalsSend); $sender — от кого (заголовок окна)
+function terminalsQueueAdd($terminal_rec, $kind, $message, $level, $file, $image = '', $sender = '')
 {
     $tid = isset($terminal_rec['ID']) ? (int)$terminal_rec['ID'] : 0;
     $urgent = ($kind == 'ask' || (int)$level >= terminals::QUEUE_URGENT_LEVEL);
     if (!$tid || !terminalsQueueLock($tid)) {
         // без ID или очередь занята другим процессом слишком долго — не теряем сообщение
-        $played = terminalsQueuePlay($terminal_rec, $kind, $message, $level, $file, $image);
+        $played = terminalsQueuePlay($terminal_rec, $kind, $message, $level, $file, $image, $sender);
         return $played[0];
     }
     $now = time();
     $result = true;
     // текст хранится в JSON (\uXXXX): таблица в utf8, эмодзи иначе превратятся в «?»
-    $key = json_encode((string)$message);
+    $key = json_encode(($kind == 'sound') ? 'sound:' . $file : (string)$message);
     $current = SQLSelectOne("SELECT * FROM terminals_queue WHERE TERMINAL_ID=$tid AND STARTED>0 ORDER BY STARTED DESC, ID DESC LIMIT 1");
     $busy = !empty($current['ID']) && (int)$current['FINISH'] > $now;
     if (!$busy && !empty($current['ID']) && $now < (int)$current['FINISH'] + 2 * terminals::QUEUE_PLAYING_CHECKS
@@ -71,7 +72,7 @@ function terminalsQueueAdd($terminal_rec, $kind, $message, $level, $file, $image
         if ($kind == 'cached' && $current['FILENAME'] == '') {
             // голос фразы, текст которой уже показан: звучит сразу, терминал занят дольше
             // (с картинкой этой фразы, если она была)
-            $played = terminalsQueuePlay($terminal_rec, 'cached', $message, $level, $file, (string)$current['IMAGE']);
+            $played = terminalsQueuePlay($terminal_rec, 'cached', $message, $level, $file, (string)$current['IMAGE'], (string)$current['SENDER']);
             $current['FILENAME'] = $file;
             $current['FINISH'] = max((int)$current['FINISH'], $now + $played[1]);
             SQLUpdate('terminals_queue', $current);
@@ -91,6 +92,9 @@ function terminalsQueueAdd($terminal_rec, $kind, $message, $level, $file, $image
         if ($image == '') {
             $image = (string)$waiting['IMAGE'];
         }
+        if ($sender == '') {
+            $sender = (string)$waiting['SENDER'];
+        }
         SQLExec("DELETE FROM terminals_queue WHERE ID=" . (int)$waiting['ID']);
         $waiting = array();
     }
@@ -103,6 +107,10 @@ function terminalsQueueAdd($terminal_rec, $kind, $message, $level, $file, $image
         }
         if ($image != '' && $waiting['IMAGE'] == '') {
             $waiting['IMAGE'] = $image;
+            $changed = true;
+        }
+        if ($sender != '' && $waiting['SENDER'] == '') {
+            $waiting['SENDER'] = $sender;
             $changed = true;
         }
         if ($changed) {
@@ -119,6 +127,7 @@ function terminalsQueueAdd($terminal_rec, $kind, $message, $level, $file, $image
         'LEVEL' => (int)$level,
         'FILENAME' => (string)$file,
         'IMAGE' => (string)$image,
+        'SENDER' => (string)$sender,
         'ADDED' => $now,
         'STARTED' => 0,
         'FINISH' => 0,
@@ -132,7 +141,7 @@ function terminalsQueueAdd($terminal_rec, $kind, $message, $level, $file, $image
         }
         SQLExec("DELETE FROM terminals_queue WHERE TERMINAL_ID=$tid AND STARTED>0");
         $rec['STARTED'] = $now;
-        $played = terminalsQueuePlay($terminal_rec, $kind, $message, $level, $file, $image);
+        $played = terminalsQueuePlay($terminal_rec, $kind, $message, $level, $file, $image, $sender);
         $rec['FINISH'] = $now + $played[1];
         SQLInsert('terminals_queue', $rec);
         $result = $played[0];
@@ -190,7 +199,7 @@ function terminalsQueueNext($tid, $check = 0)
         }
         $now = time();
         $message = json_decode($next['MESSAGE'], true);
-        $played = terminalsQueuePlay($terminal_rec, $next['KIND'], is_string($message) ? $message : '', (int)$next['LEVEL'], $next['FILENAME'], (string)$next['IMAGE']);
+        $played = terminalsQueuePlay($terminal_rec, $next['KIND'], is_string($message) ? $message : '', (int)$next['LEVEL'], $next['FILENAME'], (string)$next['IMAGE'], (string)$next['SENDER']);
         $next['STARTED'] = $now;
         $next['FINISH'] = $now + $played[1];
         SQLUpdate('terminals_queue', $next);
@@ -209,7 +218,7 @@ function terminalsQueueNext($tid, $check = 0)
 
 // Отдать сообщение дополнению TTS. Возвращает [результат дополнения, сколько секунд терминал занят].
 // Сообщение с картинкой уходит в showMessage(), если дополнение его умеет (текст, картинка и голос вместе)
-function terminalsQueuePlay($terminal_rec, $kind, $message, $level, $file, $image = '')
+function terminalsQueuePlay($terminal_rec, $kind, $message, $level, $file, $image = '', $sender = '')
 {
     $result = false;
     $busy = 0;
@@ -217,9 +226,22 @@ function terminalsQueuePlay($terminal_rec, $kind, $message, $level, $file, $imag
     if (!is_object($tts)) {
         return array($result, $busy);
     }
-    if ($image != '' && method_exists($tts, 'showMessage')) {
-        DebMes("Showing to " . $terminal_rec['TITLE'] . ' (level ' . $level . '): ' . $message . " (image: $image" . ($file != '' ? ", file: $file" : '') . ')', 'terminals');
-        $result = $tts->showMessage($message, ($kind == 'ask') ? 9999 : $level, $image, $file);
+    if ($kind == 'sound') {
+        // звуковой файл (terminalsSend): дополнению, которое умеет playFile()
+        if (method_exists($tts, 'playFile')) {
+            DebMes("Playing sound to " . $terminal_rec['TITLE'] . " (level $level): $file", 'terminals');
+            $result = $tts->playFile($file, $level, $sender);
+            if ($result) {
+                $local = is_file($file) ? $file : (is_file(ROOT . ltrim($file, '/')) ? ROOT . ltrim($file, '/') : '');
+                $seconds = ($local != '' && function_exists('getMediaDurationSeconds')) ? (int)getMediaDurationSeconds($local) : 0;
+                $busy = ($seconds > 0) ? $seconds + 1 : 3;
+            }
+        }
+        return array($result, $busy);
+    }
+    if (($image != '' || $sender != '') && method_exists($tts, 'showMessage')) {
+        DebMes("Showing to " . $terminal_rec['TITLE'] . ' (level ' . $level . '): ' . $message . ($sender != '' ? " (from: $sender)" : '') . ($image != '' ? " (image: $image)" : '') . ($file != '' ? " (file: $file)" : ''), 'terminals');
+        $result = $tts->showMessage($message, ($kind == 'ask') ? 9999 : $level, $image, $file, $sender);
         if ($result) {
             $seconds = 0;
             if ($file != '' && is_file($file) && function_exists('getMediaDurationSeconds')) {

@@ -83,6 +83,29 @@ if ($this->mode == 'update') {
     }
 }
 
+// отправка сообщения на этот терминал (форма «Отправить сообщение», terminals_send.inc.php)
+if ($this->mode == 'send' && is_array($rec) && !empty($rec['ID'])) {
+    $send_options = array(
+        'from' => gr('send_from'),
+        'image' => gr('send_image'),
+        'sound' => gr('send_sound'),
+        'voice' => gr('send_voice', 'int'),
+    );
+    if (gr('send_level') !== '') {
+        $send_options['level'] = gr('send_level', 'int');
+    }
+    $out['SENT'] = terminalsSend($rec['NAME'], gr('send_message'), $send_options) ? 1 : 0;
+    $out['SEND_FAILED'] = $out['SENT'] ? 0 : 1;
+}
+$out['SEND_TERMINALS'] = SQLSelect("SELECT NAME, TITLE FROM terminals WHERE ID!=" . (int)(is_array($rec) ? $rec['ID'] : 0) . " ORDER BY TITLE");
+$out['SEND_SOUNDS'] = array();
+$sound_files = is_dir(ROOT . 'cms/sounds') ? scandir(ROOT . 'cms/sounds') : array();
+foreach ((array)$sound_files as $sound_file) {
+    if (preg_match('/\.(mp3|wav|ogg)$/i', $sound_file)) {
+        $out['SEND_SOUNDS'][] = array('FILE' => 'cms/sounds/' . $sound_file, 'TITLE' => $sound_file);
+    }
+}
+
 // сохранённые значения полей дополнений — для формы
 $settings_values = array('tts' => array(), 'player' => array(), 'columns' => array());
 foreach (array('tts' => 'TTS_SETTINGS', 'player' => 'PLAYER_SETTINGS') as $kind => $column) {

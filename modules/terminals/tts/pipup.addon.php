@@ -118,17 +118,23 @@ class pipup extends tts_addon
         return $this->sendCommand($phrase, 'Уведомление', $this->messageId($phrase), $this->deviceVoice());
     }
 
-    // Сообщение с картинкой (модуль terminals вызывает его вместо say()/sayCached(), если он есть):
-    // текст, картинка и, если уже готов, звук голоса — в одном окне. Картинка — путь в веб-корне
-    // MajorDoMo (как в say('… image:cms/…')) или http-ссылка. Без картинки — как say()/sayCached()
-    function showMessage($phrase, $level = 0, $image = '', $cached_file = '')
+    // Сообщение с картинкой или от другого терминала (модуль terminals вызывает его вместо
+    // say()/sayCached(), если он есть): текст, картинка и, если уже готов, звук голоса — в одном окне.
+    // Картинка — путь в веб-корне MajorDoMo (как в say('… image:cms/…')) или http-ссылка.
+    // $sender — от кого, пишется в заголовке окна
+    function showMessage($phrase, $level = 0, $image = '', $cached_file = '', $sender = '')
     {
+        $title = ($sender != '') ? 'От: ' . $sender : 'Уведомление';
         $imgUrl = ($image != '') ? $this->fileUrl($image) : false;
         if ($image != '' && $imgUrl === false) {
             DebMes("PiPup: image not found: $image", 'terminals');
         }
         if ($imgUrl === false) {
-            return ($cached_file != '') ? $this->sayCached($phrase, $level, $cached_file) : $this->say($phrase, $level);
+            if ($cached_file != '') {
+                return ($this->deviceVoice() || !$this->engineAllowed($cached_file)) ? 0
+                    : $this->soundMessage($phrase, $cached_file, '🔊 ' . $title);
+            }
+            return $this->sendCommand($phrase, $title, $this->messageId($phrase), $this->deviceVoice());
         }
         $url = $this->notifyUrl('/notify');
         if ($url === false) {
@@ -137,7 +143,7 @@ class pipup extends tts_addon
         $data = array(
             'duration' => $this->autoDuration($phrase),
             'position' => 0,
-            'title' => 'Уведомление',
+            'title' => $title,
             'titleColor' => '#0066cc',
             'titleSize' => 20,
             'message' => (string)$phrase,
@@ -159,9 +165,8 @@ class pipup extends tts_addon
             $soundUrl = $this->fileUrl($cached_file);
             if ($soundUrl !== false) {
                 $data['sound'] = $soundUrl;
-                $settings = function_exists('terminalsAddonSettings') ? terminalsAddonSettings($this->terminal, 'tts', 'pipup') : array();
-                if (isset($settings['VOLUME']) && (int)$settings['VOLUME'] > 0) {
-                    $data['soundVolume'] = min(100, (int)$settings['VOLUME']) / 100;
+                if ($this->messageVolume() !== null) {
+                    $data['soundVolume'] = $this->messageVolume();
                 }
                 $local = $this->localPath($cached_file);
                 if ($local !== false && function_exists('getMediaDurationSeconds')) {
@@ -211,7 +216,37 @@ class pipup extends tts_addon
      */
     function sayCached($phrase, $level = 0, $cached_file = '')
     {
-        // Выбор генератора голоса: поле «Имя пользователя» плеера в карточке терминала.
+        return $this->soundMessage($phrase, $cached_file, '🔊 Уведомление');
+    }
+
+    // Звуковой файл (terminalsSend: звук перед сообщением) — отдельным окном.
+    // Файл — путь в веб-корне MajorDoMo или http-ссылка; $title — заголовок окна (например, отправитель)
+    function playFile($file, $level = 0, $title = '')
+    {
+        $soundUrl = $this->fileUrl($file);
+        if ($soundUrl === false) {
+            DebMes("PiPup: sound not found: $file", 'terminals');
+            return 0;
+        }
+        $duration = 5;
+        $local = $this->localPath($file);
+        if ($local !== false && function_exists('getMediaDurationSeconds')) {
+            $duration = max(3, (int)getMediaDurationSeconds($local) + 2);
+        }
+        return $this->sendSound($soundUrl, '', ($title != '') ? '🔊 ' . $title : '🔊', $duration, $this->messageVolume());
+    }
+
+    // «Громкость сообщений» (1–100) — громкость звука окна относительно громкости устройства (0..1) или null
+    private function messageVolume()
+    {
+        $settings = function_exists('terminalsAddonSettings') ? terminalsAddonSettings($this->terminal, 'tts', 'pipup') : array();
+        return (isset($settings['VOLUME']) && (int)$settings['VOLUME'] > 0) ? min(100, (int)$settings['VOLUME']) / 100 : null;
+    }
+
+    // Окно с текстом фразы и её голосом
+    private function soundMessage($phrase, $cached_file, $title)
+    {
+        // Выбор генератора голоса: поле «Голос сообщений» в настройках TTS (раньше — «Имя пользователя» плеера).
         // Значение — метка генератора в имени файла: префикс (sanotts, piper_tts, rh, sapi)
         // или суффикс (yandex, google, ivona, tilde); можно несколько через запятую.
         // device — говорить синтезатором самого устройства, файлы генераторов не использовать.
@@ -235,10 +270,7 @@ class pipup extends tts_addon
         if ($local !== false && function_exists('getMediaDurationSeconds')) {
             $duration = max($duration, (int)getMediaDurationSeconds($local) + 2);
         }
-        // «Громкость сообщений» (1–100) — громкость звука окна относительно громкости устройства
-        $settings = function_exists('terminalsAddonSettings') ? terminalsAddonSettings($this->terminal, 'tts', 'pipup') : array();
-        $volume = (isset($settings['VOLUME']) && (int)$settings['VOLUME'] > 0) ? min(100, (int)$settings['VOLUME']) / 100 : null;
-        return $this->sendSound($soundUrl, $phrase, '🔊 Уведомление', $duration, $volume, $this->messageId($phrase));
+        return $this->sendSound($soundUrl, $phrase, $title, $duration, $this->messageVolume(), $this->messageId($phrase));
     }
 
     // Голос устройства: в поле «Голос сообщений» указано device

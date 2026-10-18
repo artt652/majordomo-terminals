@@ -412,3 +412,56 @@
 <input type="hidden" name="player_settings_json" value="">
 </form>
 
+[#if ID!=""#]
+<!-- сообщение на этот терминал: текст (с озвучкой), картинка, звук, отправитель (terminals_send.inc.php) -->
+<form action="?" method="post" class="form-horizontal" name="frmSend">
+<fieldset style="margin-top:20px">
+<legend style="font-size:18px">Отправить сообщение на этот терминал</legend>
+[#if SENT="1"#]<div class="alert alert-success">Сообщение отправлено</div>[#endif SENT#]
+[#if SEND_FAILED="1"#]<div class="alert alert-danger">Сообщение не отправлено: терминал не может проговаривать или нечего отправлять</div>[#endif SEND_FAILED#]
+<div class="form-group">
+	<label class="col-lg-4 control-label">Текст:</label>
+	<div class="col-lg-5"><textarea name="send_message" class="form-control" rows="2"></textarea></div>
+</div>
+<div class="form-group">
+	<div class="col-lg-offset-4 col-lg-5">
+		<div class="checkbox"><label><input type="checkbox" name="send_voice" value="1" checked> Озвучить текст генератором речи</label></div>
+	</div>
+</div>
+<div class="form-group">
+	<label class="col-lg-4 control-label">Картинка:</label>
+	<div class="col-lg-5"><input type="text" name="send_image" class="form-control" placeholder="путь в веб-корне (cms/cached/snapshot.jpg) или http-ссылка"></div>
+</div>
+<div class="form-group">
+	<label class="col-lg-4 control-label">Звук перед сообщением:</label>
+	<div class="col-lg-5">
+		<select name="send_sound" class="form-control">
+			<option value="">нет</option>
+			[#begin SEND_SOUNDS#]<option value="[#FILE#]">[#TITLE#]</option>[#end SEND_SOUNDS#]
+		</select>
+	</div>
+</div>
+<div class="form-group">
+	<label class="col-lg-4 control-label">От кого:</label>
+	<div class="col-lg-5">
+		<select name="send_from" class="form-control">
+			<option value="">не указывать</option>
+			[#begin SEND_TERMINALS#]<option value="[#NAME#]">[#TITLE#]</option>[#end SEND_TERMINALS#]
+		</select>
+	</div>
+</div>
+<div class="form-group">
+	<label class="col-lg-4 control-label">Уровень:</label>
+	<div class="col-lg-5"><input type="number" name="send_level" class="form-control" placeholder="пусто — порог этого терминала"></div>
+</div>
+<div class="form-group">
+	<div class="col-lg-offset-4 col-lg-5"><input class="btn btn-default" type="submit" value="Отправить"></div>
+</div>
+</fieldset>
+<input type="hidden" name="id" value="<#ID#>">
+<input type="hidden" name="view_mode" value="<#VIEW_MODE#>">
+<input type="hidden" name="edit_mode" value="<#EDIT_MODE#>">
+<input type="hidden" name="mode" value="send">
+</form>
+[#endif ID#]
+

@@ -31,9 +31,38 @@ class mediaplayer extends tts_addon
         return true;
     }
 
-    // Ссылка, по которой плеер заберёт файл сообщения (пусто, если путь не из cms/cached)
+    // Звуковой файл (terminalsSend: звук перед сообщением): путь в веб-корне MajorDoMo или http-ссылка.
+    // Играет так же, как файл голоса, — у наследников (mpd_tts и др.) их способом
+    public function playFile($file, $level = 0, $title = '')
+    {
+        return $this->sayCached('', $level, $file);
+    }
+
+    // Ссылка, по которой плеер заберёт файл сообщения: файл голоса из cms/cached, другой файл
+    // в веб-корне MajorDoMo или http-ссылка (пусто, если файл вне веб-корня)
     protected function messageUrl($cached_file)
     {
+        if (preg_match('/^https?:\/\//i', (string)$cached_file)) {
+            return (string)$cached_file;
+        }
+        if (!preg_match('/\/cms\/cached.+/', $cached_file)) {
+            // файл в веб-корне (например, cms/sounds/dingdong.mp3)
+            $path = is_file($cached_file) ? $cached_file : ROOT . ltrim((string)$cached_file, '/');
+            $real = realpath($path);
+            $root = realpath(ROOT);
+            if ($real === false || $root === false || strpos($real, $root . DIRECTORY_SEPARATOR) !== 0 || !is_file($real)) {
+                return '';
+            }
+            $cached_file = '/' . str_replace(DIRECTORY_SEPARATOR, '/', substr($real, strlen($root) + 1));
+            if (preg_match('/\/cms\/cached.+/', $cached_file) == 0) {
+                $server_ip = getLocalIp();
+                $url = $server_ip ? 'http://' . $server_ip . $cached_file : '';
+                if ($url == '' || !remote_file_exists($url)) {
+                    $url = BASE_URL . $cached_file;
+                }
+                return $url;
+            }
+        }
         // poluchaem adress cashed files dlya zapuska ego na vosproizvedeniye
         if (preg_match('/\/cms\/cached.+/', $cached_file, $m)) {
             $server_ip = getLocalIp();
@@ -101,7 +130,7 @@ class mediaplayer extends tts_addon
         }
         $volume = (isset($played['volume']) && (int)$played['volume'] > 0) ? (int)$played['volume'] : 0;
         $file = ($played['state'] == 'playing') ? $this->currentFile($played) : '';
-        if ($file != '' && !preg_match('/cms[\\\\\/]cached[\\\\\/]voice/i', $file)) {
+        if ($file != '' && !$this->isMessageFile($file)) {
             $state = array('file' => $file, 'time' => isset($played['time']) ? (int)$played['time'] : 0);
             $track_id = $this->currentTrackId($played);
             if ($track_id >= 0) {
@@ -141,7 +170,13 @@ class mediaplayer extends tts_addon
         if ($file == '') {
             return null;
         }
-        return (bool)preg_match('/cms[\\\\\/]cached[\\\\\/]voice/i', $file);
+        return (bool)$this->isMessageFile($file);
+    }
+
+    // Файл сообщения, а не музыка: голос из cms/cached/voice или звук из cms/sounds (terminalsSend)
+    protected function isMessageFile($file)
+    {
+        return (bool)preg_match('/cms[\\\\\/](cached[\\\\\/]voice|sounds)[\\\\\/]/i', (string)$file);
     }
 
     // Текущий файл плеера из ответа getPlayerStatus()
@@ -273,11 +308,11 @@ class mediaplayer extends tts_addon
         return $this->playerCommand('pl_play', $id);
     }
 
-    // Убрать из плейлиста файлы сообщений (cms/cached/voice); остальные треки не трогаются
+    // Убрать из плейлиста файлы сообщений (cms/cached/voice, cms/sounds); остальные треки не трогаются
     protected function playlistCleanup()
     {
         foreach ($this->playlist() as $item) {
-            if (is_array($item) && isset($item['id'], $item['file']) && preg_match('/cms[\\\\\/]cached[\\\\\/]voice/i', $item['file'])) {
+            if (is_array($item) && isset($item['id'], $item['file']) && $this->isMessageFile($item['file'])) {
                 $this->playerCommand('pl_delete', (int)$item['id']);
             }
         }
