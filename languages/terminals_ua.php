@@ -85,6 +85,7 @@ $dictionary = array(
 	'TERMINALS_SELECT_CHAT'          => 'Оберіть чат',
 	'TERMINALS_BACK'                 => 'Назад',
 	'TERMINALS_FILE'                 => 'Файл',
+	'TERMINALS_CAMERA'               => 'Камера',
 	'TERMINALS_RECORD_VOICE'         => 'Записати голосове',
 	'TERMINALS_FILE_TOO_BIG'         => 'Файл більший за %s МБ',
 	'TERMINALS_FILE_TYPE'            => 'Такий тип файлу не приймається',

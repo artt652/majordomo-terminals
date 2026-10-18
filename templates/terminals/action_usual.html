@@ -160,7 +160,8 @@
 			<div class="tg-status" id="tm_status"></div>
 			<div class="tg-compose">
 				<div class="tg-menu" id="tm_menu">
-					<label>📷 <#LANG_TERMINALS_PHOTO#><input type="file" name="image" accept="image/*" capture="environment" style="display:none"></label>
+					<label>🖼 <#LANG_TERMINALS_PHOTO#><input type="file" name="image" accept="image/*" style="display:none"></label>
+					<label>📷 <#LANG_TERMINALS_CAMERA#><input type="file" name="image_camera" accept="image/*" capture="environment" style="display:none"></label>
 					<label>📄 <#LANG_TERMINALS_FILE#><input type="file" name="file" style="display:none"></label>
 					<label>🎤 <#LANG_TERMINALS_VOICE_MESSAGE#><input type="file" name="audio" accept="audio/*" capture style="display:none"></label>
 				</div>
@@ -395,11 +396,11 @@
 	function tmFiles() {
 		var box = document.getElementById('tm_files');
 		box.innerHTML = '';
-		[tmForm.image, tmForm.audio, tmForm.file].forEach(function (input) {
+		[tmForm.image, tmForm.image_camera, tmForm.audio, tmForm.file].forEach(function (input) {
 			if (!input.files || !input.files.length) return;
 			var chip = document.createElement('span');
 			chip.className = 'tg-chip';
-			chip.textContent = ({image: '📷 ', audio: '🎤 ', file: '📄 '})[input.name] + input.files[0].name;
+			chip.textContent = ({image: '🖼 ', image_camera: '📷 ', audio: '🎤 ', file: '📄 '})[input.name] + input.files[0].name;
 			var x = document.createElement('button');
 			x.type = 'button';
 			x.textContent = '✕';
@@ -409,11 +410,17 @@
 		});
 		tmSendIcon();
 	}
-	[tmForm.image, tmForm.audio, tmForm.file].forEach(function (input) {
-		input.addEventListener('change', function () { tmMenu.style.display = 'none'; tmFiles(); });
+	[tmForm.image, tmForm.image_camera, tmForm.audio, tmForm.file].forEach(function (input) {
+		input.addEventListener('change', function () {
+			// картинка одна: выбранная из галереи заменяет снимок с камеры и наоборот
+			if (input.name == 'image' && input.files.length) tmForm.image_camera.value = '';
+			if (input.name == 'image_camera' && input.files.length) tmForm.image.value = '';
+			tmMenu.style.display = 'none';
+			tmFiles();
+		});
 	});
 	function tmHasFiles() {
-		return [tmForm.image, tmForm.audio, tmForm.file].some(function (input) { return input.files && input.files.length; });
+		return [tmForm.image, tmForm.image_camera, tmForm.audio, tmForm.file].some(function (input) { return input.files && input.files.length; });
 	}
 
 	// поле ввода растёт по тексту; Enter — отправить, Shift+Enter — новая строка
@@ -624,7 +631,7 @@
 		var status = document.getElementById('tm_status');
 		// размер проверяем до отправки: иначе сервер отбросит запрос целиком
 		var tooBig = '';
-		[[tmForm.image, tmMaxMedia], [tmForm.audio, tmMaxMedia], [tmForm.file, tmMaxFile]].forEach(function (item) {
+		[[tmForm.image, tmMaxMedia], [tmForm.image_camera, tmMaxMedia], [tmForm.audio, tmMaxMedia], [tmForm.file, tmMaxFile]].forEach(function (item) {
 			var f = item[0].files && item[0].files[0];
 			if (f && f.size > item[1] * 1048576) tooBig = tmText.tooBig.replace('%s', item[1]);
 		});
@@ -644,6 +651,7 @@
 					tmInput.value = '';
 					tmGrow();
 					tmForm.image.value = '';
+					tmForm.image_camera.value = '';
 					tmForm.audio.value = '';
 					tmForm.file.value = '';
 					tmFiles();

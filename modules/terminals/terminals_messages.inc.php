@@ -236,6 +236,10 @@ if ($this->mode == 'send_message' || gr('mode') == 'send_message') {
     }
     $text = gr('message');
     $image = $save_upload('image', $image_ext, $max_media);
+    if ($image == '') {
+        // снимок с камеры (отдельный пункт меню)
+        $image = $save_upload('image_camera', $image_ext, $max_media);
+    }
     $sound = $save_upload('audio', $audio_ext, $max_media);
     $file = $save_upload('file', $file_ext, $max_file);
     $sent = 0;
