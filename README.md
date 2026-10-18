@@ -9,6 +9,11 @@
 | `modules/terminals/terminals.class.php` | Изменён: очередь сообщений для дополнений с `useQueue()`, события `MINUTELY` и `startup`, таблицы `terminals_queue` и `terminals_state` |
 | `modules/terminals/terminals_queue.inc.php` | Новый: логика очереди, сохранение и восстановление плеера, сторож |
 | `modules/terminals/tts/mediaplayer.addon.php` | Изменён: собственная очередь на заданиях `allsay-target-*` убрана, добавлены `useQueue()`, `saveState()`, `restoreState()` |
+| `modules/terminals/tts/mpd_tts.addon.php` | Новый: сообщения на MPD без потери плейлиста (проверено на MPD 0.23) |
+| `modules/terminals/tts/lms_tts.addon.php` | Новый: то же для Logitech Media Server (не проверено на устройстве) |
+| `modules/terminals/tts/kodi_tts.addon.php` | Новый: то же для Kodi (не проверено на устройстве) |
+| `modules/terminals/tts/chromecast_tts.addon.php` | Новый: Chromecast, музыка возвращается с прежней позиции (не проверено на устройстве) |
+| `modules/terminals/tts/dnla_tts.addon.php` | Новый: DLNA, сообщение перекодируется из wav в mp3 (не проверено на устройстве) |
 | `modules/terminals/tts/pipup.addon.php` | Новый: тип терминала PiPup (уведомления, картинки, звук, видео на Android-устройстве) |
 | `modules/app_player/addons/pipup_play.addon.php` | Новый: плеер PiPup |
 
@@ -20,6 +25,17 @@
 - **Повторы склеиваются.** Та же фраза второй раз не ставится, а готовый звуковой файл фразы присоединяется к её записи.
 - **Плеер восстанавливается.** Перед первым сообщением серии сохраняется, что играл плеер, после последнего тот же трек включается с той же позиции. Если трек остался в плейлисте под тем же номером (vlcweb), он включается через `pl_play`, и плейлист сохраняется; сообщения из плейлиста удаляются. Если плеер заменил плейлист (mpd, lms) или плейлиста нет, файл запускается заново.
 - **Старые сообщения удаляются.** Не проигрываются сообщения старше 10 минут. Сторож (`MINUTELY`) перезапускает застрявшую очередь, `startup` сбрасывает её.
+
+## Тип TTS для терминала
+
+| Плеер терминала | Тип TTS |
+|---|---|
+| VLC (HTTP), другие плееры | `mediaplayer` |
+| MPD | `mpd_tts` |
+| Logitech Media Server | `lms_tts` |
+| Kodi | `kodi_tts` |
+| Chromecast | `chromecast_tts` |
+| DLNA | `dnla_tts` |
 
 После замены файлов переустановите модуль «Терминалы», чтобы создались таблицы и подписки на события.
 

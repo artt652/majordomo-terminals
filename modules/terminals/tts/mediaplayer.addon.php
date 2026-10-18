@@ -10,12 +10,24 @@ class mediaplayer extends tts_addon
 
     public function sayCached($phrase, $level = 0, $cached_file = '')
     {
+        $cached_file_url = $this->messageUrl($cached_file);
+        if ($cached_file_url == '') {
+            return false;
+        }
+        // очередь, порядок и восстановление плеера ведёт модуль terminals (terminals_queue.inc.php)
+        playMedia($cached_file_url, $this->terminal['TITLE']);
+        return true;
+    }
+
+    // Ссылка, по которой плеер заберёт файл сообщения (пусто, если путь не из cms/cached)
+    protected function messageUrl($cached_file)
+    {
         // poluchaem adress cashed files dlya zapuska ego na vosproizvedeniye
         if (preg_match('/\/cms\/cached.+/', $cached_file, $m)) {
             $server_ip = getLocalIp();
             if (!$server_ip) {
                 //DebMes("Server IP not found", 'terminals');
-                return false;
+                return '';
             } else {
                 $cached_file_url = 'http://' . $server_ip . $m[0];
             }
@@ -23,13 +35,10 @@ class mediaplayer extends tts_addon
             if (!remote_file_exists($cached_file_url)) {
                 $cached_file_url = BASE_URL . $m[0];
             }
-        } else {
-            //DebMes("Unknown file path format: " . $cached_filename, 'terminals');
-            return false;
+            return $cached_file_url;
         }
-        // очередь, порядок и восстановление плеера ведёт модуль terminals (terminals_queue.inc.php)
-        playMedia($cached_file_url, $this->terminal['TITLE']);
-        return true;
+        //DebMes("Unknown file path format: " . $cached_filename, 'terminals');
+        return '';
     }
 
     // Сообщения этого терминала идут через очередь модуля terminals
@@ -108,7 +117,7 @@ class mediaplayer extends tts_addon
     }
 
     // Команда плееру через app_player с ожиданием ответа. Возвращает успех
-    private function playerCommand($command, $param = '')
+    protected function playerCommand($command, $param = '')
     {
         include_once(DIR_MODULES . 'app_player/app_player.class.php');
         $player = new app_player();
@@ -122,7 +131,7 @@ class mediaplayer extends tts_addon
     }
 
     // Плейлист плеера: массив элементов id/name/file или пустой массив
-    private function playlist()
+    protected function playlist()
     {
         include_once(DIR_MODULES . 'app_player/app_player.class.php');
         $player = new app_player();
@@ -137,19 +146,45 @@ class mediaplayer extends tts_addon
         return $player->json['data'];
     }
 
-    // Есть ли в плейлисте трек с этим номером и этим файлом
-    private function playlistItem($id, $file)
+    // Есть ли в плейлисте ровно один трек с этим номером, и это этот файл
+    protected function playlistItem($id, $file)
     {
+        $found = 0;
+        $same = false;
         foreach ($this->playlist() as $item) {
-            if (is_array($item) && isset($item['id'], $item['file']) && (int)$item['id'] == $id && $item['file'] == $file) {
-                return true;
+            if (is_array($item) && isset($item['id'], $item['file']) && (int)$item['id'] == $id) {
+                $found++;
+                $same = ($item['file'] == $file);
             }
         }
-        return false;
+        return $found == 1 && $same;
+    }
+
+    // Добавить сообщение в конец плейлиста и включить его по номеру, не трогая остальные треки.
+    // Для плееров, у которых play() заменяет плейлист (mpd_tts, lms_tts, kodi_tts). Возвращает успех
+    protected function playInPlaylist($url)
+    {
+        $this->playerSession();
+        // прежние сообщения уже прозвучали — убираем их, чтобы плейлист не рос
+        $this->playlistCleanup();
+        if (!$this->playerCommand('pl_add', $url)) {
+            return false;
+        }
+        $id = -1;
+        foreach ($this->playlist() as $item) {
+            if (is_array($item) && isset($item['id'], $item['file']) && $item['file'] == $url) {
+                $id = (int)$item['id']; // последнее совпадение — только что добавленное
+            }
+        }
+        // номер должен однозначно указывать на сообщение, иначе можно включить чужой трек
+        if ($id < 0 || !$this->playlistItem($id, $url)) {
+            return false;
+        }
+        return $this->playerCommand('pl_play', $id);
     }
 
     // Убрать из плейлиста файлы сообщений (cms/cached/voice); остальные треки не трогаются
-    private function playlistCleanup()
+    protected function playlistCleanup()
     {
         foreach ($this->playlist() as $item) {
             if (is_array($item) && isset($item['id'], $item['file']) && preg_match('/cms[\\\\\/]cached[\\\\\/]voice/i', $item['file'])) {
@@ -160,7 +195,7 @@ class mediaplayer extends tts_addon
 
     // app_player::usual() пишет в $session->data. В заданиях и фоновых событиях (objects/?job=…)
     // сессии нет: PHP 7 сам создавал пустой объект, PHP 8 падает с ошибкой. Делаем то же, что PHP 7.
-    private function playerSession()
+    protected function playerSession()
     {
         global $session;
         if (!is_object($session)) {
