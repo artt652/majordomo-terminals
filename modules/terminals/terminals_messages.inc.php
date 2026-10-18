@@ -121,7 +121,9 @@ if (gr('ajax') && gr('list')) {
 
 $out['ME_NAME'] = !empty($me['ID']) ? $me['NAME'] : '';
 $out['ME_TITLE'] = !empty($me['ID']) ? $me['TITLE'] : '';
-$out['MSG_TERMINALS'] = SQLSelect("SELECT NAME, TITLE FROM terminals WHERE CANTTS=1 AND TTS_TYPE!=''" . (!empty($me['ID']) ? " AND ID!=" . (int)$me['ID'] : '') . " ORDER BY TITLE");
+// кому: все терминалы, кроме этого. Кто умеет говорить, получит сообщение на устройство,
+// остальные — только на свою страницу «Сообщения»
+$out['MSG_TERMINALS'] = SQLSelect("SELECT NAME, TITLE FROM terminals" . (!empty($me['ID']) ? " WHERE ID!=" . (int)$me['ID'] : '') . " ORDER BY TITLE");
 $out['ALL_TERMINALS'] = SQLSelect("SELECT NAME, TITLE FROM terminals ORDER BY TITLE");
 $out['CONVERSATION_JSON'] = json_encode($conversation, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
 $out['MESSAGES_PAGE'] = 1;

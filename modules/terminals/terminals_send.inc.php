@@ -60,14 +60,17 @@ function terminalsSend($to, $message, $options = array())
     $sent = 0;
     foreach ((array)$to as $destination) {
         $terminal_rec = terminalsFind($destination);
-        if (empty($terminal_rec['ID']) || !$terminal_rec['CANTTS'] || $terminal_rec['TTS_TYPE'] == '') {
-            DebMes('terminalsSend: terminal not found or cannot speak: ' . $destination, 'terminals');
+        if (empty($terminal_rec['ID'])) {
+            DebMes('terminalsSend: terminal not found: ' . $destination, 'terminals');
             continue;
         }
+        // терминал без «Может проговаривать» (например, только браузер со страницей «Сообщения»)
+        // получает сообщение только в переписку — на его страницу, без доставки дополнению TTS
+        $speaks = $terminal_rec['CANTTS'] && $terminal_rec['TTS_TYPE'] != '';
         $level = isset($options['level']) ? (int)$options['level'] : terminalsMinLevel($terminal_rec);
         DebMes('terminalsSend to ' . $terminal_rec['TITLE'] . ($sender != '' ? " from $sender" : '') . " (level $level): $message"
-            . ($image != '' ? " (image: $image)" : '') . ($sound != '' ? " (sound: $sound)" : ''), 'terminals');
-        $tts = terminalsQueueAddon($terminal_rec);
+            . ($image != '' ? " (image: $image)" : '') . ($sound != '' ? " (sound: $sound)" : '') . ($speaks ? '' : ' (page only)'), 'terminals');
+        $tts = $speaks ? terminalsQueueAddon($terminal_rec) : null;
         // звук перед сообщением
         if ($sound != '' && is_object($tts) && method_exists($tts, 'playFile')) {
             if (terminalsQueueUsed($tts)) {
@@ -76,7 +79,7 @@ function terminalsSend($to, $message, $options = array())
                 $tts->playFile($sound, $level, $sender);
             }
         }
-        if ($message != '' || $image != '') {
+        if ($speaks && ($message != '' || $image != '')) {
             if ($voice && $message != '') {
                 // как sayTo(): терминалы и генераторы речи получают событие SAYTO
                 processSubscriptionsSafe('SAYTO', array('level' => $level, 'message' => $message,
