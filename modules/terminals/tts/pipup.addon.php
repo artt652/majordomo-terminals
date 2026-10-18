@@ -118,6 +118,69 @@ class pipup extends tts_addon
         return $this->sendCommand($phrase, 'Уведомление', $this->messageId($phrase), $this->deviceVoice());
     }
 
+    // Сообщение с картинкой (модуль terminals вызывает его вместо say()/sayCached(), если он есть):
+    // текст, картинка и, если уже готов, звук голоса — в одном окне. Картинка — путь в веб-корне
+    // MajorDoMo (как в say('… image:cms/…')) или http-ссылка. Без картинки — как say()/sayCached()
+    function showMessage($phrase, $level = 0, $image = '', $cached_file = '')
+    {
+        $imgUrl = ($image != '') ? $this->fileUrl($image) : false;
+        if ($image != '' && $imgUrl === false) {
+            DebMes("PiPup: image not found: $image", 'terminals');
+        }
+        if ($imgUrl === false) {
+            return ($cached_file != '') ? $this->sayCached($phrase, $level, $cached_file) : $this->say($phrase, $level);
+        }
+        $url = $this->notifyUrl('/notify');
+        if ($url === false) {
+            return 0;
+        }
+        $data = array(
+            'duration' => $this->autoDuration($phrase),
+            'position' => 0,
+            'title' => 'Уведомление',
+            'titleColor' => '#0066cc',
+            'titleSize' => 20,
+            'message' => (string)$phrase,
+            'messageColor' => '#000000',
+            'messageSize' => 14,
+            'backgroundColor' => '#ffffff',
+            'media' => array('image' => array('uri' => $imgUrl, 'width' => 480)),
+        );
+        $forkFields = array(
+            'id' => $this->messageId($phrase), // то же окно, что у say()/sayCached() этой фразы
+            'stack' => 'vertical',
+        );
+        if ($this->deviceVoice()) {
+            $forkFields['tts'] = (string)$phrase;
+            if (defined('SETTINGS_SITE_LANGUAGE') && SETTINGS_SITE_LANGUAGE != '') {
+                $forkFields['ttsLanguage'] = SETTINGS_SITE_LANGUAGE;
+            }
+        } elseif ($cached_file != '' && $this->engineAllowed($cached_file)) {
+            $soundUrl = $this->fileUrl($cached_file);
+            if ($soundUrl !== false) {
+                $data['sound'] = $soundUrl;
+                $settings = function_exists('terminalsAddonSettings') ? terminalsAddonSettings($this->terminal, 'tts', 'pipup') : array();
+                if (isset($settings['VOLUME']) && (int)$settings['VOLUME'] > 0) {
+                    $data['soundVolume'] = min(100, (int)$settings['VOLUME']) / 100;
+                }
+                $local = $this->localPath($cached_file);
+                if ($local !== false && function_exists('getMediaDurationSeconds')) {
+                    $data['duration'] = max($data['duration'], (int)getMediaDurationSeconds($local) + 2);
+                }
+            }
+        }
+        DebMes("Sending message with image '$image' to " . $url, 'terminals');
+        $httpCode = $this->post($url, array_merge($data, $forkFields), $error);
+        if ($httpCode === 400) {
+            $httpCode = $this->post($url, $data, $error);
+        }
+        if ($httpCode !== 200) {
+            DebMes("PiPup: message with image to $url failed (HTTP $httpCode) $error", 'terminals');
+            return 0;
+        }
+        return 1;
+    }
+
     function ask($phrase, $level = 0)
     {
         return $this->sendCommand($phrase, 'Вопрос', $this->messageId($phrase), $this->deviceVoice());

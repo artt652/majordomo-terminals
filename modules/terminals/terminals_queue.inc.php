@@ -44,13 +44,13 @@ function terminalsQueueUsed($tts)
     return is_object($tts) && method_exists($tts, 'useQueue') && $tts->useQueue();
 }
 
-function terminalsQueueAdd($terminal_rec, $kind, $message, $level, $file)
+function terminalsQueueAdd($terminal_rec, $kind, $message, $level, $file, $image = '')
 {
     $tid = isset($terminal_rec['ID']) ? (int)$terminal_rec['ID'] : 0;
     $urgent = ($kind == 'ask' || (int)$level >= terminals::QUEUE_URGENT_LEVEL);
     if (!$tid || !terminalsQueueLock($tid)) {
         // без ID или очередь занята другим процессом слишком долго — не теряем сообщение
-        $played = terminalsQueuePlay($terminal_rec, $kind, $message, $level, $file);
+        $played = terminalsQueuePlay($terminal_rec, $kind, $message, $level, $file, $image);
         return $played[0];
     }
     $now = time();
@@ -70,7 +70,8 @@ function terminalsQueueAdd($terminal_rec, $kind, $message, $level, $file)
     if ($busy && $current['MESSAGE'] === $key) {
         if ($kind == 'cached' && $current['FILENAME'] == '') {
             // голос фразы, текст которой уже показан: звучит сразу, терминал занят дольше
-            $played = terminalsQueuePlay($terminal_rec, 'cached', $message, $level, $file);
+            // (с картинкой этой фразы, если она была)
+            $played = terminalsQueuePlay($terminal_rec, 'cached', $message, $level, $file, (string)$current['IMAGE']);
             $current['FILENAME'] = $file;
             $current['FINISH'] = max((int)$current['FINISH'], $now + $played[1]);
             SQLUpdate('terminals_queue', $current);
@@ -87,13 +88,24 @@ function terminalsQueueAdd($terminal_rec, $kind, $message, $level, $file)
         if ($file == '') {
             $file = $waiting['FILENAME'];
         }
+        if ($image == '') {
+            $image = (string)$waiting['IMAGE'];
+        }
         SQLExec("DELETE FROM terminals_queue WHERE ID=" . (int)$waiting['ID']);
         $waiting = array();
     }
     if (!empty($waiting['ID'])) {
-        // та же фраза уже ждёт: присоединяем к ней файл голоса, повтор не ставим
+        // та же фраза уже ждёт: присоединяем к ней файл голоса и картинку, повтор не ставим
+        $changed = false;
         if ($file != '' && $waiting['FILENAME'] == '') {
             $waiting['FILENAME'] = $file;
+            $changed = true;
+        }
+        if ($image != '' && $waiting['IMAGE'] == '') {
+            $waiting['IMAGE'] = $image;
+            $changed = true;
+        }
+        if ($changed) {
             SQLUpdate('terminals_queue', $waiting);
         }
         terminalsQueueUnlock($tid);
@@ -106,6 +118,7 @@ function terminalsQueueAdd($terminal_rec, $kind, $message, $level, $file)
         'MESSAGE' => $key,
         'LEVEL' => (int)$level,
         'FILENAME' => (string)$file,
+        'IMAGE' => (string)$image,
         'ADDED' => $now,
         'STARTED' => 0,
         'FINISH' => 0,
@@ -119,7 +132,7 @@ function terminalsQueueAdd($terminal_rec, $kind, $message, $level, $file)
         }
         SQLExec("DELETE FROM terminals_queue WHERE TERMINAL_ID=$tid AND STARTED>0");
         $rec['STARTED'] = $now;
-        $played = terminalsQueuePlay($terminal_rec, $kind, $message, $level, $file);
+        $played = terminalsQueuePlay($terminal_rec, $kind, $message, $level, $file, $image);
         $rec['FINISH'] = $now + $played[1];
         SQLInsert('terminals_queue', $rec);
         $result = $played[0];
@@ -177,7 +190,7 @@ function terminalsQueueNext($tid, $check = 0)
         }
         $now = time();
         $message = json_decode($next['MESSAGE'], true);
-        $played = terminalsQueuePlay($terminal_rec, $next['KIND'], is_string($message) ? $message : '', (int)$next['LEVEL'], $next['FILENAME']);
+        $played = terminalsQueuePlay($terminal_rec, $next['KIND'], is_string($message) ? $message : '', (int)$next['LEVEL'], $next['FILENAME'], (string)$next['IMAGE']);
         $next['STARTED'] = $now;
         $next['FINISH'] = $now + $played[1];
         SQLUpdate('terminals_queue', $next);
@@ -194,13 +207,26 @@ function terminalsQueueNext($tid, $check = 0)
     terminalsQueueUnlock($tid);
 }
 
-// Отдать сообщение дополнению TTS. Возвращает [результат дополнения, сколько секунд терминал занят]
-function terminalsQueuePlay($terminal_rec, $kind, $message, $level, $file)
+// Отдать сообщение дополнению TTS. Возвращает [результат дополнения, сколько секунд терминал занят].
+// Сообщение с картинкой уходит в showMessage(), если дополнение его умеет (текст, картинка и голос вместе)
+function terminalsQueuePlay($terminal_rec, $kind, $message, $level, $file, $image = '')
 {
     $result = false;
     $busy = 0;
     $tts = terminalsQueueAddon($terminal_rec);
     if (!is_object($tts)) {
+        return array($result, $busy);
+    }
+    if ($image != '' && method_exists($tts, 'showMessage')) {
+        DebMes("Showing to " . $terminal_rec['TITLE'] . ' (level ' . $level . '): ' . $message . " (image: $image" . ($file != '' ? ", file: $file" : '') . ')', 'terminals');
+        $result = $tts->showMessage($message, ($kind == 'ask') ? 9999 : $level, $image, $file);
+        if ($result) {
+            $seconds = 0;
+            if ($file != '' && is_file($file) && function_exists('getMediaDurationSeconds')) {
+                $seconds = (int)getMediaDurationSeconds($file);
+            }
+            $busy = ($seconds > 0) ? $seconds + 1 : terminalsQueueSpeechSeconds($message);
+        }
         return array($result, $busy);
     }
     if ($kind == 'say' || $kind == 'ask') {

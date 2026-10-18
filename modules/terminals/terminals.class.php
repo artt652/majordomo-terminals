@@ -232,7 +232,7 @@ class terminals extends module
         }
     }
 
-    function terminalSay($terminal_rec, $message, $level)
+    function terminalSay($terminal_rec, $message, $level, $image = '')
     {
         $asking = 0;
         if ($level === 'ask') {
@@ -247,7 +247,7 @@ class terminals extends module
             return false;
         }
         if (terminalsQueueUsed(terminalsQueueAddon($terminal_rec))) {
-            return terminalsQueueAdd($terminal_rec, $asking ? 'ask' : 'say', $message, $level, '');
+            return terminalsQueueAdd($terminal_rec, $asking ? 'ask' : 'say', $message, $level, '', $image);
         }
         DebMes("Saying to " . $terminal_rec['TITLE'] . ' (level ' . $level . '): ' . $message, 'terminals');
         include_once DIR_MODULES . 'terminals/tts_addon.class.php';
@@ -255,7 +255,10 @@ class terminals extends module
         if (file_exists($addon_file)) {
             include_once($addon_file);
             $tts = new $terminal_rec['TTS_TYPE']($terminal_rec);
-            if ($asking) {
+            if ($image != '' && method_exists($tts, 'showMessage')) {
+                // сообщение с картинкой — дополнению, которое умеет её показать
+                $result = $tts->showMessage($message, $level, $image);
+            } elseif ($asking) {
                 $result = $tts->ask($message, $level);
             } else {
                 $result = $tts->say($message, $level);
@@ -278,7 +281,8 @@ class terminals extends module
         if ($event == 'SAY') {
             $terminals = SQLSelect("SELECT * FROM terminals WHERE CANTTS=1 AND TTS_TYPE!=''");
             foreach ($terminals as $terminal_rec) {
-                $this->terminalSay($terminal_rec, $details['message'], $details['level']);
+                // картинка из say('… image:путь') — в событии SAY
+                $this->terminalSay($terminal_rec, $details['message'], $details['level'], isset($details['image']) ? (string)$details['image'] : '');
             }
         } elseif ($event == 'SAYTO' || $event == 'ASK') {
             $terminal_rec = array();
@@ -468,6 +472,7 @@ class terminals extends module
  terminals_queue: MESSAGE text
  terminals_queue: LEVEL int(10) NOT NULL DEFAULT '0'
  terminals_queue: FILENAME varchar(255) NOT NULL DEFAULT ''
+ terminals_queue: IMAGE varchar(255) NOT NULL DEFAULT ''
  terminals_queue: ADDED int(10) NOT NULL DEFAULT '0'
  terminals_queue: STARTED int(10) NOT NULL DEFAULT '0'
  terminals_queue: FINISH int(10) NOT NULL DEFAULT '0'
