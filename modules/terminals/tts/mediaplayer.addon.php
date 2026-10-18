@@ -62,6 +62,9 @@ class mediaplayer extends tts_addon
             return false;
         }
         $state = array('file' => $file, 'time' => isset($played['time']) ? (int)$played['time'] : 0);
+        if (isset($played['track_id']) && (int)$played['track_id'] >= 0) {
+            $state['track_id'] = (int)$played['track_id'];
+        }
         if (isset($played['volume']) && (int)$played['volume'] > 0) {
             $state['volume'] = (int)$played['volume'];
         }
@@ -76,16 +79,18 @@ class mediaplayer extends tts_addon
         }
         $title = $this->terminal['TITLE'];
         $this->playerSession();
-        // запуск напрямую, а не через playMedia(): тот отправляет команду в фоне,
-        // и перемотка могла бы прийти в плеер раньше запуска
-        include_once(DIR_MODULES . 'app_player/app_player.class.php');
-        $player = new app_player();
-        $player->play_terminal = $this->terminal['NAME'];
-        $player->command = 'play';
-        $player->param = $state['file'];
-        $player->ajax = TRUE;
-        $player->intCall = TRUE;
-        $player->usual($out);
+        // Команды плееру — напрямую, а не через playMedia(): тот отправляет команду в фоне,
+        // и перемотка могла бы прийти в плеер раньше запуска.
+        // Если прежний трек остался в плейлисте под тем же номером (vlcweb добавляет сообщение
+        // в плейлист), включаем его через pl_play: плейлист и порядок треков сохраняются.
+        // Иначе (mpd, lms заменяют плейлист; плеер без плейлиста) — запуск файла, как раньше.
+        $restored = false;
+        if (isset($state['track_id']) && $this->playlistItem((int)$state['track_id'], $state['file'])) {
+            $restored = $this->playerCommand('pl_play', (int)$state['track_id']);
+        }
+        if (!$restored) {
+            $this->playerCommand('play', $state['file']);
+        }
         if (!empty($state['time'])) {
             seekPlayerPosition($title, (int)$state['time']);
             // плеер мог ещё не загрузить трек: проверяем и при необходимости повторяем перемотку через 2 с
@@ -98,7 +103,59 @@ class mediaplayer extends tts_addon
         if (!empty($state['volume'])) {
             setPlayerVolume($title, (int)$state['volume']);
         }
+        $this->playlistCleanup();
         return true;
+    }
+
+    // Команда плееру через app_player с ожиданием ответа. Возвращает успех
+    private function playerCommand($command, $param = '')
+    {
+        include_once(DIR_MODULES . 'app_player/app_player.class.php');
+        $player = new app_player();
+        $player->play_terminal = $this->terminal['NAME'];
+        $player->command = $command;
+        $player->param = $param;
+        $player->ajax = TRUE;
+        $player->intCall = TRUE;
+        $player->usual($out);
+        return !empty($player->json['success']);
+    }
+
+    // Плейлист плеера: массив элементов id/name/file или пустой массив
+    private function playlist()
+    {
+        include_once(DIR_MODULES . 'app_player/app_player.class.php');
+        $player = new app_player();
+        $player->play_terminal = $this->terminal['NAME'];
+        $player->command = 'pl_get';
+        $player->ajax = TRUE;
+        $player->intCall = TRUE;
+        $player->usual($out);
+        if (empty($player->json['success']) || !is_array($player->json['data'])) {
+            return array();
+        }
+        return $player->json['data'];
+    }
+
+    // Есть ли в плейлисте трек с этим номером и этим файлом
+    private function playlistItem($id, $file)
+    {
+        foreach ($this->playlist() as $item) {
+            if (is_array($item) && isset($item['id'], $item['file']) && (int)$item['id'] == $id && $item['file'] == $file) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Убрать из плейлиста файлы сообщений (cms/cached/voice); остальные треки не трогаются
+    private function playlistCleanup()
+    {
+        foreach ($this->playlist() as $item) {
+            if (is_array($item) && isset($item['id'], $item['file']) && preg_match('/cms[\\\\\/]cached[\\\\\/]voice/i', $item['file'])) {
+                $this->playerCommand('pl_delete', (int)$item['id']);
+            }
+        }
     }
 
     // app_player::usual() пишет в $session->data. В заданиях и фоновых событиях (objects/?job=…)
