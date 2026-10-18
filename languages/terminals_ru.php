@@ -66,6 +66,9 @@ $dictionary = array(
 	'TERMINALS_MORE'                 => 'Подробнее',
 	'TERMINALS_PIPUP_PLAY_MORE'      => 'Тип окна выбирается по ссылке или расширению: <b>звук</b> (mp3, wav, ogg, m4a…), <b>картинка</b> (jpg, png, gif, webp; локальный файл уходит файлом), <b>SVG</b>, <b>видео</b> (mp4, webm, m3u8, rtsp://…), <b>WebRTC</b> go2rtc (…/api/webrtc?src=…), <b>веб-страница / MJPEG</b> (прочие http-ссылки). Файлы — из веб-корня MajorDoMo или по ссылке. Звук и видео показываются на время файла, потоки — 60 с, картинки — 30 с. «Стоп» закрывает все окна PiPup (звук по ссылке доигрывает); пауза, громкость и статус недоступны.<br><b>Требования:</b> Android 6.0.1+ с форком PiPup (mhoogenbosch) 0.27+ — <a href="https://github.com/mhoogenbosch/PiPup/releases/latest/download/PiPup.apk" target="_blank">скачать APK</a>; PHP с curl, BASE_URL в config.php с портом веб-сервера. В поле «Адрес» — только IP или имя устройства, порт PiPup — в поле «Порт PiPup» (пусто — 7979).<br><b>Текст и голос сообщений</b> (say, sayTo, ask) выводит тип TTS <b>pipup</b>: включите «Может произносить» и выберите pipup; его настройки — в разделе TTS. Длительность окна сообщения считается по длине текста (10–60 с). Если текстовые окна не появляются, проверьте порог уровня сообщений терминала и приоритет модуля terminals (модули с BREAK, например yandex_tts, останавливают рассылку события).',
 	'TERMINALS_APP_PAGE'             => 'Страница для устройств-терминалов',
+	'TERMINALS_ALL'                  => 'Все терминалы',
+	'TERMINALS_ATTACH'               => 'Прикрепить',
+	'TERMINALS_THEME'                => 'Светлая / тёмная тема',
 );
 
 foreach ($dictionary as $key => $value) {

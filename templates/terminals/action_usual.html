@@ -1,96 +1,217 @@
 <!--#
  Страница «Сообщения»: обмен сообщениями между терминалами (modules/terminals/terminals_messages.inc.php)
+ Вид как у мессенджера: чат с выбранным терминалом, сообщения пузырями, поле ввода снизу.
+ Тема светлая/тёмная — запоминается в браузере (localStorage).
 #-->
 <style type="text/css">
-	.tm-wrap { max-width: 720px; margin: 0 auto; padding: 8px; }
-	.tm-to label { display: inline-block; margin: 0 12px 6px 0; font-weight: normal; }
-	.tm-files { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0; }
-	.tm-files label { font-weight: normal; margin: 0; }
-	.tm-msg { border: 1px solid #ddd; border-radius: 6px; padding: 8px 10px; margin: 8px 0; }
-	.tm-msg.tm-in { border-left: 4px solid #337ab7; }
-	.tm-msg.tm-out { border-left: 4px solid #aaa; opacity: .9; }
-	.tm-head { font-size: 12px; color: #777; margin-bottom: 4px; }
-	.tm-msg img { max-width: 100%; max-height: 240px; display: block; margin-top: 6px; border-radius: 4px; }
-	.tm-msg audio { width: 100%; margin-top: 6px; }
+	.tg-app { --tg-bg: #e6ebee; --tg-panel: #ffffff; --tg-text: #000000; --tg-muted: #707579; --tg-in: #ffffff; --tg-out: #e3fee0;
+		--tg-out-text: #000000; --tg-accent: #3390ec; --tg-border: #dfe1e5; --tg-input: #ffffff; --tg-time: #8a9aa9; --tg-shadow: 0 1px 2px rgba(16,35,47,.15); }
+	.tg-app.tg-dark { --tg-bg: #0e1621; --tg-panel: #17212b; --tg-text: #f5f5f5; --tg-muted: #8d9ba8; --tg-in: #182533; --tg-out: #2b5278;
+		--tg-out-text: #ffffff; --tg-accent: #5aa7f0; --tg-border: #0b121a; --tg-input: #17212b; --tg-time: #7d8e9e; --tg-shadow: none; }
+	.tg-app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; max-width: 900px; margin: 0 auto;
+		background: var(--tg-bg); color: var(--tg-text); font-size: 15px; }
+	.tg-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--tg-panel); border-bottom: 1px solid var(--tg-border); }
+	.tg-head .tg-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+	.tg-head .tg-sub { font-size: 12px; color: var(--tg-muted); }
+	.tg-head select { background: var(--tg-input); color: var(--tg-text); border: 1px solid var(--tg-border); border-radius: 8px; padding: 4px 8px; max-width: 45vw; flex: none; }
+	.tg-grow { flex: 1; min-width: 0; }
+	.tg-icon { background: none; border: 0; color: var(--tg-muted); font-size: 20px; line-height: 1; padding: 6px; border-radius: 50%; cursor: pointer; flex: none; }
+	.tg-icon:hover { background: rgba(127,127,127,.15); }
+	.tg-icon.tg-on { color: var(--tg-accent); }
+	.tg-list { flex: 1; overflow-y: auto; padding: 10px 10px 4px; display: flex; flex-direction: column; gap: 4px; }
+	.tg-empty { margin: auto; color: var(--tg-muted); background: rgba(0,0,0,.08); padding: 4px 12px; border-radius: 12px; font-size: 13px; }
+	.tg-app.tg-dark .tg-empty { background: rgba(255,255,255,.08); }
+	.tg-msg { max-width: 78%; padding: 6px 9px 4px; border-radius: 12px; box-shadow: var(--tg-shadow); word-wrap: break-word; white-space: pre-wrap; }
+	.tg-msg.tg-in { align-self: flex-start; background: var(--tg-in); border-bottom-left-radius: 4px; }
+	.tg-msg.tg-out { align-self: flex-end; background: var(--tg-out); color: var(--tg-out-text); border-bottom-right-radius: 4px; }
+	.tg-from { font-size: 13px; font-weight: 600; color: var(--tg-accent); cursor: pointer; margin-bottom: 2px; white-space: normal; }
+	.tg-msg img { display: block; max-width: 100%; max-height: 320px; border-radius: 8px; margin: 2px 0 4px; cursor: pointer; }
+	.tg-msg audio { display: block; width: 240px; max-width: 100%; margin: 2px 0 4px; }
+	.tg-time { float: right; font-size: 11px; color: var(--tg-time); margin: 6px 0 0 10px; white-space: nowrap; }
+	.tg-day { align-self: center; font-size: 12px; color: #fff; background: rgba(0,0,0,.25); padding: 2px 10px; border-radius: 10px; margin: 6px 0; }
+	.tg-files { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px; background: var(--tg-panel); }
+	.tg-files:empty { display: none; }
+	.tg-chip { font-size: 12px; background: rgba(127,127,127,.15); border-radius: 12px; padding: 3px 4px 3px 10px; margin-top: 6px; }
+	.tg-chip button { background: none; border: 0; color: var(--tg-muted); cursor: pointer; }
+	.tg-compose { display: flex; align-items: flex-end; gap: 4px; padding: 6px 8px; background: var(--tg-panel); border-top: 1px solid var(--tg-border); position: relative; }
+	.tg-compose textarea { flex: 1; resize: none; border: 0; outline: none; background: transparent; color: var(--tg-text); padding: 8px 4px; max-height: 140px; font-size: 15px; line-height: 20px; }
+	.tg-send { background: var(--tg-accent); color: #fff; border: 0; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; flex: none; }
+	.tg-send:disabled { opacity: .5; }
+	.tg-menu { position: absolute; bottom: 52px; left: 8px; background: var(--tg-panel); border: 1px solid var(--tg-border); border-radius: 10px;
+		box-shadow: 0 4px 16px rgba(0,0,0,.2); padding: 4px 0; display: none; z-index: 5; }
+	.tg-menu label { display: block; padding: 8px 16px; cursor: pointer; margin: 0; font-weight: normal; white-space: nowrap; color: var(--tg-text); }
+	.tg-menu label:hover { background: rgba(127,127,127,.12); }
+	.tg-status { font-size: 12px; color: var(--tg-muted); padding: 2px 12px; background: var(--tg-panel); }
+	.tg-status:empty { display: none; }
 </style>
-<div class="tm-wrap">
-	<h3 style="margin-top:6px"><#LANG_TERMINALS_MESSAGES#>[#if ME_TITLE!=""#] — [#ME_TITLE#][#endif ME_TITLE#]</h3>
 
-	<form id="tm_form" method="post" enctype="multipart/form-data" action="?">
-		[#if ME_NAME=""#]
-		<div class="form-group">
-			<label><#LANG_TERMINALS_THIS_TERMINAL#>:</label>
-			<select name="from" id="tm_from" class="form-control">
-				<option value=""><#LANG_TERMINALS_CHOOSE#></option>
-				[#begin ALL_TERMINALS#]<option value="[#NAME#]">[#TITLE#]</option>[#end ALL_TERMINALS#]
+<div class="tg-app" id="tg_app">
+	<form id="tm_form" method="post" enctype="multipart/form-data" action="?" style="display:contents">
+		<div class="tg-head">
+			<div class="tg-grow">
+				<div class="tg-title"><#LANG_TERMINALS_MESSAGES#>[#if ME_TITLE!=""#] — [#ME_TITLE#][#endif ME_TITLE#]</div>
+				[#if ME_NAME=""#]
+				<div class="tg-sub"><#LANG_TERMINALS_THIS_TERMINAL#>:
+					<select name="from" id="tm_from">
+						<option value=""><#LANG_TERMINALS_CHOOSE#></option>
+						[#begin ALL_TERMINALS#]<option value="[#NAME#]">[#TITLE#]</option>[#end ALL_TERMINALS#]
+					</select>
+				</div>
+				<div class="tg-sub"><#LANG_TERMINALS_NOT_RECOGNIZED#></div>
+				[#else ME_NAME#]
+				<input type="hidden" name="from" id="tm_from" value="[#ME_NAME#]">
+				[#endif ME_NAME#]
+			</div>
+			<select id="tm_to" title="<#LANG_TERMINALS_TO#>">
+				<option value="*"><#LANG_TERMINALS_ALL#></option>
+				[#begin MSG_TERMINALS#]<option value="[#NAME#]">[#TITLE#]</option>[#end MSG_TERMINALS#]
 			</select>
-			<small class="text-muted"><#LANG_TERMINALS_NOT_RECOGNIZED#></small>
+			<button type="button" class="tg-icon" id="tm_theme" title="<#LANG_TERMINALS_THEME#>"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" style="display:block"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/></svg></button>
 		</div>
-		[#else ME_NAME#]
-		<input type="hidden" name="from" id="tm_from" value="[#ME_NAME#]">
-		[#endif ME_NAME#]
 
-		<div class="form-group tm-to">
-			<label style="display:block;font-weight:bold"><#LANG_TERMINALS_TO#>:</label>
-			[#begin MSG_TERMINALS#]<label><input type="checkbox" name="to[]" value="[#NAME#]"> [#TITLE#]</label>[#end MSG_TERMINALS#]
+		<div class="tg-list" id="tm_list"><div class="tg-empty"><#LANG_TERMINALS_NO_MESSAGES#></div></div>
+
+		<div class="tg-files" id="tm_files"></div>
+		<div class="tg-status" id="tm_status"></div>
+		<div class="tg-compose">
+			<div class="tg-menu" id="tm_menu">
+				<label>📷 <#LANG_TERMINALS_PHOTO#><input type="file" name="image" accept="image/*" capture="environment" style="display:none"></label>
+				<label>🎤 <#LANG_TERMINALS_VOICE_MESSAGE#><input type="file" name="audio" accept="audio/*" capture style="display:none"></label>
+			</div>
+			<button type="button" class="tg-icon" id="tm_attach" title="<#LANG_TERMINALS_ATTACH#>">📎</button>
+			<textarea name="message" id="tm_text" rows="1" placeholder="<#LANG_TERMINALS_MESSAGE_TEXT#>"></textarea>
+			<button type="button" class="tg-icon" id="tm_voice" title="<#LANG_TERMINALS_VOICE_ON_RECIPIENT#>">🔊</button>
+			<input type="hidden" name="voice" id="tm_voice_value" value="1">
+			<input type="hidden" name="mode" value="send_message">
+			<input type="hidden" name="ajax" value="1">
+			<button type="submit" class="tg-send" id="tm_send" title="<#LANG_TERMINALS_SEND#>">
+				<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20.5l18-8.5L3 3.5v6.6l12 1.9-12 1.9z" fill="currentColor"/></svg>
+			</button>
 		</div>
-		<div class="form-group">
-			<textarea name="message" id="tm_text" class="form-control" rows="2" placeholder="<#LANG_TERMINALS_MESSAGE_TEXT#>"></textarea>
-		</div>
-		<div class="checkbox" style="margin-top:0">
-			<label><input type="checkbox" name="voice" value="1" checked> <#LANG_TERMINALS_VOICE_ON_RECIPIENT#></label>
-		</div>
-		<div class="tm-files">
-			<label class="btn btn-default btn-sm">📷 <#LANG_TERMINALS_PHOTO#>
-				<input type="file" name="image" accept="image/*" capture="environment" style="display:none" onchange="tmFileName(this, 'tm_image_name')">
-			</label>
-			<span id="tm_image_name" class="text-muted small"></span>
-			<label class="btn btn-default btn-sm">🎤 <#LANG_TERMINALS_VOICE_MESSAGE#>
-				<input type="file" name="audio" accept="audio/*" capture style="display:none" onchange="tmFileName(this, 'tm_audio_name')">
-			</label>
-			<span id="tm_audio_name" class="text-muted small"></span>
-		</div>
-		<input type="hidden" name="mode" value="send_message">
-		<input type="hidden" name="ajax" value="1">
-		<button type="submit" class="btn btn-primary" id="tm_send"><#LANG_TERMINALS_SEND#></button>
-		<span id="tm_status" class="small" style="margin-left:10px"></span>
 	</form>
-
-	<h4 style="margin-top:20px"><#LANG_TERMINALS_CONVERSATION#></h4>
-	<div id="tm_list"><p class="text-muted"><#LANG_TERMINALS_NO_MESSAGES#></p></div>
 </div>
 
 <script type="text/javascript">
 	var tmConversation = [#CONVERSATION_JSON#];
+	var tmApp = document.getElementById('tg_app');
+	var tmForm = document.getElementById('tm_form');
 
-	function tmFileName(input, id) {
-		document.getElementById(id).textContent = (input.files && input.files.length) ? input.files[0].name : '';
+	// запоминание настроек в браузере (может быть недоступно — тогда просто не запоминаем)
+	function tmStore(key, value) {
+		try {
+			if (value === undefined) return localStorage.getItem('terminals_msg_' + key);
+			localStorage.setItem('terminals_msg_' + key, value);
+		} catch (e) { return null; }
+		return null;
 	}
 
-	function tmRender(list) {
-		var box = document.getElementById('tm_list');
+	// тема: сохранённая, иначе как в системе
+	function tmTheme(dark) {
+		tmApp.classList.toggle('tg-dark', dark);
+		document.body.style.background = dark ? '#0e1621' : '#e6ebee';
+	}
+	var tmSavedTheme = tmStore('theme');
+	tmTheme(tmSavedTheme ? tmSavedTheme == 'dark' : !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches));
+	document.getElementById('tm_theme').addEventListener('click', function () {
+		var dark = !tmApp.classList.contains('tg-dark');
+		tmTheme(dark);
+		tmStore('theme', dark ? 'dark' : 'light');
+	});
+
+	// озвучка на получателе: вкл/выкл, запоминается
+	function tmVoice(on) {
+		document.getElementById('tm_voice_value').value = on ? '1' : '0';
+		var b = document.getElementById('tm_voice');
+		b.textContent = on ? '🔊' : '🔇';
+		b.classList.toggle('tg-on', on);
+	}
+	tmVoice(tmStore('voice') !== '0');
+	document.getElementById('tm_voice').addEventListener('click', function () {
+		var on = document.getElementById('tm_voice_value').value != '1';
+		tmVoice(on);
+		tmStore('voice', on ? '1' : '0');
+	});
+
+	// собеседник: сохранённый, если он есть в списке
+	var tmTo = document.getElementById('tm_to');
+	var tmSavedTo = tmStore('to');
+	if (tmSavedTo) {
+		for (var i = 0; i < tmTo.options.length; i++) if (tmTo.options[i].value == tmSavedTo) tmTo.value = tmSavedTo;
+	}
+	tmTo.addEventListener('change', function () { tmStore('to', tmTo.value); tmRender(tmConversation, true); });
+
+	// вложения: меню 📎, выбранные файлы — «фишками» над полем ввода
+	var tmMenu = document.getElementById('tm_menu');
+	document.getElementById('tm_attach').addEventListener('click', function (e) {
+		e.stopPropagation();
+		tmMenu.style.display = (tmMenu.style.display == 'block') ? 'none' : 'block';
+	});
+	document.addEventListener('click', function (e) { if (!tmMenu.contains(e.target)) tmMenu.style.display = 'none'; });
+	function tmFiles() {
+		var box = document.getElementById('tm_files');
 		box.innerHTML = '';
-		if (!list || !list.length) {
-			box.innerHTML = '<p class="text-muted"><#LANG_TERMINALS_NO_MESSAGES#></p>';
+		[tmForm.image, tmForm.audio].forEach(function (input) {
+			if (!input.files || !input.files.length) return;
+			var chip = document.createElement('span');
+			chip.className = 'tg-chip';
+			chip.textContent = (input.name == 'image' ? '📷 ' : '🎤 ') + input.files[0].name;
+			var x = document.createElement('button');
+			x.type = 'button';
+			x.textContent = '✕';
+			x.addEventListener('click', function () { input.value = ''; tmFiles(); });
+			chip.appendChild(x);
+			box.appendChild(chip);
+		});
+	}
+	tmForm.image.addEventListener('change', function () { tmMenu.style.display = 'none'; tmFiles(); });
+	tmForm.audio.addEventListener('change', function () { tmMenu.style.display = 'none'; tmFiles(); });
+
+	// поле ввода растёт по тексту; Enter — отправить, Shift+Enter — новая строка
+	var tmText = document.getElementById('tm_text');
+	function tmGrow() { tmText.style.height = 'auto'; tmText.style.height = Math.min(tmText.scrollHeight, 140) + 'px'; }
+	tmText.addEventListener('input', tmGrow);
+	tmText.addEventListener('keydown', function (e) {
+		if (e.key == 'Enter' && !e.shiftKey && !e.isComposing) {
+			e.preventDefault();
+			if (tmForm.requestSubmit) tmForm.requestSubmit(); else document.getElementById('tm_send').click();
+		}
+	});
+
+	// переписка: старые сверху, новые снизу; с выбранным собеседником или со всеми
+	function tmRender(list, toBottom) {
+		var box = document.getElementById('tm_list');
+		var nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+		var other = tmTo.value;
+		var items = (list || []).filter(function (m) { return other == '*' || m.other == other; }).slice().reverse();
+		box.innerHTML = '';
+		if (!items.length) {
+			box.innerHTML = '<div class="tg-empty"><#LANG_TERMINALS_NO_MESSAGES#></div>';
 			return;
 		}
-		for (var i = 0; i < list.length; i++) {
-			var m = list[i];
+		var lastDay = '';
+		items.forEach(function (m) {
+			var day = (m.time || '').split(' ')[0];
+			if (day && day != lastDay) {
+				var d = document.createElement('div');
+				d.className = 'tg-day';
+				d.textContent = day;
+				box.appendChild(d);
+				lastDay = day;
+			}
 			var div = document.createElement('div');
-			div.className = 'tm-msg ' + (m.incoming ? 'tm-in' : 'tm-out');
-			var head = document.createElement('div');
-			head.className = 'tm-head';
-			head.textContent = (m.incoming ? '<#LANG_TERMINALS_FROM_PREFIX#>: ' : '<#LANG_TERMINALS_TO_PREFIX#>: ') + m.other_title + ' · ' + m.time;
-			div.appendChild(head);
-			if (m.text) {
-				var p = document.createElement('div');
-				p.textContent = m.text;
-				div.appendChild(p);
+			div.className = 'tg-msg ' + (m.incoming ? 'tg-in' : 'tg-out');
+			if (other == '*') {
+				var who = document.createElement('div');
+				who.className = 'tg-from';
+				who.textContent = (m.incoming ? '' : '→ ') + m.other_title;
+				who.addEventListener('click', function () { tmTo.value = m.other; tmStore('to', m.other); tmRender(tmConversation, true); });
+				div.appendChild(who);
 			}
 			if (m.image) {
 				var img = document.createElement('img');
 				img.src = m.image;
 				img.alt = '';
+				img.addEventListener('click', function () { window.open(m.image, '_blank'); });
 				div.appendChild(img);
 			}
 			if (m.sound) {
@@ -100,23 +221,16 @@
 				a.src = m.sound;
 				div.appendChild(a);
 			}
-			if (m.incoming) {
-				(function (other) {
-					var b = document.createElement('button');
-					b.type = 'button';
-					b.className = 'btn btn-link btn-xs';
-					b.style.paddingLeft = '0';
-					b.textContent = '<#LANG_TERMINALS_REPLY#>';
-					b.addEventListener('click', function () {
-						var boxes = document.querySelectorAll('input[name="to[]"]');
-						for (var j = 0; j < boxes.length; j++) boxes[j].checked = (boxes[j].value == other);
-						document.getElementById('tm_text').focus();
-					});
-					div.appendChild(b);
-				})(m.other);
+			var t = document.createElement('span');
+			t.className = 'tg-time';
+			t.textContent = (m.time || '').split(' ')[1] || '';
+			div.appendChild(t);
+			if (m.text) {
+				div.appendChild(document.createTextNode(m.text));
 			}
 			box.appendChild(div);
-		}
+		});
+		if (toBottom || nearBottom) box.scrollTop = box.scrollHeight;
 	}
 
 	function tmUrl(params) {
@@ -129,36 +243,51 @@
 		if (!from || !window.fetch) return;
 		fetch(tmUrl('ajax=1&list=1'), {credentials: 'same-origin'})
 			.then(function (r) { return r.json(); })
-			.then(function (list) { tmConversation = list; tmRender(list); })
+			.then(function (list) {
+				var changed = JSON.stringify(list) != JSON.stringify(tmConversation);
+				tmConversation = list;
+				if (changed) tmRender(list, false);
+			})
 			.catch(function () {});
 	}
 
-	document.getElementById('tm_form').addEventListener('submit', function (e) {
-		if (!window.fetch || !window.FormData) return; // старый браузер — обычная отправка формы
+	tmForm.addEventListener('submit', function (e) {
 		e.preventDefault();
-		var form = this, status = document.getElementById('tm_status');
+		var status = document.getElementById('tm_status');
+		if (!window.fetch || !window.FormData) return;
 		if (!document.getElementById('tm_from').value) { status.textContent = '<#LANG_TERMINALS_CHOOSE_THIS#>'; return; }
-		if (!form.querySelector('input[name="to[]"]:checked')) { status.textContent = '<#LANG_TERMINALS_CHOOSE_TO#>'; return; }
+		var hasFile = (tmForm.image.files && tmForm.image.files.length) || (tmForm.audio.files && tmForm.audio.files.length);
+		if (!tmText.value.trim() && !hasFile) return;
+		var data = new FormData(tmForm);
+		// кому: выбранный собеседник или все терминалы из списка
+		if (tmTo.value == '*') {
+			Array.prototype.forEach.call(tmTo.options, function (o) { if (o.value != '*') data.append('to[]', o.value); });
+		} else {
+			data.append('to[]', tmTo.value);
+		}
 		status.textContent = '<#LANG_TERMINALS_SENDING#>';
 		document.getElementById('tm_send').disabled = true;
-		fetch(location.pathname, {method: 'POST', body: new FormData(form), credentials: 'same-origin'})
+		fetch(location.pathname, {method: 'POST', body: data, credentials: 'same-origin'})
 			.then(function (r) { return r.json(); })
 			.then(function (res) {
-				status.textContent = res.sent ? '<#LANG_TERMINALS_SENT#>' : '<#LANG_TERMINALS_NOT_SENT#>';
+				status.textContent = res.sent ? '' : '<#LANG_TERMINALS_NOT_SENT#>';
 				if (res.sent) {
-					document.getElementById('tm_text').value = '';
-					form.image.value = ''; form.audio.value = '';
-					tmFileName(form.image, 'tm_image_name'); tmFileName(form.audio, 'tm_audio_name');
+					tmText.value = '';
+					tmGrow();
+					tmForm.image.value = '';
+					tmForm.audio.value = '';
+					tmFiles();
 				}
 				tmRefresh();
+				setTimeout(function () { var b = document.getElementById('tm_list'); b.scrollTop = b.scrollHeight; }, 400);
 			})
 			.catch(function () { status.textContent = '<#LANG_TERMINALS_SEND_ERROR#>'; })
-			.then(function () { document.getElementById('tm_send').disabled = false; });
+			.then(function () { document.getElementById('tm_send').disabled = false; tmText.focus(); });
 	});
 
 	// Вебсокет MajorDoMo: событие TERMINAL_MESSAGE (terminalsSend) — сразу обновить переписку.
 	// Пока вебсокет не подключён, переписка обновляется опросом раз в 15 с, при подключённом — раз в минуту
-	var tmWsPort = '[#WS_PORT#]', tmWsOpen = false, tmLastPoll = 0;
+	var tmWsPort = '[#WS_PORT#]', tmWsOpen = false, tmLastPoll = Date.now();
 	function tmWebSocket() {
 		if (!tmWsPort || !window.WebSocket) return;
 		var ws;
@@ -189,7 +318,7 @@
 	}
 
 	document.getElementById('tm_from').addEventListener('change', tmRefresh);
-	tmRender(tmConversation);
+	tmRender(tmConversation, true);
 	setInterval(function () {
 		var now = Date.now();
 		if (now - tmLastPoll >= (tmWsOpen ? 60000 : 15000)) { tmLastPoll = now; tmRefresh(); }
