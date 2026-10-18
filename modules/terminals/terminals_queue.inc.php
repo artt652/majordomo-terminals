@@ -15,7 +15,11 @@
  * - если у дополнения есть saveState()/restoreState(), перед первым сообщением серии состояние
  *   плеера сохраняется, а после последнего восстанавливается;
  * - сообщения старше terminals::QUEUE_TTL секунд не проигрываются; сторож (MINUTELY) запускает
- *   застрявшую очередь, startup сбрасывает «занято».
+ *   застрявшую очередь, startup сбрасывает «занято»;
+ * - конец сообщения — расчётное время (длина файла + 1 с или оценка по тексту). Если у дополнения
+ *   есть isPlaying() и плеер к этому времени ещё играет сообщение, ожидание продлевается по 2 с,
+ *   не больше terminals::QUEUE_PLAYING_CHECKS раз. Нет isPlaying() или плеер не ответил —
+ *   остаётся расчётное время.
  */
 
 // Дополнение TTS терминала (или null)
@@ -55,6 +59,13 @@ function terminalsQueueAdd($terminal_rec, $kind, $message, $level, $file)
     $key = json_encode((string)$message);
     $current = SQLSelectOne("SELECT * FROM terminals_queue WHERE TERMINAL_ID=$tid AND STARTED>0 ORDER BY STARTED DESC, ID DESC LIMIT 1");
     $busy = !empty($current['ID']) && (int)$current['FINISH'] > $now;
+    if (!$busy && !empty($current['ID']) && $now < (int)$current['FINISH'] + 2 * terminals::QUEUE_PLAYING_CHECKS
+        && terminalsQueueIsPlaying($terminal_rec)) {
+        // расчётное время вышло, но плеер ещё играет сообщение
+        $current['FINISH'] = $now + 2;
+        SQLUpdate('terminals_queue', $current);
+        $busy = true;
+    }
 
     if ($busy && $current['MESSAGE'] === $key) {
         if ($kind == 'cached' && $current['FILENAME'] == '') {
@@ -124,7 +135,7 @@ function terminalsQueueAdd($terminal_rec, $kind, $message, $level, $file)
 }
 
 // Следующее сообщение очереди терминала (вызывается отложенным заданием)
-function terminalsQueueNext($tid)
+function terminalsQueueNext($tid, $check = 0)
 {
     $tid = (int)$tid;
     if (!$tid || !terminalsQueueLock($tid)) {
@@ -142,6 +153,14 @@ function terminalsQueueNext($tid)
     if (empty($terminal_rec['ID'])) {
         SQLExec("DELETE FROM terminals_queue WHERE TERMINAL_ID=$tid");
         SQLExec("DELETE FROM terminals_state WHERE TERMINAL_ID=$tid");
+        terminalsQueueUnlock($tid);
+        return;
+    }
+    if (!empty($current['ID']) && $check < terminals::QUEUE_PLAYING_CHECKS && terminalsQueueIsPlaying($terminal_rec)) {
+        // расчётное время вышло, но плеер ещё играет сообщение — проверим снова через 2 с
+        $current['FINISH'] = $now + 2;
+        SQLUpdate('terminals_queue', $current);
+        terminalsQueueSchedule($tid, 2, $check + 1);
         terminalsQueueUnlock($tid);
         return;
     }
@@ -220,11 +239,21 @@ function terminalsQueueSpeechSeconds($message)
     return (int)ceil($len / 12) + 1;
 }
 
-function terminalsQueueSchedule($tid, $seconds)
+function terminalsQueueSchedule($tid, $seconds, $check = 0)
 {
     setTimeOut('terminals_queue_' . (int)$tid,
-        "include_once(DIR_MODULES . 'terminals/terminals.class.php'); terminalsQueueNext(" . (int)$tid . ");",
+        "include_once(DIR_MODULES . 'terminals/terminals.class.php'); terminalsQueueNext(" . (int)$tid . ", " . (int)$check . ");",
         max(0, (int)$seconds));
+}
+
+// Играет ли плеер терминала сообщение (только если дополнение умеет isPlaying() и знает ответ)
+function terminalsQueueIsPlaying($terminal_rec)
+{
+    $tts = terminalsQueueAddon($terminal_rec);
+    if (!is_object($tts) || !method_exists($tts, 'isPlaying')) {
+        return false;
+    }
+    return $tts->isPlaying() === true;
 }
 
 // После текущего сообщения: следующее из очереди или восстановление плеера

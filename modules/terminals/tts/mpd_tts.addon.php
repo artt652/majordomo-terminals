@@ -33,6 +33,13 @@ class mpd_tts extends mediaplayer
         return parent::sayCached($phrase, $level, $cached_file);
     }
 
+    // статус app_player/mpd: track_id — позиция трека, элементы плейлиста идут по порядку
+    protected function currentFile($played)
+    {
+        $position = isset($played['track_id']) ? (int)$played['track_id'] : -1;
+        return ($position >= 0 && isset($played[$position]['file'])) ? $played[$position]['file'] : '';
+    }
+
     public function saveState()
     {
         $this->playerSession();

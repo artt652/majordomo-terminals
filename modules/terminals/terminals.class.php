@@ -14,10 +14,12 @@ include_once(DIR_MODULES . 'terminals/terminals_queue.inc.php');
 
 class terminals extends module
 {
-    // Очередь сообщений (terminals_queue.inc.php): срочный уровень, срок жизни сообщения и запас сторожа, с
+    // Очередь сообщений (terminals_queue.inc.php): срочный уровень, срок жизни сообщения и запас сторожа, с;
+    // сколько раз по 2 с продлевать ожидание, если плеер ещё играет сообщение (isPlaying)
     const QUEUE_URGENT_LEVEL = 9;
     const QUEUE_TTL = 600;
     const QUEUE_WATCHDOG = 30;
+    const QUEUE_PLAYING_CHECKS = 15;
 
     /**
      * terminals

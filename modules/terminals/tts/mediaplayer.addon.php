@@ -55,18 +55,7 @@ class mediaplayer extends tts_addon
         if (!is_array($played) || !isset($played['state']) || $played['state'] != 'playing') {
             return false;
         }
-        $file = '';
-        if (!empty($played['file'])) {
-            $file = $played['file'];
-        } elseif (isset($played['track_id'])) {
-            // часть плееров (vlcweb) отдаёт файл только в плейлисте: ищем текущий трек по track_id
-            foreach ($played as $key => $item) {
-                if (is_int($key) && is_array($item) && isset($item['id'], $item['file']) && $item['id'] == $played['track_id']) {
-                    $file = $item['file'];
-                    break;
-                }
-            }
-        }
+        $file = $this->currentFile($played);
         if ($file == '' || preg_match('/cms[\\\\\/]cached[\\\\\/]voice/i', $file)) {
             return false;
         }
@@ -78,6 +67,42 @@ class mediaplayer extends tts_addon
             $state['volume'] = (int)$played['volume'];
         }
         return $state;
+    }
+
+    // Играет ли плеер сообщение: true — да, false — нет, null — неизвестно (тогда очередь
+    // ориентируется на расчётное время)
+    public function isPlaying()
+    {
+        $this->playerSession();
+        $played = getPlayerStatus($this->terminal['NAME']);
+        if (!is_array($played) || !isset($played['state'])) {
+            return null;
+        }
+        if ($played['state'] != 'playing') {
+            return false;
+        }
+        $file = $this->currentFile($played);
+        if ($file == '') {
+            return null;
+        }
+        return (bool)preg_match('/cms[\\\\\/]cached[\\\\\/]voice/i', $file);
+    }
+
+    // Текущий файл плеера из ответа getPlayerStatus()
+    protected function currentFile($played)
+    {
+        if (!empty($played['file'])) {
+            return $played['file'];
+        }
+        if (isset($played['track_id'])) {
+            // часть плееров (vlcweb) отдаёт файл только в плейлисте: ищем текущий трек по track_id
+            foreach ($played as $key => $item) {
+                if (is_int($key) && is_array($item) && isset($item['id'], $item['file']) && $item['id'] == $played['track_id']) {
+                    return $item['file'];
+                }
+            }
+        }
+        return '';
     }
 
     // Вернуть файл, позицию и громкость после сообщений
