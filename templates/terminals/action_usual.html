@@ -53,6 +53,7 @@
 	.tg-msg.tg-out { align-self: flex-end; background: var(--tg-out); color: var(--tg-out-text); border-bottom-right-radius: 4px; }
 	.tg-from { font-size: 13px; font-weight: 600; margin-bottom: 2px; white-space: normal; cursor: pointer; }
 	.tg-msg img { display: block; max-width: 100%; max-height: 320px; border-radius: 8px; margin: 2px 0 4px; cursor: pointer; }
+	.tg-msg video { display: block; max-width: 100%; max-height: 360px; border-radius: 8px; margin: 2px 0 4px; background: #000; }
 	.tg-msg audio { display: block; width: 240px; max-width: 100%; margin: 2px 0 4px; }
 	.tg-time { float: right; font-size: 11px; color: var(--tg-time); margin: 6px 0 0 10px; white-space: nowrap; }
 	.tg-day { align-self: center; font-size: 12px; color: #fff; background: rgba(0,0,0,.25); padding: 2px 10px; border-radius: 10px; margin: 6px 0; }
@@ -163,7 +164,9 @@
 					<label>🖼 <#LANG_TERMINALS_PHOTO#><input type="file" name="image" accept="image/*" style="display:none"></label>
 					<label>📷 <#LANG_TERMINALS_CAMERA#><input type="file" name="image_camera" accept="image/*" capture="environment" style="display:none"></label>
 					<label>📄 <#LANG_TERMINALS_FILE#><input type="file" name="file" style="display:none"></label>
-					<label>🎤 <#LANG_TERMINALS_VOICE_MESSAGE#><input type="file" name="audio" accept="audio/*" capture style="display:none"></label>
+					<label>🎬 <#LANG_TERMINALS_VIDEO#><input type="file" name="video" accept="video/*" style="display:none"></label>
+					<label>🎥 <#LANG_TERMINALS_VIDEO_CAMERA#><input type="file" name="video_camera" accept="video/*" capture="environment" style="display:none"></label>
+					<label>🎵 <#LANG_TERMINALS_AUDIO_FILE#><input type="file" name="audio" accept="audio/*" style="display:none"></label>
 				</div>
 				<!-- запись голосового: идёт запись, время, отмена -->
 				<div class="tg-rec" id="tm_rec">
@@ -213,7 +216,7 @@
 		noMessages: '<#LANG_TERMINALS_NO_MESSAGES#>', newGroup: '<#LANG_TERMINALS_NEW_GROUP#>', editGroup: '<#LANG_TERMINALS_EDIT_GROUP#>',
 		confirmDelete: '<#LANG_TERMINALS_DELETE_GROUP_CONFIRM#>', members: '<#LANG_TERMINALS_GROUP_MEMBERS#>',
 		chooseThis: '<#LANG_TERMINALS_CHOOSE_THIS#>', sending: '<#LANG_TERMINALS_SENDING#>', notSent: '<#LANG_TERMINALS_NOT_SENT#>',
-		sendError: '<#LANG_TERMINALS_SEND_ERROR#>', file: '<#LANG_TERMINALS_FILE#>', send: '<#LANG_TERMINALS_SEND#>',
+		sendError: '<#LANG_TERMINALS_SEND_ERROR#>', file: '<#LANG_TERMINALS_FILE#>', video: '<#LANG_TERMINALS_VIDEO#>', send: '<#LANG_TERMINALS_SEND#>',
 		record: '<#LANG_TERMINALS_RECORD_VOICE#>', tooBig: '<#LANG_TERMINALS_FILE_TOO_BIG#>', badType: '<#LANG_TERMINALS_FILE_TYPE#>',
 		uploadError: '<#LANG_TERMINALS_UPLOAD_ERROR#>', micHttps: '<#LANG_TERMINALS_MIC_HTTPS#>', micDenied: '<#LANG_TERMINALS_MIC_DENIED#>'
 	};
@@ -283,7 +286,7 @@
 		return tmConversation.filter(function (m) { return m.chat == key; }).slice().reverse();
 	}
 	function tmPreview(m, chat) {
-		var text = m.text || (m.image ? '📷 ' + tmText.photo : (m.sound ? '🎤 ' + tmText.voice : (m.file ? '📄 ' + (m.file_name || tmText.file) : '')));
+		var text = m.text || (m.image ? '📷 ' + tmText.photo : (m.video ? '🎬 ' + tmText.video : (m.sound ? '🎤 ' + tmText.voice : (m.file ? '📄 ' + (m.file_name || tmText.file) : ''))));
 		if (!m.incoming) return tmText.you + ': ' + text;
 		if (chat.type != 'term') return m.other_title + ': ' + text;
 		return text;
@@ -396,11 +399,11 @@
 	function tmFiles() {
 		var box = document.getElementById('tm_files');
 		box.innerHTML = '';
-		[tmForm.image, tmForm.image_camera, tmForm.audio, tmForm.file].forEach(function (input) {
+		tmInputs().forEach(function (input) {
 			if (!input.files || !input.files.length) return;
 			var chip = document.createElement('span');
 			chip.className = 'tg-chip';
-			chip.textContent = ({image: '🖼 ', image_camera: '📷 ', audio: '🎤 ', file: '📄 '})[input.name] + input.files[0].name;
+			chip.textContent = ({image: '🖼 ', image_camera: '📷 ', video: '🎬 ', video_camera: '🎥 ', audio: '🎵 ', file: '📄 '})[input.name] + input.files[0].name;
 			var x = document.createElement('button');
 			x.type = 'button';
 			x.textContent = '✕';
@@ -410,17 +413,21 @@
 		});
 		tmSendIcon();
 	}
-	[tmForm.image, tmForm.image_camera, tmForm.audio, tmForm.file].forEach(function (input) {
+	// поля вложений: картинка (галерея или камера), видео (галерея или камера), звук, файл
+	function tmInputs() {
+		return [tmForm.image, tmForm.image_camera, tmForm.video, tmForm.video_camera, tmForm.audio, tmForm.file];
+	}
+	tmInputs().forEach(function (input) {
 		input.addEventListener('change', function () {
-			// картинка одна: выбранная из галереи заменяет снимок с камеры и наоборот
-			if (input.name == 'image' && input.files.length) tmForm.image_camera.value = '';
-			if (input.name == 'image_camera' && input.files.length) tmForm.image.value = '';
+			// картинка одна и видео одно: выбранное из галереи заменяет снятое камерой и наоборот
+			var pair = {image: 'image_camera', image_camera: 'image', video: 'video_camera', video_camera: 'video'};
+			if (pair[input.name] && input.files.length) tmForm[pair[input.name]].value = '';
 			tmMenu.style.display = 'none';
 			tmFiles();
 		});
 	});
 	function tmHasFiles() {
-		return [tmForm.image, tmForm.image_camera, tmForm.audio, tmForm.file].some(function (input) { return input.files && input.files.length; });
+		return tmInputs().some(function (input) { return input.files && input.files.length; });
 	}
 
 	// поле ввода растёт по тексту; Enter — отправить, Shift+Enter — новая строка
@@ -449,7 +456,10 @@
 		var status = document.getElementById('tm_status');
 		if (!tmRecSupported()) {
 			status.textContent = tmText.micHttps;
+			// выбор файла записи: capture просит телефон открыть диктофон, если он есть
+			tmForm.audio.setAttribute('capture', '');
 			tmForm.audio.click();
+			setTimeout(function () { tmForm.audio.removeAttribute('capture'); }, 1000);
 			return;
 		}
 		navigator.mediaDevices.getUserMedia({audio: true}).then(function (stream) {
@@ -547,6 +557,14 @@
 				img.addEventListener('click', function () { window.open(m.image, '_blank'); });
 				div.appendChild(img);
 			}
+			if (m.video) {
+				var v = document.createElement('video');
+				v.controls = true;
+				v.preload = 'metadata';
+				v.setAttribute('playsinline', '');
+				v.src = m.video;
+				div.appendChild(v);
+			}
 			if (m.file) {
 				var link = document.createElement('a');
 				link.className = 'tg-file';
@@ -631,7 +649,8 @@
 		var status = document.getElementById('tm_status');
 		// размер проверяем до отправки: иначе сервер отбросит запрос целиком
 		var tooBig = '';
-		[[tmForm.image, tmMaxMedia], [tmForm.image_camera, tmMaxMedia], [tmForm.audio, tmMaxMedia], [tmForm.file, tmMaxFile]].forEach(function (item) {
+		[[tmForm.image, tmMaxMedia], [tmForm.image_camera, tmMaxMedia], [tmForm.audio, tmMaxMedia], [tmForm.file, tmMaxFile],
+			[tmForm.video, tmMaxFile], [tmForm.video_camera, tmMaxFile]].forEach(function (item) {
 			var f = item[0].files && item[0].files[0];
 			if (f && f.size > item[1] * 1048576) tooBig = tmText.tooBig.replace('%s', item[1]);
 		});
@@ -650,10 +669,7 @@
 				if (res.sent) {
 					tmInput.value = '';
 					tmGrow();
-					tmForm.image.value = '';
-					tmForm.image_camera.value = '';
-					tmForm.audio.value = '';
-					tmForm.file.value = '';
+					tmInputs().forEach(function (input) { input.value = ''; });
 					tmFiles();
 					tmRefresh(function () { tmOpen(tmCurrent); });
 				}

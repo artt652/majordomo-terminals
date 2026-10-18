@@ -9,6 +9,8 @@
  *       'sound' => 'cms/sounds/dingdong.mp3',   // звук перед сообщением: путь в веб-корне или http-ссылка
  *       'file'  => 'cms/cached/terminals/x.pdf', // файл для страницы «Сообщения» (скачать); на устройство — «Файл: имя»
  *       'file_name' => 'Счёт.pdf',              // имя файла для показа и скачивания
+ *       'video' => 'cms/cached/terminals/x.mp4', // видео: на странице «Сообщения» — плеер, на устройстве —
+ *                                               // окно видео, если у дополнения есть sendVideo() (pipup), иначе «Видео»
  *       'voice' => true,                        // озвучить текст генератором речи (по умолчанию да)
  *       'level' => 5,                           // уровень; по умолчанию — порог терминала-получателя
  *       'chat'  => 'room:3',                    // чат на странице «Сообщения»: all, room:ID, group:ID (пусто — личный)
@@ -34,11 +36,12 @@ function terminalsSend($to, $message, $options = array())
     $sound = isset($options['sound']) ? trim((string)$options['sound']) : '';
     $voice = !isset($options['voice']) || !empty($options['voice']);
     $file = isset($options['file']) ? trim((string)$options['file']) : '';
+    $video = isset($options['video']) ? trim((string)$options['video']) : '';
     $file_name = isset($options['file_name']) ? trim((string)$options['file_name']) : '';
     if ($file != '' && $file_name == '') {
         $file_name = basename($file);
     }
-    if ($message == '' && $image == '' && $sound == '' && $file == '') {
+    if ($message == '' && $image == '' && $sound == '' && $file == '' && $video == '') {
         return 0;
     }
     // отправитель: название терминала, если это терминал, иначе как есть
@@ -94,11 +97,27 @@ function terminalsSend($to, $message, $options = array())
                 $tts->playFile($sound, $level, $sender_title);
             }
         }
-        // только файл: на устройство — текст «Файл: имя» без озвучки, сам файл — на странице «Сообщения»
-        if ($speaks && $message == '' && $image == '' && $sound == '' && $file != '') {
+        // видео: окно видео на устройстве, если дополнение умеет (pipup: sendVideo по ссылке, со звуком).
+        // В очередь не ставится — окно видео живёт своим сроком
+        $video_shown = false;
+        if ($speaks && $video != '' && is_object($tts) && method_exists($tts, 'sendVideo')) {
+            $url = method_exists($tts, 'fileUrl') ? $tts->fileUrl($video) : $video;
+            $duration = 60;
+            if (function_exists('getMediaDurationSeconds') && file_exists(ROOT . ltrim($video, '/'))) {
+                $seconds = (int)getMediaDurationSeconds(ROOT . ltrim($video, '/'));
+                if ($seconds > 0) {
+                    $duration = min($seconds + 3, 600);
+                }
+            }
+            $video_shown = $url && (bool)$tts->sendVideo($url, '', $sender_title, 'video', array('muted' => false, 'duration' => $duration));
+        }
+        // только файл или видео, которое устройство не покажет: на устройство — текст без озвучки
+        // («Файл: имя», «Видео»), сам файл — на странице «Сообщения»
+        if ($speaks && $message == '' && $image == '' && $sound == '' && ($file != '' || ($video != '' && !$video_shown))) {
             include_once(DIR_MODULES . 'terminals/terminals.class.php');
             $terminals = new terminals();
-            $terminals->terminalSay($terminal_rec, terminalsLang('TERMINALS_FILE') . ': ' . $file_name, $level, '', $sender_title);
+            $label = ($file != '') ? terminalsLang('TERMINALS_FILE') . ': ' . $file_name : terminalsLang('TERMINALS_VIDEO');
+            $terminals->terminalSay($terminal_rec, $label, $level, '', $sender_title);
         }
         if ($speaks && ($message != '' || $image != '')) {
             if ($voice && $message != '') {
@@ -119,6 +138,7 @@ function terminalsSend($to, $message, $options = array())
             'IMAGE' => $image,
             'SOUND' => $sound,
             'FILE' => $file,
+            'VIDEO' => $video,
             'FILE_NAME' => $file_name,
             'ADDED' => time(),
             'CHAT' => $chat,

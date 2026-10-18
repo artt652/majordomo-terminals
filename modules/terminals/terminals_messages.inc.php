@@ -21,11 +21,12 @@ global $session;
 $messages_dir = 'cms/cached/terminals';
 $image_ext = array('jpg', 'jpeg', 'png', 'gif', 'webp');
 $audio_ext = array('mp3', 'wav', 'ogg', 'oga', 'opus', 'm4a', 'aac', 'amr', '3gp', 'webm');
+$video_ext = array('mp4', 'm4v', 'webm', 'mov', '3gp', 'mkv');
 // файлы: только эти расширения — файлы лежат в веб-корне, исполняемые (php, html, svg…) не принимаются
 $file_ext = array('pdf', 'txt', 'md', 'log', 'csv', 'json', 'rtf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp',
     'zip', '7z', 'rar', 'gz', 'tgz', 'tar', 'apk', 'epub', 'fb2', 'mp4', 'mkv', 'avi', 'mov', 'flac', 'heic', 'bmp');
-$file_ext = array_merge($file_ext, $image_ext, $audio_ext);
-// предел размера: свой (картинки и звук 15 МБ, файлы 50 МБ), но не больше настроек PHP
+$file_ext = array_merge($file_ext, $image_ext, $audio_ext, $video_ext);
+// предел размера: свой (картинки и звук 15 МБ, видео и файлы 50 МБ), но не больше настроек PHP
 $ini_bytes = function ($value) {
     $value = trim((string)$value);
     $n = (float)$value;
@@ -242,13 +243,19 @@ if ($this->mode == 'send_message' || gr('mode') == 'send_message') {
     }
     $sound = $save_upload('audio', $audio_ext, $max_media);
     $file = $save_upload('file', $file_ext, $max_file);
+    $video = $save_upload('video', $video_ext, $max_file);
+    if ($video == '') {
+        // видео с камеры (отдельный пункт меню)
+        $video = $save_upload('video_camera', $video_ext, $max_file);
+    }
     $sent = 0;
-    if ($upload_error == '' && $me_name != '' && count($to) && ($text != '' || $image != '' || $sound != '' || $file != '')) {
+    if ($upload_error == '' && $me_name != '' && count($to) && ($text != '' || $image != '' || $sound != '' || $file != '' || $video != '')) {
         $options = array(
             'from' => $me_name,
             'image' => $image,
             'sound' => $sound,
             'file' => $file,
+            'video' => $video,
             'file_name' => ($file != '') ? $upload_name('file') : '',
             'voice' => gr('voice', 'int') ? true : false,
         );
@@ -293,6 +300,7 @@ if ($me_name != '') {
             'text' => is_string($text) ? $text : '',
             'image' => ($row['IMAGE'] != '' && !preg_match('/^https?:/i', $row['IMAGE'])) ? ROOTHTML . ltrim($row['IMAGE'], '/') : $row['IMAGE'],
             'sound' => ($row['SOUND'] != '' && !preg_match('/^https?:/i', $row['SOUND'])) ? ROOTHTML . ltrim($row['SOUND'], '/') : $row['SOUND'],
+            'video' => (!empty($row['VIDEO']) && !preg_match('/^https?:/i', $row['VIDEO'])) ? ROOTHTML . ltrim($row['VIDEO'], '/') : (isset($row['VIDEO']) ? $row['VIDEO'] : ''),
             'file' => (!empty($row['FILE']) && !preg_match('/^https?:/i', $row['FILE'])) ? ROOTHTML . ltrim($row['FILE'], '/') : (isset($row['FILE']) ? $row['FILE'] : ''),
             'file_name' => isset($row['FILE_NAME']) ? $row['FILE_NAME'] : '',
             'time' => date('d.m H:i', (int)$row['ADDED']),
