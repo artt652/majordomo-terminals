@@ -125,3 +125,5 @@ $out['MSG_TERMINALS'] = SQLSelect("SELECT NAME, TITLE FROM terminals WHERE CANTT
 $out['ALL_TERMINALS'] = SQLSelect("SELECT NAME, TITLE FROM terminals ORDER BY TITLE");
 $out['CONVERSATION_JSON'] = json_encode($conversation, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
 $out['MESSAGES_PAGE'] = 1;
+// вебсокет MajorDoMo: мгновенное обновление переписки; без него — опрос
+$out['WS_PORT'] = (defined('WEBSOCKETS_PORT') && !(defined('DISABLE_WEBSOCKETS') && DISABLE_WEBSOCKETS == 1)) ? (int)WEBSOCKETS_PORT : '';

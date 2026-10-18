@@ -96,7 +96,12 @@ function terminalsSend($to, $message, $options = array())
             'SOUND' => $sound,
             'ADDED' => time(),
         );
-        SQLInsert('terminals_messages', $rec);
+        $rec['ID'] = SQLInsert('terminals_messages', $rec);
+        // открытые страницы «Сообщения» получают событие через вебсокет и сразу обновляют переписку
+        if (function_exists('postToWebSocketQueue')) {
+            postToWebSocketQueue('TERMINAL_MESSAGE', json_encode(array('ID' => (int)$rec['ID'],
+                'FROM' => $rec['FROM_NAME'], 'TO' => $rec['TO_NAME'])), 'PostEvent');
+        }
         $sent++;
     }
     return $sent;

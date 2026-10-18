@@ -156,7 +156,43 @@
 			.then(function () { document.getElementById('tm_send').disabled = false; });
 	});
 
+	// Вебсокет MajorDoMo: событие TERMINAL_MESSAGE (terminalsSend) — сразу обновить переписку.
+	// Пока вебсокет не подключён, переписка обновляется опросом раз в 15 с, при подключённом — раз в минуту
+	var tmWsPort = '[#WS_PORT#]', tmWsOpen = false, tmLastPoll = 0;
+	function tmWebSocket() {
+		if (!tmWsPort || !window.WebSocket) return;
+		var ws;
+		try {
+			ws = new WebSocket((location.protocol == 'https:' ? 'wss:' : 'ws:') + '//' + location.hostname + ':' + tmWsPort + '/majordomo');
+		} catch (e) { return; }
+		ws.onopen = function () {
+			tmWsOpen = true;
+			ws.send(JSON.stringify({action: 'Subscribe', data: {TYPE: 'events', EVENTS: 'TERMINAL_MESSAGE'}}));
+			tmRefresh();
+		};
+		ws.onmessage = function (msg) {
+			var r, d;
+			try { r = JSON.parse(msg.data); } catch (e) { return; }
+			if (!r || r.action != 'events') return;
+			try { d = JSON.parse(r.data); } catch (e) { return; }
+			var v = d && d.EVENT_DATA ? d.EVENT_DATA.VALUE : null;
+			if (typeof v == 'string') { try { v = JSON.parse(v); } catch (e) { v = null; } }
+			var me = document.getElementById('tm_from').value;
+			if (d && d.EVENT_DATA && d.EVENT_DATA.NAME == 'TERMINAL_MESSAGE' && (!v || v.TO == me || v.FROM == me)) {
+				tmRefresh();
+			}
+		};
+		ws.onclose = function () {
+			tmWsOpen = false;
+			setTimeout(tmWebSocket, 10000);
+		};
+	}
+
 	document.getElementById('tm_from').addEventListener('change', tmRefresh);
 	tmRender(tmConversation);
-	setInterval(tmRefresh, 15000);
+	setInterval(function () {
+		var now = Date.now();
+		if (now - tmLastPoll >= (tmWsOpen ? 60000 : 15000)) { tmLastPoll = now; tmRefresh(); }
+	}, 5000);
+	tmWebSocket();
 </script>
