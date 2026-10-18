@@ -521,6 +521,7 @@ class terminals extends module
  terminals_colors: ID int(10) unsigned NOT NULL auto_increment
  terminals_colors: CHAT_KEY varchar(100) NOT NULL DEFAULT ''
  terminals_colors: COLOR varchar(10) NOT NULL DEFAULT ''
+ terminals_colors: EMOJI varchar(100) NOT NULL DEFAULT ''
 
  terminals_groups: ID int(10) unsigned NOT NULL auto_increment
  terminals_groups: TITLE varchar(255) NOT NULL DEFAULT ''

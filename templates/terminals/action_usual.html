@@ -9,13 +9,30 @@
 	.tg-app { --tg-bg: #e6ebee; --tg-panel: #ffffff; --tg-text: #000000; --tg-muted: #707579; --tg-in: #ffffff; --tg-out: #e3fee0;
 		--tg-out-text: #000000; --tg-accent: #3390ec; --tg-border: #dfe1e5; --tg-input: #f1f3f4; --tg-time: #8a9aa9; --tg-shadow: 0 1px 2px rgba(16,35,47,.15);
 		--tg-hover: #f4f4f5; --tg-active: #3390ec; --tg-active-text: #ffffff; }
-	.tg-app.tg-dark { --tg-bg: #0e1621; --tg-panel: #17212b; --tg-text: #f5f5f5; --tg-muted: #8d9ba8; --tg-in: #182533; --tg-out: #2b5278;
+	.tg-app.tg-dark { --tg-bg: #0e1621; --tg-panel: #17212b; --tg-text: #f5f5f5; --tg-muted: #8d9ba8; --tg-in: #1f2f3f; --tg-out: #2b5278;
 		--tg-out-text: #ffffff; --tg-accent: #5aa7f0; --tg-border: #0b121a; --tg-input: #242f3d; --tg-time: #7d8e9e; --tg-shadow: none;
 		--tg-hover: #202b36; --tg-active: #2b5278; --tg-active-text: #ffffff; }
-	.tg-app { display: flex; height: 100vh; height: 100dvh; max-width: 1200px; margin: 0 auto; background: var(--tg-bg); color: var(--tg-text);
+	/* фон как в Telegram: градиент и узор из домашних значков; выбирается в меню темы */
+	.tg-app { --tg-wall: linear-gradient(150deg, #d6e6b9 0%, #b5d39a 45%, #9fc38a 100%); --tg-pattern: rgba(48, 92, 40, .22);
+		--tg-glass: rgba(255, 255, 255, .86); }
+	.tg-app.tg-dark { --tg-wall: linear-gradient(150deg, #142130 0%, #0f1924 55%, #0b121a 100%); --tg-pattern: rgba(255, 255, 255, .055);
+		--tg-glass: rgba(23, 33, 43, .88); }
+	.tg-app.tg-wp-mint { --tg-wall: linear-gradient(150deg, #c9ecdf, #9ad3c3 55%, #b9e0d0); --tg-pattern: transparent; }
+	.tg-app.tg-dark.tg-wp-mint { --tg-wall: linear-gradient(150deg, #0f2d2a, #0c2123 55%, #0a161a); }
+	.tg-app.tg-wp-sunset { --tg-wall: linear-gradient(150deg, #fbd6b4, #f5b3a8 50%, #e7a6c6); --tg-pattern: rgba(120, 50, 40, .16); }
+	.tg-app.tg-dark.tg-wp-sunset { --tg-wall: linear-gradient(150deg, #2c1a27, #211522 50%, #140f1b); --tg-pattern: rgba(255, 220, 220, .05); }
+	.tg-app.tg-wp-ocean { --tg-wall: linear-gradient(150deg, #bfdcf6, #9ec5ee 50%, #b4c7f2); --tg-pattern: rgba(30, 70, 130, .17); }
+	.tg-app.tg-dark.tg-wp-ocean { --tg-wall: linear-gradient(150deg, #10213d, #0c192e 50%, #08111f); --tg-pattern: rgba(200, 220, 255, .055); }
+	.tg-app.tg-wp-plain { --tg-wall: var(--tg-bg); --tg-pattern: transparent; --tg-glass: var(--tg-panel); }
+	.tg-app::before { content: ''; position: absolute; inset: 0; background: var(--tg-pattern); pointer-events: none; z-index: 0;
+		-webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260' viewBox='0 0 260 260'%3E%3Cg fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath transform='translate%2820 20%29' d='M2 12 12 3l10 9M5 10v10h14V10M10 20v-6h4v6'/%3E%3Cpath transform='translate%28110 14%29' d='M12 3a6 6 0 0 0-3.5 10.9V17h7v-3.1A6 6 0 0 0 12 3zM9.5 20h5'/%3E%3Cpath transform='translate%28200 26%29' d='M9 17V5l10-2v12M9 17a3 3 0 1 1-3-3 3 3 0 0 1 3 3zM19 15a3 3 0 1 1-3-3 3 3 0 0 1 3 3z'/%3E%3Cpath transform='translate%2860 82%29' d='M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6-5.3-3-5.3 3 1.2-6L3.4 9.3l6-.7z'/%3E%3Cpath transform='translate%28156 90%29' d='M7 18h10a4 4 0 0 0 .6-8A6 6 0 0 0 6.2 9 4.5 4.5 0 0 0 7 18z'/%3E%3Cpath transform='translate%2816 150%29' d='M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z'/%3E%3Cpath transform='translate%28100 150%29' d='M4 5h16v11H9l-5 4z'/%3E%3Cpath transform='translate%28196 160%29' d='M4 9h4l5-4v14l-5-4H4zM16 9a4 4 0 0 1 0 6'/%3E%3Cpath transform='translate%2856 212%29' d='M5 19c0-9 6-14 14-14 0 8-5 14-14 14zM5 19l7-7'/%3E%3Cpath transform='translate%28150 214%29' d='M18 15A7 7 0 0 1 9 6a7 7 0 1 0 9 9z'/%3E%3Cpath transform='translate%28226 92%29' d='M10 14V5a2 2 0 0 1 4 0v9a4 4 0 1 1-4 0z'/%3E%3Cpath transform='translate%28110 82%29' d='M8 15a4 4 0 1 1 3.5-6H21v3h-2v3h-3v-3h-4.5A4 4 0 0 1 8 15z'/%3E%3C/g%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260' viewBox='0 0 260 260'%3E%3Cg fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath transform='translate%2820 20%29' d='M2 12 12 3l10 9M5 10v10h14V10M10 20v-6h4v6'/%3E%3Cpath transform='translate%28110 14%29' d='M12 3a6 6 0 0 0-3.5 10.9V17h7v-3.1A6 6 0 0 0 12 3zM9.5 20h5'/%3E%3Cpath transform='translate%28200 26%29' d='M9 17V5l10-2v12M9 17a3 3 0 1 1-3-3 3 3 0 0 1 3 3zM19 15a3 3 0 1 1-3-3 3 3 0 0 1 3 3z'/%3E%3Cpath transform='translate%2860 82%29' d='M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6-5.3-3-5.3 3 1.2-6L3.4 9.3l6-.7z'/%3E%3Cpath transform='translate%28156 90%29' d='M7 18h10a4 4 0 0 0 .6-8A6 6 0 0 0 6.2 9 4.5 4.5 0 0 0 7 18z'/%3E%3Cpath transform='translate%2816 150%29' d='M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z'/%3E%3Cpath transform='translate%28100 150%29' d='M4 5h16v11H9l-5 4z'/%3E%3Cpath transform='translate%28196 160%29' d='M4 9h4l5-4v14l-5-4H4zM16 9a4 4 0 0 1 0 6'/%3E%3Cpath transform='translate%2856 212%29' d='M5 19c0-9 6-14 14-14 0 8-5 14-14 14zM5 19l7-7'/%3E%3Cpath transform='translate%28150 214%29' d='M18 15A7 7 0 0 1 9 6a7 7 0 1 0 9 9z'/%3E%3Cpath transform='translate%28226 92%29' d='M10 14V5a2 2 0 0 1 4 0v9a4 4 0 1 1-4 0z'/%3E%3Cpath transform='translate%28110 82%29' d='M8 15a4 4 0 1 1 3.5-6H21v3h-2v3h-3v-3h-4.5A4 4 0 0 1 8 15z'/%3E%3C/g%3E%3C/svg%3E"); -webkit-mask-size: 260px; mask-size: 260px; }
+	.tg-side, .tg-main { position: relative; z-index: 1; }
+	.tg-app { display: flex; height: 100vh; height: 100dvh; max-width: 1200px; margin: 0 auto; background: var(--tg-wall); color: var(--tg-text);
 		font-size: 15px; position: relative; overflow: hidden; }
 	.tg-app * { box-sizing: border-box; }
-	.tg-side { width: 340px; flex: none; display: flex; flex-direction: column; background: var(--tg-panel); border-right: 1px solid var(--tg-border); }
+	.tg-side { width: 340px; flex: none; display: flex; flex-direction: column; background: var(--tg-glass); border-right: 1px solid var(--tg-border);
+		-webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+	.tg-side .tg-search { background: transparent; }
 	.tg-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 	.tg-head { display: flex; align-items: center; gap: 8px; padding: 8px 10px; min-height: 56px; background: var(--tg-panel); border-bottom: 1px solid var(--tg-border); }
 	.tg-head .tg-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -46,6 +63,36 @@
 		color: #fff; font-size: 20px; font-weight: 600; user-select: none; }
 	.tg-head .tg-avatar { width: 40px; height: 40px; font-size: 17px; }
 	.tg-avatar { position: relative; }
+	.tg-avatar.tg-emoji { font-size: 26px; }
+	.tg-head .tg-avatar.tg-emoji { font-size: 22px; }
+	.tg-info-top .tg-avatar.tg-emoji { font-size: 44px; }
+	.tg-member .tg-avatar.tg-emoji { font-size: 19px; }
+	.tg-emojis { display: grid; grid-template-columns: repeat(auto-fill, minmax(34px, 1fr)); gap: 2px; padding: 2px 0 6px; }
+	.tg-emojis button { font-size: 21px; line-height: 1; height: 34px; border: 0; border-radius: 8px; background: none; cursor: pointer; padding: 0; color: var(--tg-muted); }
+	.tg-emojis button:hover { background: var(--tg-hover); }
+	.tg-emojis button.tg-sel { background: rgba(51,144,236,.18); }
+	.tg-emoji-own { display: flex; gap: 6px; padding: 0 0 8px; }
+	.tg-emoji-own input { width: 70px; border: 1px solid var(--tg-border); border-radius: 8px; background: transparent; color: var(--tg-text); padding: 4px 8px; font-size: 18px; text-align: center; }
+	/* аудио в цветах темы */
+	.tg-audio { display: flex; align-items: center; gap: 10px; min-width: 220px; margin: 2px 0 4px; white-space: normal; }
+	.tg-audio-btn { width: 40px; height: 40px; border-radius: 50%; border: 0; background: var(--tg-accent); color: #fff; flex: none; cursor: pointer;
+		display: flex; align-items: center; justify-content: center; padding: 0; }
+	.tg-out .tg-audio-btn { background: var(--tg-audio-out, var(--tg-accent)); }
+	.tg-audio-info { flex: 1; min-width: 0; }
+	.tg-audio-bar { height: 4px; border-radius: 2px; background: rgba(127,127,127,.3); cursor: pointer; position: relative; margin: 8px 0 6px; }
+	.tg-audio-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 2px; background: var(--tg-accent); }
+	.tg-audio-time { font-size: 12px; color: var(--tg-time); }
+	/* меню вида: тема и фон */
+	.tg-look { position: absolute; top: 52px; right: 8px; z-index: 15; background: var(--tg-panel); border: 1px solid var(--tg-border); border-radius: 12px;
+		box-shadow: 0 6px 24px rgba(0,0,0,.25); padding: 10px 12px; width: 250px; display: none; }
+	.tg-look.tg-show { display: block; }
+	.tg-look h4 { margin: 2px 0 6px; font-size: 13px; color: var(--tg-accent); font-weight: 600; }
+	.tg-look-themes { display: flex; gap: 4px; margin-bottom: 10px; }
+	.tg-look-themes button { flex: 1; border: 1px solid var(--tg-border); background: none; color: var(--tg-text); border-radius: 8px; padding: 6px 2px; font-size: 12px; cursor: pointer; }
+	.tg-look-themes button.tg-sel { border-color: var(--tg-accent); color: var(--tg-accent); font-weight: 600; }
+	.tg-walls { display: flex; gap: 6px; flex-wrap: wrap; }
+	.tg-walls button { width: 38px; height: 54px; border-radius: 8px; border: 2px solid transparent; cursor: pointer; padding: 0; }
+	.tg-walls button.tg-sel { border-color: var(--tg-accent); }
 	/* в сети — зелёная точка на аватарке */
 	.tg-avatar.tg-online::after { content: ''; position: absolute; right: 0; bottom: 0; width: 13px; height: 13px; border-radius: 50%;
 		background: #4fce5d; border: 2px solid var(--tg-panel); }
@@ -178,6 +225,16 @@
 			<button type="button" class="tg-icon" id="tm_new_group" title="<#LANG_TERMINALS_NEW_GROUP#>"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M19 8v6M16 11h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
 			<button type="button" class="tg-icon" id="tm_theme" title="<#LANG_TERMINALS_THEME#>"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/></svg></button>
 		</div>
+		<div class="tg-look" id="tm_look">
+			<h4><#LANG_TERMINALS_THEME_TITLE#></h4>
+			<div class="tg-look-themes" id="tm_look_themes">
+				<button type="button" data-theme="light"><#LANG_TERMINALS_THEME_LIGHT#></button>
+				<button type="button" data-theme="dark"><#LANG_TERMINALS_THEME_DARK#></button>
+				<button type="button" data-theme=""><#LANG_TERMINALS_THEME_SYSTEM#></button>
+			</div>
+			<h4><#LANG_TERMINALS_WALLPAPER#></h4>
+			<div class="tg-walls" id="tm_walls"></div>
+		</div>
 		<div class="tg-search"><input type="text" id="tm_search" placeholder="<#LANG_TERMINALS_SEARCH#>" autocomplete="off"></div>
 		<div class="tg-chats" id="tm_chats"></div>
 	</div>
@@ -266,6 +323,7 @@
 	var tmTitles = [#TITLES_JSON#];
 	var tmStatus = [#STATUS_JSON#];
 	var tmColorsMap = [#COLORS_JSON#];
+	var tmEmojiMap = [#EMOJIS_JSON#];
 	var tmUserName = [#USER_NAME_JSON#];
 	var tmApp = document.getElementById('tg_app');
 	var tmForm = document.getElementById('tm_form');
@@ -277,7 +335,10 @@
 		chooseThis: '<#LANG_TERMINALS_CHOOSE_THIS#>', sending: '<#LANG_TERMINALS_SENDING#>', notSent: '<#LANG_TERMINALS_NOT_SENT#>',
 		sendError: '<#LANG_TERMINALS_SEND_ERROR#>', file: '<#LANG_TERMINALS_FILE#>', video: '<#LANG_TERMINALS_VIDEO#>', send: '<#LANG_TERMINALS_SEND#>',
 		record: '<#LANG_TERMINALS_RECORD_VOICE#>', tooBig: '<#LANG_TERMINALS_FILE_TOO_BIG#>', badType: '<#LANG_TERMINALS_FILE_TYPE#>',
-		uploadError: '<#LANG_TERMINALS_UPLOAD_ERROR#>', houseSub: '<#LANG_TERMINALS_HOUSE_CHAT#>', online: '<#LANG_TERMINALS_ONLINE#>',
+		uploadError: '<#LANG_TERMINALS_UPLOAD_ERROR#>', houseSub: '<#LANG_TERMINALS_HOUSE_CHAT#>', emoji: '<#LANG_TERMINALS_AVATAR_EMOJI#>', emojiOwn: '<#LANG_TERMINALS_EMOJI_OWN#>',
+		emojiReset: '<#LANG_TERMINALS_EMOJI_DEFAULT#>', wall_pattern: '<#LANG_TERMINALS_WALL_PATTERN#>', wall_mint: '<#LANG_TERMINALS_WALL_MINT#>',
+		wall_sunset: '<#LANG_TERMINALS_WALL_SUNSET#>', wall_ocean: '<#LANG_TERMINALS_WALL_OCEAN#>', wall_plain: '<#LANG_TERMINALS_WALL_PLAIN#>',
+		play: '<#LANG_TERMINALS_PLAY#>', pause: '<#LANG_TERMINALS_PAUSE#>', online: '<#LANG_TERMINALS_ONLINE#>',
 		lastSeen: '<#LANG_TERMINALS_LAST_SEEN#>', activity: '<#LANG_TERMINALS_ACTIVITY#>', reachable: '<#LANG_TERMINALS_REACHABLE#>', offline: '<#LANG_TERMINALS_OFFLINE#>',
 		name: '<#LANG_TERMINALS_SYSTEM_NAME#>', host: '<#LANG_TERMINALS_HOST#>', room: '<#LANG_TERMINALS_ROOM#>',
 		minLevel: '<#LANG_TERMINALS_MIN_LEVEL#>', byDefault: '<#LANG_TERMINALS_BY_DEFAULT#>', tts: '<#LANG_TERMINALS_TTS#>',
@@ -304,18 +365,58 @@
 		return null;
 	}
 
-	// тема: сохранённая, иначе как в системе
+	// тема (светлая, тёмная, как в системе) и фон — меню у кнопки темы, запоминаются в браузере
+	var tmDarkQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+	var tmWalls = ['pattern', 'mint', 'sunset', 'ocean', 'plain'];
 	function tmTheme(dark) {
 		tmApp.classList.toggle('tg-dark', dark);
 		document.body.style.background = dark ? '#0e1621' : '#e6ebee';
 	}
-	var tmSavedTheme = tmStore('theme');
-	tmTheme(tmSavedTheme ? tmSavedTheme == 'dark' : !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches));
-	document.getElementById('tm_theme').addEventListener('click', function () {
-		var dark = !tmApp.classList.contains('tg-dark');
-		tmTheme(dark);
-		tmStore('theme', dark ? 'dark' : 'light');
+	function tmApplyLook() {
+		var theme = tmStore('theme') || '';
+		tmTheme(theme ? theme == 'dark' : !!(tmDarkQuery && tmDarkQuery.matches));
+		var wall = tmStore('wallpaper') || 'pattern';
+		tmWalls.forEach(function (w) { tmApp.classList.toggle('tg-wp-' + w, w == wall && w != 'pattern'); });
+		Array.prototype.forEach.call(document.querySelectorAll('#tm_look_themes button'), function (b) {
+			b.classList.toggle('tg-sel', b.getAttribute('data-theme') == theme);
+		});
+		Array.prototype.forEach.call(document.querySelectorAll('#tm_walls button'), function (b) {
+			b.classList.toggle('tg-sel', b.getAttribute('data-wall') == wall);
+		});
+	}
+	// образцы фона: тот же градиент, что у фона, в текущей теме
+	tmWalls.forEach(function (w) {
+		var b = document.createElement('button');
+		b.type = 'button';
+		b.setAttribute('data-wall', w);
+		b.title = tmText['wall_' + w];
+		b.addEventListener('click', function () { tmStore('wallpaper', w); tmApplyLook(); tmPaintWalls(); });
+		document.getElementById('tm_walls').appendChild(b);
 	});
+	function tmPaintWalls() {
+		Array.prototype.forEach.call(document.querySelectorAll('#tm_walls button'), function (b) {
+			var probe = document.createElement('div');
+			probe.className = tmApp.className.replace(/tg-wp-\w+/g, '') + (b.getAttribute('data-wall') != 'pattern' ? ' tg-wp-' + b.getAttribute('data-wall') : '');
+			probe.style.display = 'none';
+			document.body.appendChild(probe);
+			b.style.background = getComputedStyle(probe).getPropertyValue('--tg-wall');
+			document.body.removeChild(probe);
+		});
+	}
+	Array.prototype.forEach.call(document.querySelectorAll('#tm_look_themes button'), function (b) {
+		b.addEventListener('click', function () { tmStore('theme', b.getAttribute('data-theme')); tmApplyLook(); tmPaintWalls(); });
+	});
+	if (tmDarkQuery && tmDarkQuery.addEventListener) {
+		tmDarkQuery.addEventListener('change', function () { if (!tmStore('theme')) { tmApplyLook(); tmPaintWalls(); } });
+	}
+	var tmLook = document.getElementById('tm_look');
+	document.getElementById('tm_theme').addEventListener('click', function (e) {
+		e.stopPropagation();
+		tmLook.classList.toggle('tg-show');
+		tmPaintWalls();
+	});
+	document.addEventListener('click', function (e) { if (!tmLook.contains(e.target)) tmLook.classList.remove('tg-show'); });
+	tmApplyLook();
 
 	// озвучка на получателе: вкл/выкл, запоминается
 	function tmVoice(on) {
@@ -344,7 +445,9 @@
 	}
 	function tmAvatar(el, chat) {
 		var icons = {all: '📢', room: '🏠', group: '👥', house: '💬', shoutroom: '🗨️'};
-		el.textContent = icons[chat.type] || (chat.title || '?').trim().charAt(0).toUpperCase();
+		var emoji = tmEmojiMap[chat.key] || '';
+		el.textContent = emoji || icons[chat.type] || (chat.title || '?').trim().charAt(0).toUpperCase();
+		el.classList.toggle('tg-emoji', !!emoji);
 		el.style.background = tmColor(chat.key);
 		// личный чат: зелёная точка, если терминал в сети
 		var name = (chat.type == 'term') ? chat.key.substr(5) : '';
@@ -728,11 +831,7 @@
 				div.appendChild(link);
 			}
 			if (m.sound) {
-				var a = document.createElement('audio');
-				a.controls = true;
-				a.preload = 'none';
-				a.src = m.sound;
-				div.appendChild(a);
+				div.appendChild(tmAudio(m.sound));
 			}
 			var t = document.createElement('span');
 			t.className = 'tg-time';
@@ -764,6 +863,7 @@
 				tmChats = res.chats;
 				if (res.status) tmStatus = res.status;
 				if (res.colors) tmColorsMap = Array.isArray(res.colors) ? {} : res.colors;
+				if (res.emojis) tmEmojiMap = Array.isArray(res.emojis) ? {} : res.emojis;
 				if (then) { then(); return; }
 				if (changed) {
 					if (tmCurrent && !tmChat(tmCurrent)) { tmOpen(''); return; }
@@ -946,7 +1046,41 @@
 			sec.appendChild(row);
 		});
 	}
+	// эмодзи-аватарка (терминалы, свои группы, чаты MajorDoMo) и цвет — общие для всех устройств
+	var tmEmojiList = ['🏠', '🍳', '🛋️', '🛏️', '🚪', '🛁', '🧸', '💻', '📺', '📱', '🖥️', '🔊', '🎵', '📻', '🎧', '🤖', '💡', '🌡️',
+		'🌿', '🌞', '🌙', '⭐', '❤️', '🔔', '📢', '🎮', '📷', '🚗', '🏡', '👪', '👶', '👵', '🐱', '🐶', '☕', '🍽️', '🧺', '🔧', '🛡️', '🎉'];
+	function tmEmojiAllowed(key) { return /^(term:.+|group:\d+|house|shout:\d+)$/.test(key); }
 	function tmInfoPalette(key) {
+		if (tmEmojiAllowed(key)) {
+			var esec = tmInfoSection(tmText.emoji);
+			var grid = tmEl('div', 'tg-emojis');
+			var cur = tmEmojiMap[key] || '';
+			tmEmojiList.forEach(function (e) {
+				var b = tmEl('button', e == cur ? 'tg-sel' : '', e);
+				b.type = 'button';
+				b.addEventListener('click', function () { tmSetAvatar(key, {emoji: e}); });
+				grid.appendChild(b);
+			});
+			var r = tmEl('button', cur ? '' : 'tg-sel', '↺');
+			r.type = 'button';
+			r.title = tmText.emojiReset;
+			r.addEventListener('click', function () { tmSetAvatar(key, {emoji: ''}); });
+			grid.appendChild(r);
+			esec.appendChild(grid);
+			// своя эмодзи — с клавиатуры телефона
+			var own = tmEl('div', 'tg-emoji-own');
+			var input = tmEl('input');
+			input.type = 'text';
+			input.maxLength = 8;
+			input.placeholder = '🙂';
+			input.value = (cur && tmEmojiList.indexOf(cur) < 0) ? cur : '';
+			var ok = tmEl('button', 'tg-btn', tmText.emojiOwn);
+			ok.type = 'button';
+			ok.addEventListener('click', function () { if (input.value.trim()) tmSetAvatar(key, {emoji: input.value.trim()}); });
+			own.appendChild(input);
+			own.appendChild(ok);
+			esec.appendChild(own);
+		}
 		var sec = tmInfoSection(tmText.color);
 		var box = tmEl('div', 'tg-palette');
 		var current = tmColorsMap[key] || '';
@@ -955,23 +1089,97 @@
 			b.type = 'button';
 			b.style.background = c;
 			b.title = c;
-			b.addEventListener('click', function () { tmSetColor(key, c); });
+			b.addEventListener('click', function () { tmSetAvatar(key, {color: c}); });
 			box.appendChild(b);
 		});
 		var reset = tmEl('button', current ? '' : 'tg-sel', '↺');
 		reset.type = 'button';
 		reset.title = tmText.resetColor;
-		reset.addEventListener('click', function () { tmSetColor(key, ''); });
+		reset.addEventListener('click', function () { tmSetAvatar(key, {color: ''}); });
 		box.appendChild(reset);
 		sec.appendChild(box);
 	}
-	function tmSetColor(key, color) {
-		tmGroupPost({mode: 'set_color', chat: key, color: color}, function (res) {
+	function tmSetAvatar(key, change) {
+		var params = {mode: 'set_color', chat: key};
+		Object.keys(change).forEach(function (k) { params[k] = change[k]; });
+		tmGroupPost(params, function (res) {
 			if (!res.ok) return;
-			if (color) tmColorsMap[key] = color; else delete tmColorsMap[key];
-			tmInfo(key);
-			if (tmCurrent) tmOpen(tmCurrent); else tmRenderChats();
+			// новые значения — с сервера (эмодзи проверяется там)
+			tmRefresh(function () {
+				if (tmInfoKey == key) tmInfo(key);
+				if (tmCurrent) tmOpen(tmCurrent); else tmRenderChats();
+			});
 		});
+	}
+
+	// аудио: кнопка, полоса прогресса и время в цветах темы; играет одно аудио за раз
+	var tmAudioPlaying = null;
+	var tmPlaySvg = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>';
+	var tmPauseSvg = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zM13 5h4v14h-4z" fill="currentColor"/></svg>';
+	function tmFmt(sec) {
+		if (!isFinite(sec) || sec < 0) return '';
+		sec = Math.round(sec);
+		return Math.floor(sec / 60) + ':' + ('0' + sec % 60).slice(-2);
+	}
+	function tmAudio(src) {
+		var box = tmEl('div', 'tg-audio');
+		var btn = tmEl('button', 'tg-audio-btn');
+		btn.type = 'button';
+		btn.title = tmText.play;
+		btn.innerHTML = tmPlaySvg;
+		var info = tmEl('div', 'tg-audio-info');
+		var bar = tmEl('div', 'tg-audio-bar');
+		var fill = tmEl('div', 'tg-audio-fill');
+		var time = tmEl('div', 'tg-audio-time', '');
+		bar.appendChild(fill);
+		info.appendChild(bar);
+		info.appendChild(time);
+		box.appendChild(btn);
+		box.appendChild(info);
+		var audio = new Audio();
+		audio.preload = 'metadata';
+		audio.src = src;
+		var fixing = false;
+		function duration() { return isFinite(audio.duration) ? audio.duration : 0; }
+		function show() {
+			var d = duration();
+			fill.style.width = d ? Math.min(100, audio.currentTime / d * 100) + '%' : '0';
+			time.textContent = (audio.currentTime > 0 && !audio.paused ? tmFmt(audio.currentTime) + ' / ' : '') + tmFmt(d);
+		}
+		audio.addEventListener('loadedmetadata', function () {
+			// запись из браузера (webm) не знает длительности, пока не перемотать в конец
+			if (audio.duration === Infinity) { fixing = true; audio.currentTime = 1e101; }
+			show();
+		});
+		audio.addEventListener('durationchange', function () {
+			if (fixing && isFinite(audio.duration)) { fixing = false; audio.currentTime = 0; }
+			show();
+		});
+		audio.addEventListener('timeupdate', function () { if (!fixing) show(); });
+		function state(playing) {
+			btn.innerHTML = playing ? tmPauseSvg : tmPlaySvg;
+			btn.title = playing ? tmText.pause : tmText.play;
+		}
+		audio.addEventListener('play', function () { state(true); });
+		audio.addEventListener('pause', function () { state(false); show(); });
+		audio.addEventListener('ended', function () { state(false); audio.currentTime = 0; show(); });
+		btn.addEventListener('click', function () {
+			if (audio.paused) {
+				if (tmAudioPlaying && tmAudioPlaying != audio) tmAudioPlaying.pause();
+				tmAudioPlaying = audio;
+				audio.play();
+			} else {
+				audio.pause();
+			}
+		});
+		bar.addEventListener('click', function (e) {
+			var d = duration();
+			if (!d) return;
+			var r = bar.getBoundingClientRect();
+			audio.currentTime = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * d;
+			show();
+		});
+		return box;
 	}
 	function tmInfoClose() { tmInfoModal.classList.remove('tg-show'); tmInfoKey = ''; }
 	function tmInfo(key) {

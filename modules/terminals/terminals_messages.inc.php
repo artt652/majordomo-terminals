@@ -197,14 +197,26 @@ foreach ($all_terminals as $name => $t) {
         $chats[] = array('key' => 'term:' . $name, 'type' => 'term', 'title' => $t['TITLE'], 'members' => array($name));
     }
 }
-// свои цвета аватарок (общие для всех устройств): ключ чата => #rrggbb
+// свои аватарки (общие для всех устройств): ключ чата => цвет #rrggbb и эмодзи.
+// Эмодзи хранится в JSON (\uXXXX): таблицы в utf8 4-байтовые символы не принимают
 $colors = array();
-foreach (SQLSelect("SELECT CHAT_KEY, COLOR FROM terminals_colors") as $row) {
-    $colors[$row['CHAT_KEY']] = $row['COLOR'];
+$emojis = array();
+foreach (SQLSelect("SELECT * FROM terminals_colors") as $row) {
+    if ($row['COLOR'] != '') {
+        $colors[$row['CHAT_KEY']] = $row['COLOR'];
+    }
+    $emoji = (isset($row['EMOJI']) && $row['EMOJI'] != '') ? json_decode($row['EMOJI'], true) : '';
+    if (is_string($emoji) && $emoji != '') {
+        $emojis[$row['CHAT_KEY']] = $emoji;
+    }
 }
 foreach ($chats as $i => $chat) {
     $chats[$i]['color'] = isset($colors[$chat['key']]) ? $colors[$chat['key']] : '';
 }
+// эмодзи-аватарка — у терминалов, своих групп и чатов MajorDoMo (у комнат и «Все терминалы» — свои значки)
+$emoji_allowed = function ($key) {
+    return (bool)preg_match('/^(term:.+|group:\d+|house|shout:\d+)$/', $key);
+};
 // статус терминалов: в сети, на связи, последняя активность
 $statuses = array();
 foreach ($all_terminals as $name => $t) {
@@ -227,14 +239,38 @@ $json_out = function ($data) {
 };
 
 // цвет аватарки чата (терминала, комнаты, группы…) — общий для всех устройств; пусто — по умолчанию
+// аватарка чата: цвет и/или эмодзи — меняется то, что передано (пусто — по умолчанию)
 if (gr('mode') == 'set_color') {
     $key = (string)gr('chat');
-    $color = strtolower(trim((string)gr('color')));
     $ok = 0;
     if ($find_chat($key) || $key == 'term:' . $me_name) {
-        SQLExec("DELETE FROM terminals_colors WHERE CHAT_KEY='" . DBSafe($key) . "'");
-        if (preg_match('/^#[0-9a-f]{6}$/', $color)) {
-            $row = array('CHAT_KEY' => $key, 'COLOR' => $color);
+        $row = SQLSelectOne("SELECT * FROM terminals_colors WHERE CHAT_KEY='" . DBSafe($key) . "'");
+        if (empty($row['ID'])) {
+            $row = array('CHAT_KEY' => $key, 'COLOR' => '', 'EMOJI' => '');
+        }
+        if (isset($_REQUEST['color'])) {
+            $color = strtolower(trim((string)gr('color')));
+            $row['COLOR'] = preg_match('/^#[0-9a-f]{6}$/', $color) ? $color : '';
+        }
+        if (isset($_REQUEST['emoji']) && $emoji_allowed($key)) {
+            // одна эмодзи (с модификаторами): без букв, цифр и разметки, не длиннее 8 символов
+            $emoji = trim((string)gr('emoji'));
+            $valid = $emoji != '' && !preg_match('/[\p{L}\p{N}<>&"\'\s]/u', $emoji)
+                && (!function_exists('mb_strlen') || mb_strlen($emoji, 'UTF-8') <= 8);
+            if ($valid) {
+                $row['EMOJI'] = json_encode($emoji);
+            } elseif ($emoji == '') {
+                $row['EMOJI'] = '';
+            } else {
+                // не эмодзи — ничего не меняем
+                $json_out(array('ok' => 0));
+            }
+        }
+        if ($row['COLOR'] == '' && $row['EMOJI'] == '') {
+            SQLExec("DELETE FROM terminals_colors WHERE CHAT_KEY='" . DBSafe($key) . "'");
+        } elseif (!empty($row['ID'])) {
+            SQLUpdate('terminals_colors', $row);
+        } else {
             SQLInsert('terminals_colors', $row);
         }
         $ok = 1;
@@ -514,7 +550,7 @@ foreach ($shout_chats as $room_id => $chat_key) {
 $conversation = array_merge($conversation, $shout_rows);
 
 if (gr('ajax') && gr('list')) {
-    $json_out(array('messages' => $conversation, 'chats' => $chats, 'status' => $statuses, 'colors' => $colors));
+    $json_out(array('messages' => $conversation, 'chats' => $chats, 'status' => $statuses, 'colors' => $colors, 'emojis' => $emojis));
 }
 
 $out['ME_NAME'] = $me_name;
@@ -530,6 +566,7 @@ foreach ($all_terminals as $name => $t) {
 $out['TITLES_JSON'] = json_encode((object)$titles, $flags);
 $out['STATUS_JSON'] = json_encode((object)$statuses, $flags);
 $out['COLORS_JSON'] = json_encode((object)$colors, $flags);
+$out['EMOJIS_JSON'] = json_encode((object)$emojis, $flags);
 // кто вошёл на сайт с этого устройства — для карточки общего чата
 $user_name = '';
 if ($user_id) {
