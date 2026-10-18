@@ -69,6 +69,21 @@ $dictionary = array(
 	'TERMINALS_ALL'                  => 'Усі термінали',
 	'TERMINALS_ATTACH'               => 'Прикріпити',
 	'TERMINALS_THEME'                => 'Світла / темна тема',
+	'TERMINALS_SEARCH'               => 'Пошук',
+	'TERMINALS_NEW_GROUP'            => 'Нова група',
+	'TERMINALS_EDIT_GROUP'           => 'Змінити групу',
+	'TERMINALS_GROUP_NAME'           => 'Назва групи',
+	'TERMINALS_GROUP_MEMBERS'        => 'Учасники',
+	'TERMINALS_GROUP_HINT'           => 'Оберіть хоча б один термінал; цей термінал завжди в групі.',
+	'TERMINALS_SAVE'                 => 'Зберегти',
+	'TERMINALS_CANCEL'               => 'Скасувати',
+	'TERMINALS_DELETE_GROUP'         => 'Видалити групу',
+	'TERMINALS_DELETE_GROUP_CONFIRM' => 'Видалити групу? Її повідомлення більше не показуватимуться.',
+	'TERMINALS_YOU'                  => 'Ви',
+	'TERMINALS_ROOM'                 => 'Кімната',
+	'TERMINALS_GROUP'                => 'Група',
+	'TERMINALS_SELECT_CHAT'          => 'Оберіть чат',
+	'TERMINALS_BACK'                 => 'Назад',
 );
 
 foreach ($dictionary as $key => $value) {

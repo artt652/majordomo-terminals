@@ -69,6 +69,21 @@ $dictionary = array(
 	'TERMINALS_ALL'                  => 'All terminals',
 	'TERMINALS_ATTACH'               => 'Attach',
 	'TERMINALS_THEME'                => 'Light / dark theme',
+	'TERMINALS_SEARCH'               => 'Search',
+	'TERMINALS_NEW_GROUP'            => 'New group',
+	'TERMINALS_EDIT_GROUP'           => 'Edit group',
+	'TERMINALS_GROUP_NAME'           => 'Group name',
+	'TERMINALS_GROUP_MEMBERS'        => 'Members',
+	'TERMINALS_GROUP_HINT'           => 'Choose at least one terminal; this terminal is always in the group.',
+	'TERMINALS_SAVE'                 => 'Save',
+	'TERMINALS_CANCEL'               => 'Cancel',
+	'TERMINALS_DELETE_GROUP'         => 'Delete group',
+	'TERMINALS_DELETE_GROUP_CONFIRM' => 'Delete this group? Its messages will no longer be shown.',
+	'TERMINALS_YOU'                  => 'You',
+	'TERMINALS_ROOM'                 => 'Room',
+	'TERMINALS_GROUP'                => 'Group',
+	'TERMINALS_SELECT_CHAT'          => 'Select a chat',
+	'TERMINALS_BACK'                 => 'Back',
 );
 
 foreach ($dictionary as $key => $value) {

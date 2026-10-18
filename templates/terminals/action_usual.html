@@ -1,30 +1,56 @@
 <!--#
  Страница «Сообщения»: обмен сообщениями между терминалами (modules/terminals/terminals_messages.inc.php)
- Вид как у мессенджера: чат с выбранным терминалом, сообщения пузырями, поле ввода снизу.
- Тема светлая/тёмная — запоминается в браузере (localStorage).
+ Вид как у мессенджера: слева список чатов (все терминалы, комнаты, свои группы, личные чаты),
+ справа — переписка пузырями и поле ввода снизу. На узком экране список и чат — отдельные экраны.
+ Тема светлая/тёмная, открытый чат, озвучка и прочитанные сообщения запоминаются в браузере (localStorage).
 #-->
 <style type="text/css">
 	.tg-app { --tg-bg: #e6ebee; --tg-panel: #ffffff; --tg-text: #000000; --tg-muted: #707579; --tg-in: #ffffff; --tg-out: #e3fee0;
-		--tg-out-text: #000000; --tg-accent: #3390ec; --tg-border: #dfe1e5; --tg-input: #ffffff; --tg-time: #8a9aa9; --tg-shadow: 0 1px 2px rgba(16,35,47,.15); }
+		--tg-out-text: #000000; --tg-accent: #3390ec; --tg-border: #dfe1e5; --tg-input: #f1f3f4; --tg-time: #8a9aa9; --tg-shadow: 0 1px 2px rgba(16,35,47,.15);
+		--tg-hover: #f4f4f5; --tg-active: #3390ec; --tg-active-text: #ffffff; }
 	.tg-app.tg-dark { --tg-bg: #0e1621; --tg-panel: #17212b; --tg-text: #f5f5f5; --tg-muted: #8d9ba8; --tg-in: #182533; --tg-out: #2b5278;
-		--tg-out-text: #ffffff; --tg-accent: #5aa7f0; --tg-border: #0b121a; --tg-input: #17212b; --tg-time: #7d8e9e; --tg-shadow: none; }
-	.tg-app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; max-width: 900px; margin: 0 auto;
-		background: var(--tg-bg); color: var(--tg-text); font-size: 15px; }
-	.tg-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--tg-panel); border-bottom: 1px solid var(--tg-border); }
+		--tg-out-text: #ffffff; --tg-accent: #5aa7f0; --tg-border: #0b121a; --tg-input: #242f3d; --tg-time: #7d8e9e; --tg-shadow: none;
+		--tg-hover: #202b36; --tg-active: #2b5278; --tg-active-text: #ffffff; }
+	.tg-app { display: flex; height: 100vh; height: 100dvh; max-width: 1200px; margin: 0 auto; background: var(--tg-bg); color: var(--tg-text);
+		font-size: 15px; position: relative; overflow: hidden; }
+	.tg-app * { box-sizing: border-box; }
+	.tg-side { width: 340px; flex: none; display: flex; flex-direction: column; background: var(--tg-panel); border-right: 1px solid var(--tg-border); }
+	.tg-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+	.tg-head { display: flex; align-items: center; gap: 8px; padding: 8px 10px; min-height: 56px; background: var(--tg-panel); border-bottom: 1px solid var(--tg-border); }
 	.tg-head .tg-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-	.tg-head .tg-sub { font-size: 12px; color: var(--tg-muted); }
-	.tg-head select { background: var(--tg-input); color: var(--tg-text); border: 1px solid var(--tg-border); border-radius: 8px; padding: 4px 8px; max-width: 45vw; flex: none; }
+	.tg-sub { font-size: 13px; color: var(--tg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+	.tg-sub select { background: var(--tg-input); color: var(--tg-text); border: 0; border-radius: 8px; padding: 2px 6px; max-width: 100%; }
 	.tg-grow { flex: 1; min-width: 0; }
-	.tg-icon { background: none; border: 0; color: var(--tg-muted); font-size: 20px; line-height: 1; padding: 6px; border-radius: 50%; cursor: pointer; flex: none; }
+	.tg-icon { background: none; border: 0; color: var(--tg-muted); font-size: 20px; line-height: 1; padding: 8px; border-radius: 50%; cursor: pointer; flex: none; }
 	.tg-icon:hover { background: rgba(127,127,127,.15); }
 	.tg-icon.tg-on { color: var(--tg-accent); }
+	.tg-icon svg { display: block; }
+	.tg-search { padding: 6px 10px 8px; background: var(--tg-panel); }
+	.tg-search input { width: 100%; border: 0; outline: none; border-radius: 20px; padding: 8px 14px; background: var(--tg-input); color: var(--tg-text); font-size: 14px; }
+	.tg-chats { flex: 1; overflow-y: auto; padding: 0 6px 6px; }
+	.tg-chat { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 10px; cursor: pointer; }
+	.tg-chat:hover { background: var(--tg-hover); }
+	.tg-chat.tg-active { background: var(--tg-active); color: var(--tg-active-text); }
+	.tg-chat.tg-active .tg-sub, .tg-chat.tg-active .tg-chat-time { color: rgba(255,255,255,.8); }
+	.tg-chat-body { flex: 1; min-width: 0; }
+	.tg-chat-top { display: flex; gap: 6px; align-items: baseline; }
+	.tg-chat-top .tg-title { flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+	.tg-chat-time { font-size: 12px; color: var(--tg-muted); flex: none; }
+	.tg-chat-bottom { display: flex; gap: 6px; align-items: center; }
+	.tg-chat-bottom .tg-sub { flex: 1; }
+	.tg-badge { background: var(--tg-accent); color: #fff; border-radius: 11px; min-width: 22px; height: 22px; padding: 0 7px; font-size: 12px;
+		font-weight: 600; display: flex; align-items: center; justify-content: center; flex: none; }
+	.tg-chat.tg-active .tg-badge { background: #fff; color: var(--tg-active); }
+	.tg-avatar { width: 48px; height: 48px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center;
+		color: #fff; font-size: 20px; font-weight: 600; user-select: none; }
+	.tg-head .tg-avatar { width: 40px; height: 40px; font-size: 17px; }
 	.tg-list { flex: 1; overflow-y: auto; padding: 10px 10px 4px; display: flex; flex-direction: column; gap: 4px; }
 	.tg-empty { margin: auto; color: var(--tg-muted); background: rgba(0,0,0,.08); padding: 4px 12px; border-radius: 12px; font-size: 13px; }
 	.tg-app.tg-dark .tg-empty { background: rgba(255,255,255,.08); }
 	.tg-msg { max-width: 78%; padding: 6px 9px 4px; border-radius: 12px; box-shadow: var(--tg-shadow); word-wrap: break-word; white-space: pre-wrap; }
 	.tg-msg.tg-in { align-self: flex-start; background: var(--tg-in); border-bottom-left-radius: 4px; }
 	.tg-msg.tg-out { align-self: flex-end; background: var(--tg-out); color: var(--tg-out-text); border-bottom-right-radius: 4px; }
-	.tg-from { font-size: 13px; font-weight: 600; color: var(--tg-accent); cursor: pointer; margin-bottom: 2px; white-space: normal; }
+	.tg-from { font-size: 13px; font-weight: 600; margin-bottom: 2px; white-space: normal; cursor: pointer; }
 	.tg-msg img { display: block; max-width: 100%; max-height: 320px; border-radius: 8px; margin: 2px 0 4px; cursor: pointer; }
 	.tg-msg audio { display: block; width: 240px; max-width: 100%; margin: 2px 0 4px; }
 	.tg-time { float: right; font-size: 11px; color: var(--tg-time); margin: 6px 0 0 10px; white-space: nowrap; }
@@ -43,58 +69,135 @@
 	.tg-menu label:hover { background: rgba(127,127,127,.12); }
 	.tg-status { font-size: 12px; color: var(--tg-muted); padding: 2px 12px; background: var(--tg-panel); }
 	.tg-status:empty { display: none; }
+	.tg-placeholder { flex: 1; display: flex; }
+	.tg-back { display: none; }
+	.tg-app.tg-no-chat .tg-chat-view { display: none; }
+	.tg-app:not(.tg-no-chat) .tg-placeholder { display: none; }
+	/* диалог группы */
+	.tg-modal { position: absolute; inset: 0; background: rgba(0,0,0,.45); display: none; align-items: center; justify-content: center; z-index: 20; padding: 16px; }
+	.tg-modal.tg-show { display: flex; }
+	.tg-dialog { background: var(--tg-panel); color: var(--tg-text); border-radius: 14px; width: 380px; max-width: 100%; max-height: 100%;
+		display: flex; flex-direction: column; box-shadow: 0 8px 32px rgba(0,0,0,.3); }
+	.tg-dialog h3 { margin: 0; padding: 16px 18px 8px; font-size: 18px; font-weight: 600; }
+	.tg-dialog .tg-field { padding: 4px 18px 8px; }
+	.tg-dialog input[type=text] { width: 100%; border: 0; border-bottom: 2px solid var(--tg-accent); outline: none; background: transparent;
+		color: var(--tg-text); padding: 8px 2px; font-size: 16px; }
+	.tg-dialog .tg-label { font-size: 13px; color: var(--tg-accent); font-weight: 600; padding: 8px 18px 4px; }
+	.tg-members { overflow-y: auto; padding: 0 8px; flex: 1; min-height: 80px; }
+	.tg-member { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 10px; cursor: pointer; margin: 0; font-weight: normal; }
+	.tg-member:hover { background: var(--tg-hover); }
+	.tg-member .tg-avatar { width: 36px; height: 36px; font-size: 15px; }
+	.tg-member input { width: 18px; height: 18px; accent-color: var(--tg-accent); }
+	.tg-dialog .tg-hint { font-size: 12px; color: var(--tg-muted); padding: 6px 18px 0; }
+	.tg-buttons { display: flex; gap: 6px; padding: 12px 12px 12px 18px; align-items: center; }
+	.tg-btn { background: none; border: 0; color: var(--tg-accent); font-weight: 600; font-size: 14px; text-transform: uppercase; padding: 8px 12px; border-radius: 8px; cursor: pointer; }
+	.tg-btn:hover { background: rgba(127,127,127,.12); }
+	.tg-btn.tg-danger { color: #e53935; }
+	@media (max-width: 720px) {
+		.tg-side { width: 100%; border-right: 0; }
+		.tg-main { display: none; }
+		.tg-app.tg-open .tg-side { display: none; }
+		.tg-app.tg-open .tg-main { display: flex; }
+		.tg-back { display: block; }
+	}
 </style>
 
 <div class="tg-app" id="tg_app">
-	<form id="tm_form" method="post" enctype="multipart/form-data" action="?" style="display:contents">
+	<!-- список чатов -->
+	<div class="tg-side">
 		<div class="tg-head">
 			<div class="tg-grow">
 				<div class="tg-title"><#LANG_TERMINALS_MESSAGES#>[#if ME_TITLE!=""#] — [#ME_TITLE#][#endif ME_TITLE#]</div>
 				[#if ME_NAME=""#]
 				<div class="tg-sub"><#LANG_TERMINALS_THIS_TERMINAL#>:
-					<select name="from" id="tm_from">
+					<select id="tm_from">
 						<option value=""><#LANG_TERMINALS_CHOOSE#></option>
 						[#begin ALL_TERMINALS#]<option value="[#NAME#]">[#TITLE#]</option>[#end ALL_TERMINALS#]
 					</select>
 				</div>
-				<div class="tg-sub"><#LANG_TERMINALS_NOT_RECOGNIZED#></div>
+				<div class="tg-sub" title="<#LANG_TERMINALS_NOT_RECOGNIZED#>"><#LANG_TERMINALS_NOT_RECOGNIZED#></div>
 				[#else ME_NAME#]
-				<input type="hidden" name="from" id="tm_from" value="[#ME_NAME#]">
+				<input type="hidden" id="tm_from" value="[#ME_NAME#]">
 				[#endif ME_NAME#]
 			</div>
-			<select id="tm_to" title="<#LANG_TERMINALS_TO#>">
-				<option value="*"><#LANG_TERMINALS_ALL#></option>
-				[#begin MSG_TERMINALS#]<option value="[#NAME#]">[#TITLE#]</option>[#end MSG_TERMINALS#]
-			</select>
-			<button type="button" class="tg-icon" id="tm_theme" title="<#LANG_TERMINALS_THEME#>"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" style="display:block"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/></svg></button>
+			<button type="button" class="tg-icon" id="tm_new_group" title="<#LANG_TERMINALS_NEW_GROUP#>"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M19 8v6M16 11h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+			<button type="button" class="tg-icon" id="tm_theme" title="<#LANG_TERMINALS_THEME#>"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/></svg></button>
 		</div>
+		<div class="tg-search"><input type="text" id="tm_search" placeholder="<#LANG_TERMINALS_SEARCH#>" autocomplete="off"></div>
+		<div class="tg-chats" id="tm_chats"></div>
+	</div>
 
-		<div class="tg-list" id="tm_list"><div class="tg-empty"><#LANG_TERMINALS_NO_MESSAGES#></div></div>
-
-		<div class="tg-files" id="tm_files"></div>
-		<div class="tg-status" id="tm_status"></div>
-		<div class="tg-compose">
-			<div class="tg-menu" id="tm_menu">
-				<label>📷 <#LANG_TERMINALS_PHOTO#><input type="file" name="image" accept="image/*" capture="environment" style="display:none"></label>
-				<label>🎤 <#LANG_TERMINALS_VOICE_MESSAGE#><input type="file" name="audio" accept="audio/*" capture style="display:none"></label>
+	<!-- открытый чат -->
+	<div class="tg-main">
+		<div class="tg-placeholder"><div class="tg-empty"><#LANG_TERMINALS_SELECT_CHAT#></div></div>
+		<form id="tm_form" class="tg-chat-view" method="post" enctype="multipart/form-data" action="?" style="display:flex;flex-direction:column;flex:1;min-height:0;margin:0">
+			<div class="tg-head">
+				<button type="button" class="tg-icon tg-back" id="tm_back" title="<#LANG_TERMINALS_BACK#>"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+				<div class="tg-avatar" id="tm_chat_avatar"></div>
+				<div class="tg-grow">
+					<div class="tg-title" id="tm_chat_title"></div>
+					<div class="tg-sub" id="tm_chat_sub"></div>
+				</div>
+				<button type="button" class="tg-icon" id="tm_edit_group" title="<#LANG_TERMINALS_EDIT_GROUP#>" style="display:none"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z M13.5 6.5l4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></button>
 			</div>
-			<button type="button" class="tg-icon" id="tm_attach" title="<#LANG_TERMINALS_ATTACH#>">📎</button>
-			<textarea name="message" id="tm_text" rows="1" placeholder="<#LANG_TERMINALS_MESSAGE_TEXT#>"></textarea>
-			<button type="button" class="tg-icon" id="tm_voice" title="<#LANG_TERMINALS_VOICE_ON_RECIPIENT#>">🔊</button>
-			<input type="hidden" name="voice" id="tm_voice_value" value="1">
-			<input type="hidden" name="mode" value="send_message">
-			<input type="hidden" name="ajax" value="1">
-			<button type="submit" class="tg-send" id="tm_send" title="<#LANG_TERMINALS_SEND#>">
-				<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20.5l18-8.5L3 3.5v6.6l12 1.9-12 1.9z" fill="currentColor"/></svg>
-			</button>
+
+			<div class="tg-list" id="tm_list"></div>
+
+			<div class="tg-files" id="tm_files"></div>
+			<div class="tg-status" id="tm_status"></div>
+			<div class="tg-compose">
+				<div class="tg-menu" id="tm_menu">
+					<label>📷 <#LANG_TERMINALS_PHOTO#><input type="file" name="image" accept="image/*" capture="environment" style="display:none"></label>
+					<label>🎤 <#LANG_TERMINALS_VOICE_MESSAGE#><input type="file" name="audio" accept="audio/*" capture style="display:none"></label>
+				</div>
+				<button type="button" class="tg-icon" id="tm_attach" title="<#LANG_TERMINALS_ATTACH#>">📎</button>
+				<textarea name="message" id="tm_text" rows="1" placeholder="<#LANG_TERMINALS_MESSAGE_TEXT#>"></textarea>
+				<button type="button" class="tg-icon" id="tm_voice" title="<#LANG_TERMINALS_VOICE_ON_RECIPIENT#>">🔊</button>
+				<input type="hidden" name="voice" id="tm_voice_value" value="1">
+				<input type="hidden" name="mode" value="send_message">
+				<input type="hidden" name="ajax" value="1">
+				<input type="hidden" name="chat" id="tm_chat_value" value="">
+				<button type="submit" class="tg-send" id="tm_send" title="<#LANG_TERMINALS_SEND#>">
+					<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20.5l18-8.5L3 3.5v6.6l12 1.9-12 1.9z" fill="currentColor"/></svg>
+				</button>
+			</div>
+		</form>
+	</div>
+
+	<!-- создание и изменение своей группы -->
+	<div class="tg-modal" id="tm_modal">
+		<div class="tg-dialog">
+			<h3 id="tm_modal_title"><#LANG_TERMINALS_NEW_GROUP#></h3>
+			<div class="tg-field"><input type="text" id="tm_group_title" placeholder="<#LANG_TERMINALS_GROUP_NAME#>" maxlength="100"></div>
+			<div class="tg-label"><#LANG_TERMINALS_GROUP_MEMBERS#></div>
+			<div class="tg-members" id="tm_group_members"></div>
+			<div class="tg-hint"><#LANG_TERMINALS_GROUP_HINT#></div>
+			<div class="tg-buttons">
+				<button type="button" class="tg-btn tg-danger" id="tm_group_delete" style="display:none"><#LANG_TERMINALS_DELETE_GROUP#></button>
+				<div class="tg-grow"></div>
+				<button type="button" class="tg-btn" id="tm_group_cancel"><#LANG_TERMINALS_CANCEL#></button>
+				<button type="button" class="tg-btn" id="tm_group_save"><#LANG_TERMINALS_SAVE#></button>
+			</div>
 		</div>
-	</form>
+	</div>
 </div>
 
 <script type="text/javascript">
 	var tmConversation = [#CONVERSATION_JSON#];
+	var tmChats = [#CHATS_JSON#];
+	var tmTitles = [#TITLES_JSON#];
 	var tmApp = document.getElementById('tg_app');
 	var tmForm = document.getElementById('tm_form');
+	var tmCurrent = '';
+	var tmText = {
+		you: '<#LANG_TERMINALS_YOU#>', photo: '<#LANG_TERMINALS_PHOTO#>', voice: '<#LANG_TERMINALS_VOICE_MESSAGE#>',
+		noMessages: '<#LANG_TERMINALS_NO_MESSAGES#>', newGroup: '<#LANG_TERMINALS_NEW_GROUP#>', editGroup: '<#LANG_TERMINALS_EDIT_GROUP#>',
+		confirmDelete: '<#LANG_TERMINALS_DELETE_GROUP_CONFIRM#>', members: '<#LANG_TERMINALS_GROUP_MEMBERS#>',
+		chooseThis: '<#LANG_TERMINALS_CHOOSE_THIS#>', sending: '<#LANG_TERMINALS_SENDING#>', notSent: '<#LANG_TERMINALS_NOT_SENT#>',
+		sendError: '<#LANG_TERMINALS_SEND_ERROR#>'
+	};
+
+	function tmMe() { return document.getElementById('tm_from').value; }
 
 	// запоминание настроек в браузере (может быть недоступно — тогда просто не запоминаем)
 	function tmStore(key, value) {
@@ -132,13 +235,131 @@
 		tmStore('voice', on ? '1' : '0');
 	});
 
-	// собеседник: сохранённый, если он есть в списке
-	var tmTo = document.getElementById('tm_to');
-	var tmSavedTo = tmStore('to');
-	if (tmSavedTo) {
-		for (var i = 0; i < tmTo.options.length; i++) if (tmTo.options[i].value == tmSavedTo) tmTo.value = tmSavedTo;
+	// аватар: значок для групповых чатов, первая буква для терминала; цвет — по ключу
+	var tmColors = ['#e17076', '#7bc862', '#65aadd', '#a695e7', '#ee7aae', '#6ec9cb', '#faa774', '#5caffa'];
+	function tmColor(key) {
+		var h = 0;
+		for (var i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) % 1000003;
+		return tmColors[h % tmColors.length];
 	}
-	tmTo.addEventListener('change', function () { tmStore('to', tmTo.value); tmRender(tmConversation, true); });
+	function tmAvatar(el, chat) {
+		var icons = {all: '📢', room: '🏠', group: '👥'};
+		el.textContent = icons[chat.type] || (chat.title || '?').trim().charAt(0).toUpperCase();
+		el.style.background = tmColor(chat.key);
+	}
+	function tmChat(key) {
+		for (var i = 0; i < tmChats.length; i++) if (tmChats[i].key == key) return tmChats[i];
+		return null;
+	}
+	function tmTitle(name) { return tmTitles[name] || name; }
+
+	// сообщения чата: старые сверху
+	function tmMessages(key) {
+		return tmConversation.filter(function (m) { return m.chat == key; }).slice().reverse();
+	}
+	function tmPreview(m, chat) {
+		var text = m.text || (m.image ? '📷 ' + tmText.photo : (m.sound ? '🎤 ' + tmText.voice : ''));
+		if (!m.incoming) return tmText.you + ': ' + text;
+		if (chat.type != 'term') return m.other_title + ': ' + text;
+		return text;
+	}
+	function tmUnread(key) {
+		var read = parseInt(tmStore('read_' + tmMe() + '_' + key) || '0', 10), n = 0;
+		tmConversation.forEach(function (m) { if (m.chat == key && m.incoming && m.id > read) n++; });
+		return n;
+	}
+	function tmMarkRead(key) {
+		var max = 0;
+		tmConversation.forEach(function (m) { if (m.chat == key && m.id > max) max = m.id; });
+		if (max) tmStore('read_' + tmMe() + '_' + key, String(max));
+	}
+
+	// список чатов: с перепиской — по последнему сообщению, остальные — в исходном порядке
+	function tmRenderChats() {
+		var box = document.getElementById('tm_chats');
+		var q = document.getElementById('tm_search').value.trim().toLowerCase();
+		var last = {};
+		tmConversation.forEach(function (m) { if (!last[m.chat] || m.id > last[m.chat].id) last[m.chat] = m; });
+		var list = tmChats.map(function (c, i) { return {chat: c, last: last[c.key], order: i}; });
+		list.sort(function (a, b) {
+			if (a.last && b.last) return b.last.id - a.last.id;
+			if (a.last || b.last) return a.last ? -1 : 1;
+			return a.order - b.order;
+		});
+		box.innerHTML = '';
+		list.forEach(function (item) {
+			var c = item.chat;
+			if (q && (c.title || '').toLowerCase().indexOf(q) < 0) return;
+			var row = document.createElement('div');
+			row.className = 'tg-chat' + (c.key == tmCurrent ? ' tg-active' : '');
+			var av = document.createElement('div');
+			av.className = 'tg-avatar';
+			tmAvatar(av, c);
+			row.appendChild(av);
+			var body = document.createElement('div');
+			body.className = 'tg-chat-body';
+			var top = document.createElement('div');
+			top.className = 'tg-chat-top';
+			var title = document.createElement('div');
+			title.className = 'tg-title';
+			title.textContent = c.title;
+			top.appendChild(title);
+			if (item.last) {
+				var time = document.createElement('div');
+				time.className = 'tg-chat-time';
+				time.textContent = (item.last.time || '').split(' ')[1] || '';
+				top.appendChild(time);
+			}
+			body.appendChild(top);
+			var bottom = document.createElement('div');
+			bottom.className = 'tg-chat-bottom';
+			var sub = document.createElement('div');
+			sub.className = 'tg-sub';
+			sub.textContent = item.last ? tmPreview(item.last, c) : tmMembersText(c);
+			bottom.appendChild(sub);
+			var unread = (c.key == tmCurrent) ? 0 : tmUnread(c.key);
+			if (unread) {
+				var badge = document.createElement('div');
+				badge.className = 'tg-badge';
+				badge.textContent = unread;
+				bottom.appendChild(badge);
+			}
+			body.appendChild(bottom);
+			row.appendChild(body);
+			row.addEventListener('click', function () { tmOpen(c.key); });
+			box.appendChild(row);
+		});
+	}
+	document.getElementById('tm_search').addEventListener('input', tmRenderChats);
+
+	function tmMembersText(chat) {
+		if (chat.type == 'term') return chat.members[0] == chat.title ? '' : chat.members[0];
+		var me = tmMe();
+		return chat.members.filter(function (n) { return n != me; }).map(tmTitle).join(', ');
+	}
+
+	// открыть чат
+	function tmOpen(key) {
+		var chat = tmChat(key);
+		tmCurrent = chat ? key : '';
+		tmApp.classList.toggle('tg-no-chat', !chat);
+		tmApp.classList.toggle('tg-open', !!chat);
+		if (!chat) { tmRenderChats(); return; }
+		tmStore('chat_' + tmMe(), key);
+		document.getElementById('tm_chat_value').value = key;
+		tmAvatar(document.getElementById('tm_chat_avatar'), chat);
+		document.getElementById('tm_chat_title').textContent = chat.title;
+		var sub = tmMembersText(chat);
+		document.getElementById('tm_chat_sub').textContent = (chat.type == 'term' || !sub) ? sub : tmText.members + ': ' + sub;
+		document.getElementById('tm_edit_group').style.display = (chat.type == 'group' && tmMe()) ? '' : 'none';
+		document.getElementById('tm_status').textContent = '';
+		tmRender(true);
+		tmRenderChats();
+	}
+	document.getElementById('tm_back').addEventListener('click', function () {
+		tmApp.classList.remove('tg-open');
+		tmRenderChats();
+	});
 
 	// вложения: меню 📎, выбранные файлы — «фишками» над полем ввода
 	var tmMenu = document.getElementById('tm_menu');
@@ -167,25 +388,29 @@
 	tmForm.audio.addEventListener('change', function () { tmMenu.style.display = 'none'; tmFiles(); });
 
 	// поле ввода растёт по тексту; Enter — отправить, Shift+Enter — новая строка
-	var tmText = document.getElementById('tm_text');
-	function tmGrow() { tmText.style.height = 'auto'; tmText.style.height = Math.min(tmText.scrollHeight, 140) + 'px'; }
-	tmText.addEventListener('input', tmGrow);
-	tmText.addEventListener('keydown', function (e) {
+	var tmInput = document.getElementById('tm_text');
+	function tmGrow() { tmInput.style.height = 'auto'; tmInput.style.height = Math.min(tmInput.scrollHeight, 140) + 'px'; }
+	tmInput.addEventListener('input', tmGrow);
+	tmInput.addEventListener('keydown', function (e) {
 		if (e.key == 'Enter' && !e.shiftKey && !e.isComposing) {
 			e.preventDefault();
 			if (tmForm.requestSubmit) tmForm.requestSubmit(); else document.getElementById('tm_send').click();
 		}
 	});
 
-	// переписка: старые сверху, новые снизу; с выбранным собеседником или со всеми
-	function tmRender(list, toBottom) {
+	// переписка открытого чата; в групповых чатах у входящих — имя отправителя
+	function tmRender(toBottom) {
 		var box = document.getElementById('tm_list');
 		var nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
-		var other = tmTo.value;
-		var items = (list || []).filter(function (m) { return other == '*' || m.other == other; }).slice().reverse();
+		var chat = tmChat(tmCurrent);
+		if (!chat) return;
+		var items = tmMessages(tmCurrent);
 		box.innerHTML = '';
 		if (!items.length) {
-			box.innerHTML = '<div class="tg-empty"><#LANG_TERMINALS_NO_MESSAGES#></div>';
+			var empty = document.createElement('div');
+			empty.className = 'tg-empty';
+			empty.textContent = tmText.noMessages;
+			box.appendChild(empty);
 			return;
 		}
 		var lastDay = '';
@@ -200,11 +425,13 @@
 			}
 			var div = document.createElement('div');
 			div.className = 'tg-msg ' + (m.incoming ? 'tg-in' : 'tg-out');
-			if (other == '*') {
+			if (m.incoming && chat.type != 'term') {
 				var who = document.createElement('div');
 				who.className = 'tg-from';
-				who.textContent = (m.incoming ? '' : '→ ') + m.other_title;
-				who.addEventListener('click', function () { tmTo.value = m.other; tmStore('to', m.other); tmRender(tmConversation, true); });
+				who.style.color = tmColor('term:' + m.other);
+				who.textContent = m.other_title;
+				// имя отправителя — открыть личный чат с ним
+				who.addEventListener('click', function () { if (tmChat('term:' + m.other)) tmOpen('term:' + m.other); });
 				div.appendChild(who);
 			}
 			if (m.image) {
@@ -231,22 +458,28 @@
 			box.appendChild(div);
 		});
 		if (toBottom || nearBottom) box.scrollTop = box.scrollHeight;
+		tmMarkRead(tmCurrent);
 	}
 
 	function tmUrl(params) {
-		var from = document.getElementById('tm_from').value;
+		var from = tmMe();
 		return location.pathname + '?' + params + (from ? '&from=' + encodeURIComponent(from) : '');
 	}
 
-	function tmRefresh() {
-		var from = document.getElementById('tm_from').value;
-		if (!from || !window.fetch) return;
+	function tmRefresh(then) {
+		if (!tmMe() || !window.fetch) return;
 		fetch(tmUrl('ajax=1&list=1'), {credentials: 'same-origin'})
 			.then(function (r) { return r.json(); })
-			.then(function (list) {
-				var changed = JSON.stringify(list) != JSON.stringify(tmConversation);
-				tmConversation = list;
-				if (changed) tmRender(list, false);
+			.then(function (res) {
+				if (!res || !res.messages) return;
+				var changed = JSON.stringify(res.messages) != JSON.stringify(tmConversation) || JSON.stringify(res.chats) != JSON.stringify(tmChats);
+				tmConversation = res.messages;
+				tmChats = res.chats;
+				if (then) { then(); return; }
+				if (changed) {
+					if (tmCurrent && !tmChat(tmCurrent)) { tmOpen(''); return; }
+					if (tmCurrent) tmOpen(tmCurrent); else tmRenderChats();
+				}
 			})
 			.catch(function () {});
 	}
@@ -255,35 +488,101 @@
 		e.preventDefault();
 		var status = document.getElementById('tm_status');
 		if (!window.fetch || !window.FormData) return;
-		if (!document.getElementById('tm_from').value) { status.textContent = '<#LANG_TERMINALS_CHOOSE_THIS#>'; return; }
+		if (!tmMe()) { status.textContent = tmText.chooseThis; return; }
 		var hasFile = (tmForm.image.files && tmForm.image.files.length) || (tmForm.audio.files && tmForm.audio.files.length);
-		if (!tmText.value.trim() && !hasFile) return;
+		if (!tmInput.value.trim() && !hasFile) return;
 		var data = new FormData(tmForm);
-		// кому: выбранный собеседник или все терминалы из списка
-		if (tmTo.value == '*') {
-			Array.prototype.forEach.call(tmTo.options, function (o) { if (o.value != '*') data.append('to[]', o.value); });
-		} else {
-			data.append('to[]', tmTo.value);
-		}
-		status.textContent = '<#LANG_TERMINALS_SENDING#>';
+		data.append('from', tmMe());
+		status.textContent = tmText.sending;
 		document.getElementById('tm_send').disabled = true;
 		fetch(location.pathname, {method: 'POST', body: data, credentials: 'same-origin'})
 			.then(function (r) { return r.json(); })
 			.then(function (res) {
-				status.textContent = res.sent ? '' : '<#LANG_TERMINALS_NOT_SENT#>';
+				status.textContent = res.sent ? '' : tmText.notSent;
 				if (res.sent) {
-					tmText.value = '';
+					tmInput.value = '';
 					tmGrow();
 					tmForm.image.value = '';
 					tmForm.audio.value = '';
 					tmFiles();
 				}
-				tmRefresh();
-				setTimeout(function () { var b = document.getElementById('tm_list'); b.scrollTop = b.scrollHeight; }, 400);
+				tmRefresh(function () { tmOpen(tmCurrent); });
 			})
-			.catch(function () { status.textContent = '<#LANG_TERMINALS_SEND_ERROR#>'; })
-			.then(function () { document.getElementById('tm_send').disabled = false; tmText.focus(); });
+			.catch(function () { status.textContent = tmText.sendError; })
+			.then(function () { document.getElementById('tm_send').disabled = false; tmInput.focus(); });
 	});
+
+	// своя группа: диалог создания и изменения
+	var tmModal = document.getElementById('tm_modal'), tmEditing = null;
+	function tmGroupDialog(chat) {
+		var me = tmMe();
+		if (!me) { alert(tmText.chooseThis); return; }
+		tmEditing = chat;
+		document.getElementById('tm_modal_title').textContent = chat ? tmText.editGroup : tmText.newGroup;
+		document.getElementById('tm_group_title').value = chat ? chat.title : '';
+		document.getElementById('tm_group_delete').style.display = chat ? '' : 'none';
+		var box = document.getElementById('tm_group_members');
+		box.innerHTML = '';
+		Object.keys(tmTitles).sort(function (a, b) { return tmTitle(a).localeCompare(tmTitle(b)); }).forEach(function (name) {
+			if (name == me) return;
+			var label = document.createElement('label');
+			label.className = 'tg-member';
+			var av = document.createElement('div');
+			av.className = 'tg-avatar';
+			tmAvatar(av, {key: 'term:' + name, type: 'term', title: tmTitle(name)});
+			var title = document.createElement('div');
+			title.className = 'tg-grow';
+			title.textContent = tmTitle(name);
+			var cb = document.createElement('input');
+			cb.type = 'checkbox';
+			cb.value = name;
+			cb.checked = !!(chat && chat.members.indexOf(name) >= 0);
+			label.appendChild(av);
+			label.appendChild(title);
+			label.appendChild(cb);
+			box.appendChild(label);
+		});
+		tmModal.classList.add('tg-show');
+		document.getElementById('tm_group_title').focus();
+	}
+	function tmGroupClose() { tmModal.classList.remove('tg-show'); }
+	function tmGroupPost(params, done) {
+		var data = new FormData();
+		data.append('from', tmMe());
+		Object.keys(params).forEach(function (k) {
+			[].concat(params[k]).forEach(function (v) { data.append(k, v); });
+		});
+		fetch(location.pathname, {method: 'POST', body: data, credentials: 'same-origin'})
+			.then(function (r) { return r.json(); })
+			.then(done)
+			.catch(function () {});
+	}
+	document.getElementById('tm_new_group').addEventListener('click', function () { tmGroupDialog(null); });
+	document.getElementById('tm_edit_group').addEventListener('click', function () { tmGroupDialog(tmChat(tmCurrent)); });
+	document.getElementById('tm_group_cancel').addEventListener('click', tmGroupClose);
+	tmModal.addEventListener('click', function (e) { if (e.target == tmModal) tmGroupClose(); });
+	document.getElementById('tm_group_save').addEventListener('click', function () {
+		var title = document.getElementById('tm_group_title').value.trim();
+		var members = [];
+		Array.prototype.forEach.call(document.querySelectorAll('#tm_group_members input:checked'), function (cb) { members.push(cb.value); });
+		if (!title) { document.getElementById('tm_group_title').focus(); return; }
+		if (!members.length) return;
+		var id = tmEditing ? tmEditing.key.split(':')[1] : '';
+		tmGroupPost({mode: 'group_save', id: id, title: title, 'members[]': members}, function (res) {
+			if (!res.ok) return;
+			tmGroupClose();
+			tmRefresh(function () { tmOpen(res.key); });
+		});
+	});
+	document.getElementById('tm_group_delete').addEventListener('click', function () {
+		if (!tmEditing || !confirm(tmText.confirmDelete)) return;
+		tmGroupPost({mode: 'group_delete', id: tmEditing.key.split(':')[1]}, function (res) {
+			if (!res.ok) return;
+			tmGroupClose();
+			tmRefresh(function () { tmOpen(''); });
+		});
+	});
+	document.addEventListener('keydown', function (e) { if (e.key == 'Escape') tmGroupClose(); });
 
 	// Вебсокет MajorDoMo: событие TERMINAL_MESSAGE (terminalsSend) — сразу обновить переписку.
 	// Пока вебсокет не подключён, переписка обновляется опросом раз в 15 с, при подключённом — раз в минуту
@@ -306,7 +605,7 @@
 			try { d = JSON.parse(r.data); } catch (e) { return; }
 			var v = d && d.EVENT_DATA ? d.EVENT_DATA.VALUE : null;
 			if (typeof v == 'string') { try { v = JSON.parse(v); } catch (e) { v = null; } }
-			var me = document.getElementById('tm_from').value;
+			var me = tmMe();
 			if (d && d.EVENT_DATA && d.EVENT_DATA.NAME == 'TERMINAL_MESSAGE' && (!v || v.TO == me || v.FROM == me)) {
 				tmRefresh();
 			}
@@ -317,8 +616,19 @@
 		};
 	}
 
-	document.getElementById('tm_from').addEventListener('change', tmRefresh);
-	tmRender(tmConversation, true);
+	// терминал выбран на странице — загрузить его чаты
+	document.getElementById('tm_from').addEventListener('change', function () {
+		tmRefresh(function () { tmOpen(tmStore('chat_' + tmMe()) || ''); });
+	});
+
+	// старт: открыть сохранённый чат (на узком экране — список чатов)
+	var tmSaved = tmStore('chat_' + tmMe());
+	if (tmSaved && tmChat(tmSaved)) {
+		tmOpen(tmSaved);
+		if (window.matchMedia && window.matchMedia('(max-width: 720px)').matches) tmApp.classList.remove('tg-open');
+	} else {
+		tmOpen('');
+	}
 	setInterval(function () {
 		var now = Date.now();
 		if (now - tmLastPoll >= (tmWsOpen ? 60000 : 15000)) { tmLastPoll = now; tmRefresh(); }

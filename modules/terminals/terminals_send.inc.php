@@ -9,6 +9,8 @@
  *       'sound' => 'cms/sounds/dingdong.mp3',   // звук перед сообщением: путь в веб-корне или http-ссылка
  *       'voice' => true,                        // озвучить текст генератором речи (по умолчанию да)
  *       'level' => 5,                           // уровень; по умолчанию — порог терминала-получателя
+ *       'chat'  => 'room:3',                    // чат на странице «Сообщения»: all, room:ID, group:ID (пусто — личный)
+ *       'chat_title' => 'Кухня',                // название чата — добавляется к отправителю в заголовке окна
  *   ));
  *
  * Куда: имя, название или адрес терминала; можно массив.
@@ -57,6 +59,12 @@ function terminalsSend($to, $message, $options = array())
         }
         SQLInsert('shouts', $shout);
     }
+    $chat = isset($options['chat']) ? preg_replace('/[^a-z0-9:_]/i', '', (string)$options['chat']) : '';
+    $send_id = md5(uniqid('', true) . mt_rand());
+    $sender_title = $sender;
+    if ($sender != '' && !empty($options['chat_title'])) {
+        $sender_title = $sender . ' · ' . trim((string)$options['chat_title']);
+    }
     $sent = 0;
     foreach ((array)$to as $destination) {
         $terminal_rec = terminalsFind($destination);
@@ -74,20 +82,20 @@ function terminalsSend($to, $message, $options = array())
         // звук перед сообщением
         if ($sound != '' && is_object($tts) && method_exists($tts, 'playFile')) {
             if (terminalsQueueUsed($tts)) {
-                terminalsQueueAdd($terminal_rec, 'sound', '', $level, $sound, '', $sender);
+                terminalsQueueAdd($terminal_rec, 'sound', '', $level, $sound, '', $sender_title);
             } else {
-                $tts->playFile($sound, $level, $sender);
+                $tts->playFile($sound, $level, $sender_title);
             }
         }
         if ($speaks && ($message != '' || $image != '')) {
             if ($voice && $message != '') {
                 // как sayTo(): терминалы и генераторы речи получают событие SAYTO
                 processSubscriptionsSafe('SAYTO', array('level' => $level, 'message' => $message,
-                    'destination' => $terminal_rec['NAME'], 'image' => $image, 'from' => $sender));
+                    'destination' => $terminal_rec['NAME'], 'image' => $image, 'from' => $sender_title));
             } else {
                 include_once(DIR_MODULES . 'terminals/terminals.class.php');
                 $terminals = new terminals();
-                $terminals->terminalSay($terminal_rec, $message, $level, $image, $sender);
+                $terminals->terminalSay($terminal_rec, $message, $level, $image, $sender_title);
             }
         }
         // переписка терминалов (страница «Сообщения»): текст хранится в JSON, чтобы не терять эмодзи
@@ -98,6 +106,8 @@ function terminalsSend($to, $message, $options = array())
             'IMAGE' => $image,
             'SOUND' => $sound,
             'ADDED' => time(),
+            'CHAT' => $chat,
+            'SEND_ID' => $send_id,
         );
         $rec['ID'] = SQLInsert('terminals_messages', $rec);
         // открытые страницы «Сообщения» получают событие через вебсокет и сразу обновляют переписку

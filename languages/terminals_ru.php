@@ -69,6 +69,21 @@ $dictionary = array(
 	'TERMINALS_ALL'                  => 'Все терминалы',
 	'TERMINALS_ATTACH'               => 'Прикрепить',
 	'TERMINALS_THEME'                => 'Светлая / тёмная тема',
+	'TERMINALS_SEARCH'               => 'Поиск',
+	'TERMINALS_NEW_GROUP'            => 'Новая группа',
+	'TERMINALS_EDIT_GROUP'           => 'Изменить группу',
+	'TERMINALS_GROUP_NAME'           => 'Название группы',
+	'TERMINALS_GROUP_MEMBERS'        => 'Участники',
+	'TERMINALS_GROUP_HINT'           => 'Выберите хотя бы один терминал; этот терминал всегда в группе.',
+	'TERMINALS_SAVE'                 => 'Сохранить',
+	'TERMINALS_CANCEL'               => 'Отмена',
+	'TERMINALS_DELETE_GROUP'         => 'Удалить группу',
+	'TERMINALS_DELETE_GROUP_CONFIRM' => 'Удалить группу? Её сообщения больше не будут показываться.',
+	'TERMINALS_YOU'                  => 'Вы',
+	'TERMINALS_ROOM'                 => 'Комната',
+	'TERMINALS_GROUP'                => 'Группа',
+	'TERMINALS_SELECT_CHAT'          => 'Выберите чат',
+	'TERMINALS_BACK'                 => 'Назад',
 );
 
 foreach ($dictionary as $key => $value) {
