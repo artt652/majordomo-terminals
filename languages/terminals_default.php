@@ -84,6 +84,13 @@ $dictionary = array(
 	'TERMINALS_GROUP'                => 'Group',
 	'TERMINALS_SELECT_CHAT'          => 'Select a chat',
 	'TERMINALS_BACK'                 => 'Back',
+	'TERMINALS_FILE'                 => 'File',
+	'TERMINALS_RECORD_VOICE'         => 'Record a voice message',
+	'TERMINALS_FILE_TOO_BIG'         => 'The file is larger than %s MB',
+	'TERMINALS_FILE_TYPE'            => 'This file type is not accepted',
+	'TERMINALS_UPLOAD_ERROR'         => 'The file could not be uploaded',
+	'TERMINALS_MIC_HTTPS'            => 'The browser allows voice recording only over HTTPS (or in Chrome with the flag “Insecure origins treated as secure”) — choose a recording file instead.',
+	'TERMINALS_MIC_DENIED'           => 'No access to the microphone',
 );
 
 foreach ($dictionary as $key => $value) {

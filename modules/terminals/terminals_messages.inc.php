@@ -21,7 +21,34 @@ global $session;
 $messages_dir = 'cms/cached/terminals';
 $image_ext = array('jpg', 'jpeg', 'png', 'gif', 'webp');
 $audio_ext = array('mp3', 'wav', 'ogg', 'oga', 'opus', 'm4a', 'aac', 'amr', '3gp', 'webm');
-$max_size = 15 * 1024 * 1024;
+// файлы: только эти расширения — файлы лежат в веб-корне, исполняемые (php, html, svg…) не принимаются
+$file_ext = array('pdf', 'txt', 'md', 'log', 'csv', 'json', 'rtf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp',
+    'zip', '7z', 'rar', 'gz', 'tgz', 'tar', 'apk', 'epub', 'fb2', 'mp4', 'mkv', 'avi', 'mov', 'flac', 'heic', 'bmp');
+$file_ext = array_merge($file_ext, $image_ext, $audio_ext);
+// предел размера: свой (картинки и звук 15 МБ, файлы 50 МБ), но не больше настроек PHP
+$ini_bytes = function ($value) {
+    $value = trim((string)$value);
+    $n = (float)$value;
+    switch (strtolower(substr($value, -1))) {
+        case 'g': $n *= 1024;
+        case 'm': $n *= 1024;
+        case 'k': $n *= 1024;
+    }
+    return (int)$n;
+};
+$php_limit = 0;
+foreach (array('upload_max_filesize', 'post_max_size') as $ini) {
+    $bytes = $ini_bytes(ini_get($ini));
+    if ($bytes > 0 && ($php_limit == 0 || $bytes < $php_limit)) {
+        $php_limit = $bytes;
+    }
+}
+$limit = function ($own) use ($php_limit) {
+    return ($php_limit > 0) ? min($own, $php_limit) : $own;
+};
+$max_media = $limit(15 * 1024 * 1024);
+$max_file = $limit(50 * 1024 * 1024);
+$upload_error = '';
 
 // терминал этого устройства: выбранный на странице (from), из сессии или по адресу устройства
 $me = array();
@@ -37,15 +64,27 @@ if (empty($me['ID']) && !empty($_SERVER['REMOTE_ADDR'])) {
 }
 
 // сохранить загруженный файл в cms/cached/terminals; вернуть путь от веб-корня или ''
-$save_upload = function ($field, $allowed) use ($messages_dir, $max_size) {
-    if (empty($_FILES[$field]['tmp_name']) || !is_uploaded_file($_FILES[$field]['tmp_name'])) {
+// (ошибка — в $upload_error: too_big, type, upload)
+$save_upload = function ($field, $allowed, $max_size) use ($messages_dir, &$upload_error) {
+    if (empty($_FILES[$field]) || (isset($_FILES[$field]['error']) && $_FILES[$field]['error'] == UPLOAD_ERR_NO_FILE)) {
+        return '';
+    }
+    $error = isset($_FILES[$field]['error']) ? (int)$_FILES[$field]['error'] : UPLOAD_ERR_OK;
+    if ($error == UPLOAD_ERR_INI_SIZE || $error == UPLOAD_ERR_FORM_SIZE) {
+        $upload_error = 'too_big';
+        return '';
+    }
+    if ($error != UPLOAD_ERR_OK || empty($_FILES[$field]['tmp_name']) || !is_uploaded_file($_FILES[$field]['tmp_name'])) {
+        $upload_error = 'upload';
         return '';
     }
     if ((int)$_FILES[$field]['size'] <= 0 || (int)$_FILES[$field]['size'] > $max_size) {
+        $upload_error = 'too_big';
         return '';
     }
     $ext = strtolower(pathinfo((string)$_FILES[$field]['name'], PATHINFO_EXTENSION));
     if (!in_array($ext, $allowed, true)) {
+        $upload_error = 'type';
         return '';
     }
     $dir = ROOT . $messages_dir;
@@ -60,9 +99,19 @@ $save_upload = function ($field, $allowed) use ($messages_dir, $max_size) {
     }
     $name = md5(uniqid('', true) . mt_rand()) . '.' . $ext;
     if (!move_uploaded_file($_FILES[$field]['tmp_name'], $dir . '/' . $name)) {
+        $upload_error = 'upload';
         return '';
     }
     return $messages_dir . '/' . $name;
+};
+// имя файла для показа: без пути и управляющих символов, не длиннее 120 символов
+$upload_name = function ($field) {
+    $name = isset($_FILES[$field]['name']) ? (string)$_FILES[$field]['name'] : '';
+    $name = preg_replace('/[\x00-\x1f\x7f\/\\\\]+/u', '', basename(str_replace('\\', '/', $name)));
+    if (function_exists('mb_substr') && mb_strlen($name, 'UTF-8') > 120) {
+        $name = mb_substr($name, 0, 120, 'UTF-8');
+    }
+    return $name;
 };
 
 // все терминалы: имя => запись
@@ -186,14 +235,17 @@ if ($this->mode == 'send_message' || gr('mode') == 'send_message') {
         $to = is_array($to) ? $to : (($to != '') ? array($to) : array());
     }
     $text = gr('message');
-    $image = $save_upload('image', $image_ext);
-    $sound = $save_upload('audio', $audio_ext);
+    $image = $save_upload('image', $image_ext, $max_media);
+    $sound = $save_upload('audio', $audio_ext, $max_media);
+    $file = $save_upload('file', $file_ext, $max_file);
     $sent = 0;
-    if ($me_name != '' && count($to) && ($text != '' || $image != '' || $sound != '')) {
+    if ($upload_error == '' && $me_name != '' && count($to) && ($text != '' || $image != '' || $sound != '' || $file != '')) {
         $options = array(
             'from' => $me_name,
             'image' => $image,
             'sound' => $sound,
+            'file' => $file,
+            'file_name' => ($file != '') ? $upload_name('file') : '',
             'voice' => gr('voice', 'int') ? true : false,
         );
         // групповой чат: на странице сообщение попадёт в этот чат, на устройстве — «Отправитель · Чат»
@@ -204,7 +256,7 @@ if ($this->mode == 'send_message' || gr('mode') == 'send_message') {
         $sent = terminalsSend($to, $text, $options);
     }
     if (gr('ajax')) {
-        $json_out(array('sent' => $sent));
+        $json_out(array('sent' => $sent, 'error' => $upload_error));
     }
     $out['SENT'] = $sent ? 1 : 0;
     $out['SEND_FAILED'] = $sent ? 0 : 1;
@@ -237,6 +289,8 @@ if ($me_name != '') {
             'text' => is_string($text) ? $text : '',
             'image' => ($row['IMAGE'] != '' && !preg_match('/^https?:/i', $row['IMAGE'])) ? ROOTHTML . ltrim($row['IMAGE'], '/') : $row['IMAGE'],
             'sound' => ($row['SOUND'] != '' && !preg_match('/^https?:/i', $row['SOUND'])) ? ROOTHTML . ltrim($row['SOUND'], '/') : $row['SOUND'],
+            'file' => (!empty($row['FILE']) && !preg_match('/^https?:/i', $row['FILE'])) ? ROOTHTML . ltrim($row['FILE'], '/') : (isset($row['FILE']) ? $row['FILE'] : ''),
+            'file_name' => isset($row['FILE_NAME']) ? $row['FILE_NAME'] : '',
             'time' => date('d.m H:i', (int)$row['ADDED']),
             'ts' => (int)$row['ADDED'],
         );
@@ -258,5 +312,8 @@ foreach ($all_terminals as $name => $t) {
 }
 $out['TITLES_JSON'] = json_encode((object)$titles, $flags);
 $out['MESSAGES_PAGE'] = 1;
+// пределы размера для проверки в браузере до отправки (МБ)
+$out['MAX_MEDIA_MB'] = round($max_media / 1048576, 1);
+$out['MAX_FILE_MB'] = round($max_file / 1048576, 1);
 // вебсокет MajorDoMo: мгновенное обновление переписки; без него — опрос
 $out['WS_PORT'] = (defined('WEBSOCKETS_PORT') && !(defined('DISABLE_WEBSOCKETS') && DISABLE_WEBSOCKETS == 1)) ? (int)WEBSOCKETS_PORT : '';

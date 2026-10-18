@@ -3,6 +3,7 @@
  Вид как у мессенджера: слева список чатов (все терминалы, комнаты, свои группы, личные чаты),
  справа — переписка пузырями и поле ввода снизу. На узком экране список и чат — отдельные экраны.
  Тема светлая/тёмная, открытый чат, озвучка и прочитанные сообщения запоминаются в браузере (localStorage).
+ Голосовое записывается в браузере (по HTTPS или на localhost), иначе выбирается файл записи; файлы — через 📎.
 #-->
 <style type="text/css">
 	.tg-app { --tg-bg: #e6ebee; --tg-panel: #ffffff; --tg-text: #000000; --tg-muted: #707579; --tg-in: #ffffff; --tg-out: #e3fee0;
@@ -68,6 +69,17 @@
 		box-shadow: 0 4px 16px rgba(0,0,0,.2); padding: 4px 0; display: none; z-index: 5; }
 	.tg-menu label { display: block; padding: 8px 16px; cursor: pointer; margin: 0; font-weight: normal; white-space: nowrap; color: var(--tg-text); }
 	.tg-menu label:hover { background: rgba(127,127,127,.12); }
+	.tg-file { display: flex; align-items: center; gap: 10px; margin: 2px 0 4px; color: inherit; text-decoration: none; white-space: normal; min-width: 180px; }
+	.tg-file:hover { text-decoration: none; color: inherit; }
+	.tg-file-icon { width: 42px; height: 42px; border-radius: 50%; background: var(--tg-accent); color: #fff; flex: none; display: flex; align-items: center; justify-content: center; }
+	.tg-file-name { font-weight: 600; word-break: break-word; }
+	.tg-file-ext { font-size: 12px; color: var(--tg-time); text-transform: uppercase; }
+	.tg-rec { flex: 1; display: none; align-items: center; gap: 10px; height: 40px; padding: 0 6px; color: var(--tg-text); }
+	.tg-rec-dot { width: 10px; height: 10px; border-radius: 50%; background: #e53935; animation: tg-blink 1s infinite; }
+	@keyframes tg-blink { 50% { opacity: .2; } }
+	.tg-rec-time { font-variant-numeric: tabular-nums; }
+	.tg-recording .tg-rec { display: flex; }
+	.tg-recording #tm_attach, .tg-recording #tm_text, .tg-recording #tm_voice { display: none; }
 	.tg-status { font-size: 12px; color: var(--tg-muted); padding: 2px 12px; background: var(--tg-panel); }
 	.tg-status:empty { display: none; }
 	.tg-placeholder { flex: 1; display: flex; }
@@ -149,7 +161,14 @@
 			<div class="tg-compose">
 				<div class="tg-menu" id="tm_menu">
 					<label>📷 <#LANG_TERMINALS_PHOTO#><input type="file" name="image" accept="image/*" capture="environment" style="display:none"></label>
+					<label>📄 <#LANG_TERMINALS_FILE#><input type="file" name="file" style="display:none"></label>
 					<label>🎤 <#LANG_TERMINALS_VOICE_MESSAGE#><input type="file" name="audio" accept="audio/*" capture style="display:none"></label>
+				</div>
+				<!-- запись голосового: идёт запись, время, отмена -->
+				<div class="tg-rec" id="tm_rec">
+					<button type="button" class="tg-icon" id="tm_rec_cancel" title="<#LANG_TERMINALS_CANCEL#>"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+					<span class="tg-rec-dot"></span>
+					<span class="tg-rec-time" id="tm_rec_time">0:00</span>
 				</div>
 				<button type="button" class="tg-icon" id="tm_attach" title="<#LANG_TERMINALS_ATTACH#>"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5l-7.8 7.8a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
 				<textarea name="message" id="tm_text" rows="1" placeholder="<#LANG_TERMINALS_MESSAGE_TEXT#>"></textarea>
@@ -158,9 +177,7 @@
 				<input type="hidden" name="mode" value="send_message">
 				<input type="hidden" name="ajax" value="1">
 				<input type="hidden" name="chat" id="tm_chat_value" value="">
-				<button type="submit" class="tg-send" id="tm_send" title="<#LANG_TERMINALS_SEND#>">
-					<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20.5l18-8.5L3 3.5v6.6l12 1.9-12 1.9z" fill="currentColor"/></svg>
-				</button>
+				<button type="submit" class="tg-send" id="tm_send" title="<#LANG_TERMINALS_SEND#>"></button>
 			</div>
 		</form>
 	</div>
@@ -195,8 +212,11 @@
 		noMessages: '<#LANG_TERMINALS_NO_MESSAGES#>', newGroup: '<#LANG_TERMINALS_NEW_GROUP#>', editGroup: '<#LANG_TERMINALS_EDIT_GROUP#>',
 		confirmDelete: '<#LANG_TERMINALS_DELETE_GROUP_CONFIRM#>', members: '<#LANG_TERMINALS_GROUP_MEMBERS#>',
 		chooseThis: '<#LANG_TERMINALS_CHOOSE_THIS#>', sending: '<#LANG_TERMINALS_SENDING#>', notSent: '<#LANG_TERMINALS_NOT_SENT#>',
-		sendError: '<#LANG_TERMINALS_SEND_ERROR#>'
+		sendError: '<#LANG_TERMINALS_SEND_ERROR#>', file: '<#LANG_TERMINALS_FILE#>', send: '<#LANG_TERMINALS_SEND#>',
+		record: '<#LANG_TERMINALS_RECORD_VOICE#>', tooBig: '<#LANG_TERMINALS_FILE_TOO_BIG#>', badType: '<#LANG_TERMINALS_FILE_TYPE#>',
+		uploadError: '<#LANG_TERMINALS_UPLOAD_ERROR#>', micHttps: '<#LANG_TERMINALS_MIC_HTTPS#>', micDenied: '<#LANG_TERMINALS_MIC_DENIED#>'
 	};
+	var tmMaxMedia = parseFloat('[#MAX_MEDIA_MB#]') || 15, tmMaxFile = parseFloat('[#MAX_FILE_MB#]') || 50;
 
 	function tmMe() { return document.getElementById('tm_from').value; }
 
@@ -262,7 +282,7 @@
 		return tmConversation.filter(function (m) { return m.chat == key; }).slice().reverse();
 	}
 	function tmPreview(m, chat) {
-		var text = m.text || (m.image ? '📷 ' + tmText.photo : (m.sound ? '🎤 ' + tmText.voice : ''));
+		var text = m.text || (m.image ? '📷 ' + tmText.photo : (m.sound ? '🎤 ' + tmText.voice : (m.file ? '📄 ' + (m.file_name || tmText.file) : '')));
 		if (!m.incoming) return tmText.you + ': ' + text;
 		if (chat.type != 'term') return m.other_title + ': ' + text;
 		return text;
@@ -375,11 +395,11 @@
 	function tmFiles() {
 		var box = document.getElementById('tm_files');
 		box.innerHTML = '';
-		[tmForm.image, tmForm.audio].forEach(function (input) {
+		[tmForm.image, tmForm.audio, tmForm.file].forEach(function (input) {
 			if (!input.files || !input.files.length) return;
 			var chip = document.createElement('span');
 			chip.className = 'tg-chip';
-			chip.textContent = (input.name == 'image' ? '📷 ' : '🎤 ') + input.files[0].name;
+			chip.textContent = ({image: '📷 ', audio: '🎤 ', file: '📄 '})[input.name] + input.files[0].name;
 			var x = document.createElement('button');
 			x.type = 'button';
 			x.textContent = '✕';
@@ -387,14 +407,89 @@
 			chip.appendChild(x);
 			box.appendChild(chip);
 		});
+		tmSendIcon();
 	}
-	tmForm.image.addEventListener('change', function () { tmMenu.style.display = 'none'; tmFiles(); });
-	tmForm.audio.addEventListener('change', function () { tmMenu.style.display = 'none'; tmFiles(); });
+	[tmForm.image, tmForm.audio, tmForm.file].forEach(function (input) {
+		input.addEventListener('change', function () { tmMenu.style.display = 'none'; tmFiles(); });
+	});
+	function tmHasFiles() {
+		return [tmForm.image, tmForm.audio, tmForm.file].some(function (input) { return input.files && input.files.length; });
+	}
 
 	// поле ввода растёт по тексту; Enter — отправить, Shift+Enter — новая строка
 	var tmInput = document.getElementById('tm_text');
 	function tmGrow() { tmInput.style.height = 'auto'; tmInput.style.height = Math.min(tmInput.scrollHeight, 140) + 'px'; }
-	tmInput.addEventListener('input', tmGrow);
+	tmInput.addEventListener('input', function () { tmGrow(); tmSendIcon(); });
+
+	// кнопка справа: «Отправить», когда есть текст, вложение или идёт запись; иначе — микрофон (голосовое)
+	var tmSendBtn = document.getElementById('tm_send');
+	function tmMicMode() { return !tmRec && !tmInput.value.trim() && !tmHasFiles(); }
+	function tmSendIcon() {
+		var mic = tmMicMode();
+		tmSendBtn.title = mic ? tmText.record : tmText.send;
+		tmSendBtn.innerHTML = mic
+			? '<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>'
+			: '<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20.5l18-8.5L3 3.5v6.6l12 1.9-12 1.9z" fill="currentColor"/></svg>';
+	}
+
+	// Голосовое: запись в браузере (MediaRecorder). Микрофон браузер даёт только по HTTPS или на localhost
+	// (в Chrome — ещё с флагом «Insecure origins treated as secure»); иначе — выбор файла записи
+	var tmRec = null, tmRecTimer = null;
+	function tmRecSupported() {
+		return !!(window.MediaRecorder && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+	}
+	function tmRecStart() {
+		var status = document.getElementById('tm_status');
+		if (!tmRecSupported()) {
+			status.textContent = tmText.micHttps;
+			tmForm.audio.click();
+			return;
+		}
+		navigator.mediaDevices.getUserMedia({audio: true}).then(function (stream) {
+			var types = ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4', 'audio/webm'], type = '';
+			for (var i = 0; i < types.length; i++) {
+				if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(types[i])) { type = types[i]; break; }
+			}
+			var recorder = type ? new MediaRecorder(stream, {mimeType: type}) : new MediaRecorder(stream);
+			var rec = {recorder: recorder, stream: stream, chunks: [], started: Date.now()};
+			recorder.ondataavailable = function (ev) { if (ev.data && ev.data.size) rec.chunks.push(ev.data); };
+			recorder.start();
+			tmRec = rec;
+			status.textContent = '';
+			document.querySelector('.tg-compose').classList.add('tg-recording');
+			document.getElementById('tm_rec_time').textContent = '0:00';
+			tmRecTimer = setInterval(function () {
+				var sec = Math.floor((Date.now() - rec.started) / 1000);
+				document.getElementById('tm_rec_time').textContent = Math.floor(sec / 60) + ':' + ('0' + sec % 60).slice(-2);
+			}, 500);
+			tmSendIcon();
+		}).catch(function () {
+			status.textContent = tmText.micDenied;
+		});
+	}
+	// остановить запись; done(файл) — запись, done(null) — отменена
+	function tmRecStop(done) {
+		var rec = tmRec;
+		tmRec = null;
+		clearInterval(tmRecTimer);
+		document.querySelector('.tg-compose').classList.remove('tg-recording');
+		tmSendIcon();
+		if (!rec) { if (done) done(null); return; }
+		rec.recorder.onstop = function () {
+			rec.stream.getTracks().forEach(function (t) { t.stop(); });
+			if (!done) return;
+			var mime = (rec.recorder.mimeType || 'audio/webm').split(';')[0];
+			var ext = mime.indexOf('ogg') >= 0 ? 'ogg' : (mime.indexOf('mp4') >= 0 || mime.indexOf('aac') >= 0 ? 'm4a' : 'webm');
+			var blob = new Blob(rec.chunks, {type: mime});
+			done(blob.size ? {blob: blob, name: 'voice.' + ext} : null);
+		};
+		rec.recorder.stop();
+	}
+	document.getElementById('tm_rec_cancel').addEventListener('click', function () { tmRecStop(null); });
+	tmSendBtn.addEventListener('click', function (e) {
+		if (tmMicMode()) { e.preventDefault(); tmRecStart(); }
+	});
+	tmSendIcon();
 	tmInput.addEventListener('keydown', function (e) {
 		if (e.key == 'Enter' && !e.shiftKey && !e.isComposing) {
 			e.preventDefault();
@@ -445,6 +540,28 @@
 				img.addEventListener('click', function () { window.open(m.image, '_blank'); });
 				div.appendChild(img);
 			}
+			if (m.file) {
+				var link = document.createElement('a');
+				link.className = 'tg-file';
+				link.href = m.file;
+				link.target = '_blank';
+				link.setAttribute('download', m.file_name || '');
+				var icon = document.createElement('span');
+				icon.className = 'tg-file-icon';
+				icon.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 19.5h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+				var info = document.createElement('span');
+				var fname = document.createElement('div');
+				fname.className = 'tg-file-name';
+				fname.textContent = m.file_name || tmText.file;
+				var fext = document.createElement('div');
+				fext.className = 'tg-file-ext';
+				fext.textContent = ((m.file_name || m.file).split('.').pop() || '').slice(0, 8);
+				info.appendChild(fname);
+				info.appendChild(fext);
+				link.appendChild(icon);
+				link.appendChild(info);
+				div.appendChild(link);
+			}
 			if (m.sound) {
 				var a = document.createElement('audio');
 				a.controls = true;
@@ -490,31 +607,52 @@
 
 	tmForm.addEventListener('submit', function (e) {
 		e.preventDefault();
-		var status = document.getElementById('tm_status');
 		if (!window.fetch || !window.FormData) return;
+		var status = document.getElementById('tm_status');
 		if (!tmMe()) { status.textContent = tmText.chooseThis; return; }
-		var hasFile = (tmForm.image.files && tmForm.image.files.length) || (tmForm.audio.files && tmForm.audio.files.length);
-		if (!tmInput.value.trim() && !hasFile) return;
+		if (tmRec) {
+			// идёт запись — остановить и отправить её
+			tmRecStop(function (voice) { if (voice) tmSend(voice); });
+			return;
+		}
+		if (tmMicMode()) return;
+		tmSend(null);
+	});
+
+	// отправка: текст, вложения и записанное голосовое (voice = {blob, name})
+	function tmSend(voice) {
+		var status = document.getElementById('tm_status');
+		// размер проверяем до отправки: иначе сервер отбросит запрос целиком
+		var tooBig = '';
+		[[tmForm.image, tmMaxMedia], [tmForm.audio, tmMaxMedia], [tmForm.file, tmMaxFile]].forEach(function (item) {
+			var f = item[0].files && item[0].files[0];
+			if (f && f.size > item[1] * 1048576) tooBig = tmText.tooBig.replace('%s', item[1]);
+		});
+		if (voice && voice.blob.size > tmMaxMedia * 1048576) tooBig = tmText.tooBig.replace('%s', tmMaxMedia);
+		if (tooBig) { status.textContent = tooBig; return; }
 		var data = new FormData(tmForm);
 		data.append('from', tmMe());
+		if (voice) data.set('audio', voice.blob, voice.name);
 		status.textContent = tmText.sending;
-		document.getElementById('tm_send').disabled = true;
+		tmSendBtn.disabled = true;
 		fetch(location.pathname, {method: 'POST', body: data, credentials: 'same-origin'})
 			.then(function (r) { return r.json(); })
 			.then(function (res) {
-				status.textContent = res.sent ? '' : tmText.notSent;
+				var errors = {too_big: tmText.tooBig.replace('%s', tmMaxFile), type: tmText.badType, upload: tmText.uploadError};
+				status.textContent = res.sent ? '' : (errors[res.error] || tmText.notSent);
 				if (res.sent) {
 					tmInput.value = '';
 					tmGrow();
 					tmForm.image.value = '';
 					tmForm.audio.value = '';
+					tmForm.file.value = '';
 					tmFiles();
+					tmRefresh(function () { tmOpen(tmCurrent); });
 				}
-				tmRefresh(function () { tmOpen(tmCurrent); });
 			})
 			.catch(function () { status.textContent = tmText.sendError; })
-			.then(function () { document.getElementById('tm_send').disabled = false; tmInput.focus(); });
-	});
+			.then(function () { tmSendBtn.disabled = false; tmSendIcon(); tmInput.focus(); });
+	}
 
 	// своя группа: диалог создания и изменения
 	var tmModal = document.getElementById('tm_modal'), tmEditing = null;

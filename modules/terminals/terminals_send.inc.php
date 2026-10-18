@@ -7,6 +7,8 @@
  *       'from'  => 'Гостиная',                  // от кого: терминал (имя или название) или любой текст
  *       'image' => 'cms/cached/snapshot.jpg',   // картинка: путь в веб-корне MajorDoMo или http-ссылка
  *       'sound' => 'cms/sounds/dingdong.mp3',   // звук перед сообщением: путь в веб-корне или http-ссылка
+ *       'file'  => 'cms/cached/terminals/x.pdf', // файл для страницы «Сообщения» (скачать); на устройство — «Файл: имя»
+ *       'file_name' => 'Счёт.pdf',              // имя файла для показа и скачивания
  *       'voice' => true,                        // озвучить текст генератором речи (по умолчанию да)
  *       'level' => 5,                           // уровень; по умолчанию — порог терминала-получателя
  *       'chat'  => 'room:3',                    // чат на странице «Сообщения»: all, room:ID, group:ID (пусто — личный)
@@ -31,7 +33,12 @@ function terminalsSend($to, $message, $options = array())
     $image = isset($options['image']) ? trim((string)$options['image']) : '';
     $sound = isset($options['sound']) ? trim((string)$options['sound']) : '';
     $voice = !isset($options['voice']) || !empty($options['voice']);
-    if ($message == '' && $image == '' && $sound == '') {
+    $file = isset($options['file']) ? trim((string)$options['file']) : '';
+    $file_name = isset($options['file_name']) ? trim((string)$options['file_name']) : '';
+    if ($file != '' && $file_name == '') {
+        $file_name = basename($file);
+    }
+    if ($message == '' && $image == '' && $sound == '' && $file == '') {
         return 0;
     }
     // отправитель: название терминала, если это терминал, иначе как есть
@@ -87,6 +94,12 @@ function terminalsSend($to, $message, $options = array())
                 $tts->playFile($sound, $level, $sender_title);
             }
         }
+        // только файл: на устройство — текст «Файл: имя» без озвучки, сам файл — на странице «Сообщения»
+        if ($speaks && $message == '' && $image == '' && $sound == '' && $file != '') {
+            include_once(DIR_MODULES . 'terminals/terminals.class.php');
+            $terminals = new terminals();
+            $terminals->terminalSay($terminal_rec, terminalsLang('TERMINALS_FILE') . ': ' . $file_name, $level, '', $sender_title);
+        }
         if ($speaks && ($message != '' || $image != '')) {
             if ($voice && $message != '') {
                 // как sayTo(): терминалы и генераторы речи получают событие SAYTO
@@ -105,6 +118,8 @@ function terminalsSend($to, $message, $options = array())
             'MESSAGE' => json_encode($message),
             'IMAGE' => $image,
             'SOUND' => $sound,
+            'FILE' => $file,
+            'FILE_NAME' => $file_name,
             'ADDED' => time(),
             'CHAT' => $chat,
             'SEND_ID' => $send_id,

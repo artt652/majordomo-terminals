@@ -501,6 +501,8 @@ class terminals extends module
  terminals_messages: IMAGE varchar(255) NOT NULL DEFAULT ''
  terminals_messages: SOUND varchar(255) NOT NULL DEFAULT ''
  terminals_messages: ADDED int(10) NOT NULL DEFAULT '0'
+ terminals_messages: FILE varchar(255) NOT NULL DEFAULT ''
+ terminals_messages: FILE_NAME varchar(255) NOT NULL DEFAULT ''
  terminals_messages: CHAT varchar(50) NOT NULL DEFAULT ''
  terminals_messages: SEND_ID varchar(32) NOT NULL DEFAULT ''
  terminals_messages: INDEX (TO_NAME)

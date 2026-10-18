@@ -84,6 +84,13 @@ $dictionary = array(
 	'TERMINALS_GROUP'                => 'Группа',
 	'TERMINALS_SELECT_CHAT'          => 'Выберите чат',
 	'TERMINALS_BACK'                 => 'Назад',
+	'TERMINALS_FILE'                 => 'Файл',
+	'TERMINALS_RECORD_VOICE'         => 'Записать голосовое',
+	'TERMINALS_FILE_TOO_BIG'         => 'Файл больше %s МБ',
+	'TERMINALS_FILE_TYPE'            => 'Такой тип файла не принимается',
+	'TERMINALS_UPLOAD_ERROR'         => 'Не удалось загрузить файл',
+	'TERMINALS_MIC_HTTPS'            => 'Запись голоса браузер разрешает только по HTTPS (или в Chrome с флагом «Insecure origins treated as secure») — выберите файл записи.',
+	'TERMINALS_MIC_DENIED'           => 'Нет доступа к микрофону',
 );
 
 foreach ($dictionary as $key => $value) {
