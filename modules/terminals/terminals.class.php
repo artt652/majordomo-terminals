@@ -11,6 +11,7 @@
 //
 //
 include_once(DIR_MODULES . 'terminals/terminals_queue.inc.php');
+include_once(DIR_MODULES . 'terminals/terminals_settings.inc.php');
 
 class terminals extends module
 {
@@ -458,6 +459,8 @@ class terminals extends module
  terminals: LINKED_OBJECT varchar(255) NOT NULL DEFAULT ''
  terminals: LEVEL_LINKED_PROPERTY varchar(255) NOT NULL DEFAULT ''
  terminals: LOCATION_ID int(5) NOT NULL DEFAULT '0' 
+ terminals: TTS_SETTINGS text
+ terminals: PLAYER_SETTINGS text
 
  terminals_queue: ID int(10) unsigned NOT NULL auto_increment
  terminals_queue: TERMINAL_ID int(10) NOT NULL DEFAULT '0'

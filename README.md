@@ -9,6 +9,10 @@
 | `modules/terminals/terminals.class.php` | Изменён: очередь сообщений для дополнений с `useQueue()`, события `MINUTELY` и `startup`, таблицы `terminals_queue` и `terminals_state` |
 | `modules/terminals/terminals_queue.inc.php` | Новый: логика очереди, сохранение и восстановление плеера, сторож |
 | `modules/terminals/tts/mediaplayer.addon.php` | Изменён: собственная очередь на заданиях `allsay-target-*` убрана, добавлены `useQueue()`, `saveState()`, `restoreState()` |
+| `modules/terminals/terminals_settings.inc.php` | Новый: настройки дополнений TTS и плеера, поля объявляет дополнение |
+| `modules/terminals/terminals_edit.inc.php` | Изменён: поля дополнений в форме терминала и их сохранение |
+| `templates/terminals/terminals_edit.html` | Изменён: поля плеера и TTS строятся по описанию из дополнения, без жёстко прописанного списка |
+| `modules/app_player/addons/{dnla,chromecast,foobar,ghn,majordroid,mpd}.addon.php` | Изменены: объявляют свои поля (`settingsFields()`) вместо перечня в шаблоне |
 | `modules/terminals/tts/mpd_tts.addon.php` | Новый: сообщения на MPD без потери плейлиста (проверено на MPD 0.23) |
 | `modules/terminals/tts/lms_tts.addon.php` | Новый: то же для Logitech Media Server (не проверено на устройстве) |
 | `modules/terminals/tts/kodi_tts.addon.php` | Новый: то же для Kodi (не проверено на устройстве) |
@@ -26,6 +30,25 @@
 - **Плеер восстанавливается.** Перед первым сообщением серии сохраняется, что играл плеер, после последнего тот же трек включается с той же позиции. Если трек остался в плейлисте под тем же номером (vlcweb), он включается через `pl_play`, и плейлист сохраняется; сообщения из плейлиста удаляются. Если плеер заменил плейлист (mpd, lms) или плейлиста нет, файл запускается заново.
 - **Конец сообщения по плееру.** Конец сообщения считается по длине файла (резерв). Если дополнение умеет `isPlaying()` (mediaplayer и все `*_tts`) и плеер к этому времени ещё играет сообщение, следующее ждёт, проверка каждые 2 с, не дольше 30 с.
 - **Старые сообщения удаляются.** Не проигрываются сообщения старше 10 минут. Сторож (`MINUTELY`) перезапускает застрявшую очередь, `startup` сбрасывает её.
+
+## Настройки дополнений
+
+Дополнение TTS (`modules/terminals/tts/`) и дополнение плеера (`modules/app_player/addons/`) объявляют поля карточки терминала методом `settingsFields()`:
+
+```php
+function settingsFields()
+{
+    return array(
+        array('NAME' => 'PORT', 'TITLE' => 'Порт PiPup', 'HINT' => 'пусто — 7979'),
+        array('NAME' => 'VOICE', 'TITLE' => 'Голос', 'TYPE' => 'combo', 'OPTIONS' => array('' => 'Любой', 'device' => 'Устройство')),
+    );
+}
+```
+
+- `TYPE`: `text` (по умолчанию), `password`, `number`, `select`, `combo` (список подсказок, можно ввести своё), `checkbox`; ещё `DEFAULT`, `HINT`, `OPTIONS`.
+- Поля с именами прежних столбцов (`PLAYER_PORT`, `PLAYER_USERNAME`, `PLAYER_PASSWORD`, `PLAYER_CONTROL_ADDRESS`) хранятся в них, как раньше. Остальные — в JSON-полях `TTS_SETTINGS` / `PLAYER_SETTINGS` отдельно для каждого дополнения, смена типа их не стирает.
+- Дополнение читает свои значения через `terminalsAddonSettings($this->terminal, 'tts' или 'player', 'имя_дополнения')`.
+- Плеер без `settingsFields()` получает прежний набор: порт, имя пользователя, пароль. TTS без него полей не получает.
 
 ## Тип TTS для терминала
 

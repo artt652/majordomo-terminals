@@ -9,6 +9,13 @@ class ghn extends app_player_addon {
 	// Private properties
 	private $address;
 	
+	// Поля карточки терминала для этого плеера (modules/terminals/terminals_settings.inc.php)
+	function settingsFields() {
+		return array(
+			array('NAME' => 'PLAYER_PORT', 'TITLE' => 'LANG_PLAYER_PORT'),
+		);
+	}
+
 	// Constructor
 	function __construct($terminal) {
 		$this->title = 'Google Home Notifier';

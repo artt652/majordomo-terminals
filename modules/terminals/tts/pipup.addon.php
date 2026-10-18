@@ -1,5 +1,7 @@
 <?php
 
+include_once(DIR_MODULES . 'terminals/terminals_settings.inc.php');
+
 class pipup extends tts_addon
 {
     // Собственное свойство: в базовом tts_addon $title объявлен private,
@@ -13,6 +15,88 @@ class pipup extends tts_addon
     {
         $this->title = 'PiPup';
         parent::__construct($terminal);
+    }
+
+    // Поля карточки терминала для этого типа TTS (modules/terminals/terminals_settings.inc.php)
+    function settingsFields()
+    {
+        $voices = array('' => 'Любой голос — первый готовый файл генератора');
+        foreach (self::voiceLabels() as $voice) {
+            $voices[$voice['label']] = $voice['title'] . ' — ' . $voice['count'] . ' в кеше';
+        }
+        $voices['device'] = 'Голос устройства (device)';
+        return array(
+            array('NAME' => 'PORT', 'TITLE' => 'Порт PiPup', 'HINT' => 'пусто — как у плеера, иначе 7979'),
+            // по умолчанию — прежнее место настройки, «Имя пользователя» плеера
+            array('NAME' => 'VOICE', 'TITLE' => 'Голос сообщений', 'TYPE' => 'combo', 'OPTIONS' => $voices,
+                'DEFAULT' => isset($this->terminal['PLAYER_USERNAME']) ? (string)$this->terminal['PLAYER_USERNAME'] : '',
+                'HINT' => 'пусто — любой голос; sanotts, yandex… — только эти; device — голос устройства'),
+        );
+    }
+
+    // Значение поля «Голос сообщений». Пока поля TTS не сохраняли — прежнее место, «Имя пользователя» плеера
+    private function voiceSetting()
+    {
+        $settings = function_exists('terminalsAddonSettings') ? terminalsAddonSettings($this->terminal, 'tts', 'pipup') : array();
+        if (array_key_exists('VOICE', $settings)) {
+            return (string)$settings['VOICE'];
+        }
+        return isset($this->terminal['PLAYER_USERNAME']) ? (string)$this->terminal['PLAYER_USERNAME'] : '';
+    }
+
+    // Генераторы речи, чьи файлы есть в кеше cms/cached/voice (и его подпапках): метка → число файлов.
+    // Метка — то, что остаётся от имени файла без md5: префикс (sanotts_<md5>) или суффикс (<md5>_yandex).
+    private static function voiceLabels()
+    {
+        $names = array('sanotts' => 'sanoTTS', 'piper_tts' => 'Piper', 'sapi' => 'Windows SAPI',
+            'yandex' => 'Яндекс', 'google' => 'Google');
+        // Служебные файлы генераторов с другой меткой: piper_dict_<md5> — прослушивание фраз
+        // в словаре piper_tts (кнопка ▶). Это тот же голос, считаем их вместе с piper_tts.
+        $aliases = array('piper_dict' => 'piper_tts');
+        $dir = ROOT . 'cms/cached/voice';
+        $counts = array();
+        $left = 20000; // не читать бесконечно большой кеш
+        $stack = array($dir);
+        while ($stack && $left > 0) {
+            $d = array_pop($stack);
+            $list = @scandir($d);
+            if (!is_array($list)) {
+                continue;
+            }
+            foreach ($list as $f) {
+                if ($f == '.' || $f == '..' || --$left <= 0) {
+                    continue;
+                }
+                $path = $d . DIRECTORY_SEPARATOR . $f;
+                if (is_dir($path)) {
+                    if ($d == $dir) {
+                        $stack[] = $path; // подпапки первого уровня
+                    }
+                    continue;
+                }
+                $ext = strtolower(pathinfo($f, PATHINFO_EXTENSION));
+                if (!in_array($ext, array('mp3', 'wav', 'ogg', 'opus', 'm4a', 'aac', 'flac'), true)) {
+                    continue;
+                }
+                $name = strtolower(pathinfo($f, PATHINFO_FILENAME));
+                if (!preg_match('/^(?:([a-z0-9_]+?)_)?[0-9a-f]{32}(?:_([a-z0-9_]+))?$/', $name, $m)) {
+                    continue;
+                }
+                $label = !empty($m[1]) ? $m[1] : (isset($m[2]) ? $m[2] : '');
+                if (isset($aliases[$label])) {
+                    $label = $aliases[$label];
+                }
+                if ($label !== '') {
+                    $counts[$label] = isset($counts[$label]) ? $counts[$label] + 1 : 1;
+                }
+            }
+        }
+        arsort($counts);
+        $out = array();
+        foreach ($counts as $label => $count) {
+            $out[] = array('label' => $label, 'title' => isset($names[$label]) ? $names[$label] . ' (' . $label . ')' : $label, 'count' => $count);
+        }
+        return $out;
     }
 
     // Сообщения идут через очередь модуля terminals: окна не перебивают друг друга
@@ -66,7 +150,7 @@ class pipup extends tts_addon
             return 0;
         }
         if (!$this->engineAllowed($cached_file)) {
-            DebMes('PiPup: skip ' . basename((string)$cached_file) . ' (terminal voice: ' . $this->terminal['PLAYER_USERNAME'] . ')', 'terminals');
+            DebMes('PiPup: skip ' . basename((string)$cached_file) . ' (terminal voice: ' . $this->voiceSetting() . ')', 'terminals');
             return 0;
         }
         $soundUrl = $this->fileUrl($cached_file);
@@ -83,10 +167,10 @@ class pipup extends tts_addon
         return $this->sendSound($soundUrl, $phrase, '🔊 Уведомление', $duration, null, $this->messageId($phrase));
     }
 
-    // Голос устройства: в поле «Имя пользователя» указано device
+    // Голос устройства: в поле «Голос сообщений» указано device
     private function deviceVoice()
     {
-        $filter = isset($this->terminal['PLAYER_USERNAME']) ? strtolower((string)$this->terminal['PLAYER_USERNAME']) : '';
+        $filter = strtolower($this->voiceSetting());
         foreach (explode(',', $filter) as $engine) {
             if (trim($engine) === 'device') {
                 return true;
@@ -98,7 +182,7 @@ class pipup extends tts_addon
     // Подходит ли файл генератору, выбранному для терминала
     private function engineAllowed($cached_file)
     {
-        $filter = isset($this->terminal['PLAYER_USERNAME']) ? trim((string)$this->terminal['PLAYER_USERNAME']) : '';
+        $filter = trim($this->voiceSetting());
         if ($filter === '') {
             return true;
         }
@@ -514,7 +598,12 @@ class pipup extends tts_addon
     private function hostPort()
     {
         $host = preg_replace('/:\d*$/', '', trim($this->terminal['HOST']));
-        $port = isset($this->terminal['PLAYER_PORT']) ? (int)$this->terminal['PLAYER_PORT'] : 0;
+        // «Порт PiPup» в настройках TTS; пусто — порт плеера (pipup_play), иначе 7979
+        $settings = function_exists('terminalsAddonSettings') ? terminalsAddonSettings($this->terminal, 'tts', 'pipup') : array();
+        $port = !empty($settings['PORT']) ? (int)$settings['PORT'] : 0;
+        if ($port <= 0 || $port > 65535) {
+            $port = isset($this->terminal['PLAYER_PORT']) ? (int)$this->terminal['PLAYER_PORT'] : 0;
+        }
         return $host . ':' . (($port > 0 && $port < 65536) ? $port : self::DEFAULT_PORT);
     }
 

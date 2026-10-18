@@ -6,6 +6,14 @@ Addon dnla for app_player
 
 class dnla extends app_player_addon
 {
+    // Поля карточки терминала для этого плеера (modules/terminals/terminals_settings.inc.php)
+    function settingsFields()
+    {
+        return array(
+            array('NAME' => 'PLAYER_CONTROL_ADDRESS', 'TITLE' => 'Control address'),
+        );
+    }
+
     function __construct($terminal)
     {
         $this->title       = 'Устройства с поддержкой протокола DLNA';

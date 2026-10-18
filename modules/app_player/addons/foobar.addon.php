@@ -10,6 +10,13 @@ class foobar extends app_player_addon {
 	private $curl;
 	private $address;
 	
+	// Поля карточки терминала для этого плеера (modules/terminals/terminals_settings.inc.php)
+	function settingsFields() {
+		return array(
+			array('NAME' => 'PLAYER_PORT', 'TITLE' => 'LANG_PLAYER_PORT'),
+		);
+	}
+
 	// Constructor
 	function __construct($terminal) {
 		$this->title = 'Foobar2000';

@@ -7,6 +7,14 @@ Addon Chromecast for app_player
 class chromecast extends app_player_addon
 {
     
+    // Поля карточки терминала для этого плеера (modules/terminals/terminals_settings.inc.php)
+    function settingsFields()
+    {
+        return array(
+            array('NAME' => 'PLAYER_PORT', 'TITLE' => 'LANG_PLAYER_PORT'),
+        );
+    }
+
     // Constructor
     function __construct($terminal)
     {

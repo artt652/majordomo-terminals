@@ -10,6 +10,15 @@ class mpd extends app_player_addon
     // Private properties
     private $mpd;
 
+    // Поля карточки терминала для этого плеера (modules/terminals/terminals_settings.inc.php)
+    function settingsFields()
+    {
+        return array(
+            array('NAME' => 'PLAYER_PORT', 'TITLE' => 'LANG_PLAYER_PORT'),
+            array('NAME' => 'PLAYER_PASSWORD', 'TITLE' => 'LANG_PLAYER_PASSWORD'),
+        );
+    }
+
     // Constructor
     function __construct($terminal)
     {

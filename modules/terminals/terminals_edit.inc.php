@@ -53,15 +53,15 @@ if ($this->mode == 'update') {
     
     $rec['TTS_TYPE'] = gr('tts_type');
     $rec['PLAYER_TYPE'] = gr('player_type');
-    $rec['PLAYER_PORT'] = gr('player_port');
-    $rec['PLAYER_USERNAME'] = gr('player_username');
-    $rec['PLAYER_PASSWORD'] = gr('player_password');
+    // поля выбранных дополнений TTS и плеера (terminals_settings.inc.php): прежние столбцы
+    // PLAYER_PORT и др. меняются, только если дополнение их показало
+    terminalsSaveSettings($rec, 'tts', $rec['TTS_TYPE'], gr('tts_setting'));
+    terminalsSaveSettings($rec, 'player', $rec['PLAYER_TYPE'], gr('player_setting'));
     $rec['LINKED_OBJECT'] = gr('linked_object');
     /*
     global $level_linked_property;
     $rec['LEVEL_LINKED_PROPERTY'] = $level_linked_property;
     */
-    $rec['PLAYER_CONTROL_ADDRESS'] = gr('player_control_address');
 
     $rec['HOST'] = gr('host');
     if (!$rec['HOST']) {
@@ -83,6 +83,19 @@ if ($this->mode == 'update') {
     }
 }
 
+// сохранённые значения полей дополнений — для формы
+$settings_values = array('tts' => array(), 'player' => array(), 'columns' => array());
+foreach (array('tts' => 'TTS_SETTINGS', 'player' => 'PLAYER_SETTINGS') as $kind => $column) {
+    $all = (is_array($rec) && isset($rec[$column])) ? json_decode((string)$rec[$column], true) : null;
+    $settings_values[$kind] = is_array($all) ? $all : array();
+}
+foreach (terminalsSettingsColumns() as $column) {
+    $settings_values['columns'][$column] = (is_array($rec) && isset($rec[$column])) ? (string)$rec[$column] : '';
+}
+$json_flags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
+$out['SETTINGS_VALUES_JSON'] = json_encode($settings_values, $json_flags);
+
+$rec_raw = is_array($rec) ? $rec : array(); // запись до экранирования — для полей дополнений
 if (is_array($rec)) {
     foreach ($rec as $k => $v) {
         if (!is_array($v)) {
@@ -93,7 +106,10 @@ if (is_array($rec)) {
 outHash($rec, $out);
 
 $out['TTS_ADDONS'] = array();
+$tts_fields = array();
+$player_fields = array('' => terminalsFieldsForForm(terminalsAddonFields(null, 'player')));
 if (is_dir(DIR_MODULES . 'terminals/tts')) {
+    include_once DIR_MODULES . 'terminals/tts_addon.class.php';
     $addons = scandir(DIR_MODULES . 'terminals/tts');
     if (is_array($addons)) {
         foreach ($addons as $addon_file) {
@@ -102,6 +118,14 @@ if (is_dir(DIR_MODULES . 'terminals/tts')) {
                 if (strtolower(substr($addon_file, -10)) == '.addon.php') {
                     $addon_name = basename($addon_file, '.addon.php');
                     $out['TTS_ADDONS'][] = array('NAME'=>$addon_name);
+                    // поля дополнения TTS (settingsFields). Дополнение, у которого есть одноимённое
+                    // дополнение плеера (majordroid), не подключаем: два класса с одним именем — Fatal
+                    if (!file_exists(DIR_MODULES . 'app_player/addons/' . $addon_name . '.addon.php')) {
+                        include_once($addon_file);
+                        if (class_exists($addon_name)) {
+                            $tts_fields[$addon_name] = terminalsFieldsForForm(terminalsAddonFields(new $addon_name($rec_raw), 'tts'));
+                        }
+                    }
                 }
             }
         }
@@ -127,7 +151,7 @@ if (is_dir(DIR_MODULES . 'app_player/addons')) {
                                 foreach ($reflection->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
                                     if ($method->getDeclaringClass()->getName() == $reflection->getName()) {
                                         $method_name = $method->getName();
-                                        if (substr($method_name, 0, 2) != '__' and !in_array($method_name, array('destroy', 'command'))) {
+                                        if (substr($method_name, 0, 2) != '__' and !in_array($method_name, array('destroy', 'command', 'settingsFields'))) {
                                             $features[] = $method_name;
                                         }
                                     }
@@ -137,6 +161,7 @@ if (is_dir(DIR_MODULES . 'app_player/addons')) {
                                 } else {
                                     $player->description .= '<p style="color: #b94a48;"><b>' . LANG_NO_FEATURES_WARNING . '</b></p>';
                                 }
+                                $player_fields[$addon_name] = terminalsFieldsForForm(terminalsAddonFields($player, 'player'));
                                 // Results
                                 $out['PLAYER_ADDONS'][] = array(
                                     'TITLE' => $player->title,
@@ -151,5 +176,8 @@ if (is_dir(DIR_MODULES . 'app_player/addons')) {
         }
     }
 }
+
+$out['TTS_FIELDS_JSON'] = json_encode($tts_fields, $json_flags);
+$out['PLAYER_FIELDS_JSON'] = json_encode($player_fields, $json_flags);
 
 ?>

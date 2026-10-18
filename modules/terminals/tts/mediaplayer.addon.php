@@ -130,8 +130,10 @@ class mediaplayer extends tts_addon
             // плеер мог ещё не загрузить трек: проверяем и при необходимости повторяем перемотку через 2 с
             $now = getPlayerStatus($this->terminal['NAME']);
             if (!is_array($now) || !isset($now['time']) || abs((int)$now['time'] - (int)$state['time']) > 5) {
+                // в задании нет сессии, а app_player пишет в $session->data (PHP 8 без неё падает)
                 setTimeOut('terminals_restore_seek_' . (int)$this->terminal['ID'],
-                    'seekPlayerPosition(' . var_export($title, true) . ', ' . (int)$state['time'] . ');', 2);
+                    'global $session; if (!is_object($session)) { $session = new stdClass(); $session->data = array(); } '
+                    . 'seekPlayerPosition(' . var_export($title, true) . ', ' . (int)$state['time'] . ');', 2);
             }
         }
         if (!empty($state['volume'])) {

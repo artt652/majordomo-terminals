@@ -30,7 +30,7 @@ class pipup_play extends app_player_addon
             . 'PHP с curl, BASE_URL в config.php с портом веб-сервера. '
             . 'В поле «Адрес» — только IP или имя устройства, порт PiPup — в поле «Порт PiPup» (пусто — 7979).'
             . '<br><b>Текст и голос сообщений</b> (say, sayTo, ask) выводит тип TTS <b>pipup</b>: включите «Может произносить» и выберите pipup. '
-            . 'Его настройка задаётся здесь, в поле <b>«Голос сообщений»</b> (у других плееров это поле «Имя пользователя»):'
+            . 'Его настройки — в разделе TTS карточки терминала: <b>«Порт PiPup»</b> (пусто — как у плеера) и <b>«Голос сообщений»</b>:'
             . '<ul style="margin:4px 0 4px 18px;padding:0">'
             . '<li>пусто — голос любого генератора речи;</li>'
             . '<li>метка генератора — только его голос: <code>sanotts</code>, <code>piper_tts</code>, <code>rh</code>, <code>sapi</code> (речь Windows), '
@@ -40,137 +40,16 @@ class pipup_play extends app_player_addon
             . 'Длительность окна сообщения считается по длине текста (10–60 с). '
             . 'Если текстовые окна не появляются, проверьте порог уровня сообщений терминала и приоритет модуля terminals '
             . '(модули с BREAK, например yandex_tts, останавливают рассылку события).'
-            . '</details>'
-            // Страница терминала создаёт плеер без терминала (NULL): только тогда нужен скрипт формы и список голосов
-            . (($terminal === null) ? self::formScript(self::voiceLabels()) : '');
+            . '</details>';
         parent::__construct($terminal);
     }
 
-    // Генераторы речи, чьи файлы есть в кеше cms/cached/voice (и его подпапках): метка → число файлов.
-    // Метка — то, что остаётся от имени файла без md5: префикс (sanotts_<md5>) или суффикс (<md5>_yandex).
-    private static function voiceLabels()
+    // Поля карточки терминала для этого плеера (modules/terminals/terminals_settings.inc.php)
+    function settingsFields()
     {
-        $names = array('sanotts' => 'sanoTTS', 'piper_tts' => 'Piper', 'sapi' => 'Windows SAPI',
-            'yandex' => 'Яндекс', 'google' => 'Google');
-        // Служебные файлы генераторов с другой меткой: piper_dict_<md5> — прослушивание фраз
-        // в словаре piper_tts (кнопка ▶). Это тот же голос, считаем их вместе с piper_tts.
-        $aliases = array('piper_dict' => 'piper_tts');
-        $dir = ROOT . 'cms/cached/voice';
-        $counts = array();
-        $left = 20000; // не читать бесконечно большой кеш
-        $stack = array($dir);
-        while ($stack && $left > 0) {
-            $d = array_pop($stack);
-            $list = @scandir($d);
-            if (!is_array($list)) {
-                continue;
-            }
-            foreach ($list as $f) {
-                if ($f == '.' || $f == '..' || --$left <= 0) {
-                    continue;
-                }
-                $path = $d . DIRECTORY_SEPARATOR . $f;
-                if (is_dir($path)) {
-                    if ($d == $dir) {
-                        $stack[] = $path; // подпапки первого уровня
-                    }
-                    continue;
-                }
-                $ext = strtolower(pathinfo($f, PATHINFO_EXTENSION));
-                if (!in_array($ext, array('mp3', 'wav', 'ogg', 'opus', 'm4a', 'aac', 'flac'), true)) {
-                    continue;
-                }
-                $name = strtolower(pathinfo($f, PATHINFO_FILENAME));
-                if (!preg_match('/^(?:([a-z0-9_]+?)_)?[0-9a-f]{32}(?:_([a-z0-9_]+))?$/', $name, $m)) {
-                    continue;
-                }
-                $label = !empty($m[1]) ? $m[1] : (isset($m[2]) ? $m[2] : '');
-                if (isset($aliases[$label])) {
-                    $label = $aliases[$label];
-                }
-                if ($label !== '') {
-                    $counts[$label] = isset($counts[$label]) ? $counts[$label] + 1 : 1;
-                }
-            }
-        }
-        arsort($counts);
-        $out = array();
-        foreach ($counts as $label => $count) {
-            $out[] = array('label' => $label, 'title' => isset($names[$label]) ? $names[$label] . ' (' . $label . ')' : $label, 'count' => $count);
-        }
-        return $out;
-    }
-
-    // Поля карточки терминала, пока выбран этот плеер: «Имя пользователя» подписано «Голос сообщений»,
-    // «Порт» — «Порт PiPup», у обоих подсказки; ненужное поле «Пароль» скрыто. Описание выводится на странице как HTML,
-    // поэтому скрипт работает без правки шаблона ядра; при выборе другого плеера всё возвращается.
-    private static function formScript($voices)
-    {
-        $flags = defined('JSON_UNESCAPED_UNICODE') ? JSON_UNESCAPED_UNICODE : 0;
-        return '<script>(function () {'
-            . 'var voices = ' . json_encode($voices, $flags) . ';'
-            . 'var hint = "пусто — любой голос; sanotts, yandex… — только эти; device — голос устройства";'
-            . 'var caption = "Голос сообщений:", portCaption = "Порт PiPup:", portHint = "пусто — 7979";'
-            . 'function apply() {'
-            . 'var s = document.querySelector("select[name=player_type]"), u = document.querySelector("input[name=player_username]");'
-            . 'if (!s || !u) return;'
-            . 'var on = s.value == "pipup_play";'
-            . 'var pw = document.getElementById("player_password"), p = document.querySelector("input[name=player_port]");'
-            . 'relabel("#player_name label", on ? caption : null);'
-            . 'relabel("#player_port label", on ? portCaption : null);'
-            . 'tip(u, hint, on); if (p) tip(p, portHint, on);'
-            . 'if (on && pw) pw.style.display = "none";'
-            . 'voiceSelect(u, on);'
-            . '}'
-            // стрелка выпадающего списка прямо в поле: выбор пишет метку в поле, свой список через запятую вводится руками
-            . 'function voiceSelect(u, on) {'
-            . 'var arrow = document.getElementById("pipup_voice_arrow"), menu = document.getElementById("pipup_voice_menu");'
-            . 'if (!arrow) {'
-            . 'var wrap = document.createElement("div"); wrap.style.position = "relative";'
-            . 'u.parentNode.insertBefore(wrap, u); wrap.appendChild(u);'
-            . 'arrow = document.createElement("span"); arrow.id = "pipup_voice_arrow"; arrow.title = "Выбрать из списка";'
-            . 'arrow.innerHTML = "<svg width=\\"14\\" height=\\"14\\" viewBox=\\"0 0 14 14\\" style=\\"display:block\\"><path d=\\"M3 5l4 4 4-4\\" fill=\\"none\\" stroke=\\"currentColor\\" stroke-width=\\"2\\" stroke-linecap=\\"round\\" stroke-linejoin=\\"round\\"/></svg>";'
-            . 'arrow.style.cssText = "position:absolute;top:0;bottom:0;right:1px;width:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;opacity:.7";'
-            . 'menu = document.createElement("ul"); menu.id = "pipup_voice_menu"; menu.className = "dropdown-menu";'
-            . 'menu.style.cssText = "display:none;width:100%;max-height:280px;overflow:auto";'
-            . 'wrap.appendChild(arrow); wrap.appendChild(menu);'
-            . 'arrow.addEventListener("mousedown", function (e) { e.preventDefault(); });'
-            . 'arrow.addEventListener("click", function () { if (menu.style.display == "none") { fill(menu, u); menu.style.display = "block"; } else menu.style.display = "none"; });'
-            . 'document.addEventListener("click", function (e) { if (!wrap.contains(e.target)) menu.style.display = "none"; });'
-            . 'u.addEventListener("keydown", function (e) { if (e.key == "Escape") menu.style.display = "none"; if (e.key == "ArrowDown" && e.altKey) arrow.click(); });'
-            . '}'
-            . 'u.style.paddingRight = on ? "36px" : ""; arrow.style.display = on ? "flex" : "none"; if (!on) menu.style.display = "none";'
-            . 'if (on && u.offsetHeight) { arrow.style.top = u.offsetTop + "px"; arrow.style.height = u.offsetHeight + "px"; arrow.style.bottom = "auto"; arrow.style.color = getComputedStyle(u).color; }'
-            . '}'
-            . 'function fill(menu, u) {'
-            . 'menu.innerHTML = ""; var cur = u.value.trim().toLowerCase();'
-            . 'function add(v, t) {'
-            . 'var li = document.createElement("li"), a = document.createElement("a"); a.href = "#"; a.textContent = t;'
-            . 'if (v == cur) { li.className = "active"; }'
-            . 'a.addEventListener("click", function (e) { e.preventDefault(); u.value = v; menu.style.display = "none"; u.focus(); });'
-            . 'li.appendChild(a); menu.appendChild(li);'
-            . '}'
-            . 'add("", "Любой голос — первый готовый файл генератора");'
-            . 'for (var i = 0; i < voices.length; i++) add(voices[i].label, voices[i].title + " — " + voices[i].count + " в кеше");'
-            . 'add("device", "Голос устройства (device)");'
-            . '}'
-            // подпись поля: своя для этого плеера, при выборе другого — исходная
-            . 'function relabel(sel, text) {'
-            . 'var l = document.querySelector(sel); if (!l) return;'
-            . 'if (l.getAttribute("data-orig") === null) l.setAttribute("data-orig", l.textContent);'
-            . 'l.textContent = (text !== null) ? text : l.getAttribute("data-orig");'
-            . '}'
-            // подсказка в поле: ставим для этого плеера, убираем только свою
-            . 'function tip(el, text, on) {'
-            . 'if (on) { el.placeholder = text; el.title = text; }'
-            . 'else if (el.placeholder == text) { el.placeholder = ""; el.title = ""; }'
-            . '}'
-            // шаблон сам показывает/скрывает поля при загрузке и смене типа — применяем после него
-            . 'function later() { apply(); setTimeout(apply, 0); setTimeout(apply, 300); }'
-            . 'if (document.readyState == "loading") document.addEventListener("DOMContentLoaded", later); else later();'
-            . 'window.addEventListener("load", apply);'
-            . 'document.addEventListener("change", function (e) { if (e.target && e.target.name == "player_type") later(); });'
-            . '})();</script>';
+        return array(
+            array('NAME' => 'PLAYER_PORT', 'TITLE' => 'Порт PiPup', 'HINT' => 'пусто — 7979'),
+        );
     }
 
     // Play: тип окна выбирается по ссылке или расширению файла
