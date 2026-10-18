@@ -15,6 +15,7 @@
  *       'level' => 5,                           // уровень; по умолчанию — порог терминала-получателя
  *       'chat'  => 'room:3',                    // чат на странице «Сообщения»: all, room:ID, group:ID (пусто — личный)
  *       'chat_title' => 'Кухня',                // название чата — добавляется к отправителю в заголовке окна
+ *       'shout' => true,                        // записать копию в общий чат MajorDoMo (для chat => 'all' — всегда)
  *   ));
  *
  * Куда: имя, название или адрес терминала; можно массив.
@@ -22,7 +23,9 @@
  * Без озвучки (voice => false) — только текст, сразу в очередь получателя.
  * Картинку и отправителя показывают дополнения с showMessage() (pipup: картинка в окне,
  * отправитель в заголовке), звук играют дополнения с playFile() (mediaplayer, *_tts, pipup).
- * Остальные получают текст, как обычно. Сообщение записывается и в историю (shouts).
+ * Остальные получают текст, как обычно.
+ * В общий чат MajorDoMo (shouts) пишется только сообщение всем терминалам (chat => 'all')
+ * или с 'shout' => true — с именем отправителя: «Кухня: текст». Личные и групповые туда не попадают.
  * Возвращает число терминалов, которым сообщение отправлено.
  */
 
@@ -53,11 +56,26 @@ function terminalsSend($to, $message, $options = array())
             $sender = $from['TITLE'];
         }
     }
-    // история сообщений — одна запись на отправку
-    if ($message != '') {
+    $chat = isset($options['chat']) ? preg_replace('/[^a-z0-9:_]/i', '', (string)$options['chat']) : '';
+    // копия в общий чат MajorDoMo (shouts) — только сообщение всем терминалам, одна запись на отправку,
+    // с именем отправителя в тексте (чат показывает автором имя компьютера)
+    if ($chat == 'all' || !empty($options['shout'])) {
+        $text = $message;
+        if ($text == '') {
+            if ($video != '') {
+                $text = terminalsLang('TERMINALS_VIDEO');
+            } elseif ($file != '') {
+                $text = terminalsLang('TERMINALS_FILE') . ': ' . $file_name;
+            } elseif ($sound != '' && $image == '') {
+                $text = terminalsLang('TERMINALS_VOICE_MESSAGE');
+            }
+        }
+        if ($sender != '') {
+            $text = $sender . ': ' . $text;
+        }
         $shout = array(
             // таблица shouts в utf8 (3 байта): эмодзи и другие 4-байтовые символы она не принимает
-            'MESSAGE' => preg_replace('/[\x{10000}-\x{10FFFF}]/u', '?', $message),
+            'MESSAGE' => preg_replace('/[\x{10000}-\x{10FFFF}]/u', '?', $text),
             'IMAGE' => $image,
             'ADDED' => date('Y-m-d H:i:s'),
             'ROOM_ID' => 0,
@@ -69,7 +87,6 @@ function terminalsSend($to, $message, $options = array())
         }
         SQLInsert('shouts', $shout);
     }
-    $chat = isset($options['chat']) ? preg_replace('/[^a-z0-9:_]/i', '', (string)$options['chat']) : '';
     $send_id = md5(uniqid('', true) . mt_rand());
     $sender_title = $sender;
     if ($sender != '' && !empty($options['chat_title'])) {

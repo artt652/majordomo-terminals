@@ -134,10 +134,31 @@ $group_members = function ($group) use ($all_terminals) {
     return $result;
 };
 
-// чаты этого терминала: key, type (all|room|group|term), title, members
+// пользователь MajorDoMo, вошедший на сайт с этого устройства: от его имени пишется в общий чат
+$user_id = (is_object($session) && !empty($session->data['SITE_USER_ID'])) ? (int)$session->data['SITE_USER_ID'] : 0;
+// имя компьютера — автор сообщений дома в общем чате (как в shoutbox)
+$computer_name = (defined('SETTINGS_GENERAL_ALICE_NAME') && SETTINGS_GENERAL_ALICE_NAME != '') ? SETTINGS_GENERAL_ALICE_NAME
+    : (defined('LANG_DEFAULT_COMPUTER_NAME') ? LANG_DEFAULT_COMPUTER_NAME : 'MajorDoMo');
+
+// чаты этого терминала: key, type (all|house|shoutroom|room|group|term), title, members;
+// readonly — писать нельзя (не выполнен вход), text_only — только текст
 $chats = array();
 if (count($all_terminals) > 1 || $me_name == '') {
     $chats[] = array('key' => 'all', 'type' => 'all', 'title' => terminalsLang('TERMINALS_ALL'), 'members' => array_keys($all_terminals));
+}
+// общий чат MajorDoMo (shoutbox): сообщение — команда дому, как из чата (say от пользователя),
+// ответ дома приходит сюда же и звучит на этом терминале
+$chats[] = array('key' => 'house', 'type' => 'house', 'title' => $computer_name, 'members' => array(),
+    'readonly' => ($user_id && $me_name != '') ? 0 : 1, 'text_only' => 1);
+// публичные комнаты чата MajorDoMo (shoutrooms): переписка людей, без команд и озвучки
+$shout_rooms = array();
+$has_rooms = SQLSelectOne("SHOW TABLES LIKE 'shoutrooms'");
+if (!empty($has_rooms)) {
+    $shout_rooms = SQLSelect("SELECT ID, TITLE FROM shoutrooms WHERE IS_PUBLIC=1 ORDER BY PRIORITY DESC, TITLE");
+}
+foreach ($shout_rooms as $room) {
+    $chats[] = array('key' => 'shout:' . $room['ID'], 'type' => 'shoutroom', 'title' => $room['TITLE'], 'members' => array(),
+        'readonly' => ($user_id && $me_name != '') ? 0 : 1, 'text_only' => 1);
 }
 // комнаты, к которым привязаны терминалы: участники — терминалы комнаты
 $rooms = SQLSelect("SELECT ID, TITLE FROM locations ORDER BY PRIORITY DESC, TITLE");
@@ -236,6 +257,30 @@ if ($this->mode == 'send_message' || gr('mode') == 'send_message') {
         $to = is_array($to) ? $to : (($to != '') ? array($to) : array());
     }
     $text = gr('message');
+    // общий чат и его комнаты: только текст, от пользователя, вошедшего на сайт
+    if (!empty($chat['key']) && ($chat['type'] == 'house' || $chat['type'] == 'shoutroom')) {
+        $sent = 0;
+        $text = trim((string)$text);
+        if ($text != '' && $user_id && $me_name != '') {
+            // shouts в utf8: 4-байтовые символы (эмодзи) таблица не принимает
+            $text = preg_replace('/[\x{10000}-\x{10FFFF}]/u', '?', $text);
+            if ($chat['type'] == 'house') {
+                // как shoutbox и command.php: отметить запрос терминала — по нему sayReply() находит,
+                // куда отвечать, — и отдать команду дому от пользователя (source terminalID)
+                $now = date('Y-m-d H:i:s');
+                $activity = array('ID' => (int)$me['ID'], 'LATEST_ACTIVITY' => $now, 'LATEST_REQUEST_TIME' => $now,
+                    'LATEST_REQUEST' => htmlspecialchars($text), 'IS_ONLINE' => 1);
+                SQLUpdate('terminals', $activity);
+                say(htmlspecialchars($text), 0, $user_id, 'terminal' . $me['ID']);
+            } else {
+                $shout = array('MESSAGE' => htmlspecialchars($text), 'IMAGE' => '', 'ADDED' => date('Y-m-d H:i:s'),
+                    'ROOM_ID' => (int)substr($chat['key'], 6), 'MEMBER_ID' => $user_id, 'SOURCE' => 'terminal' . $me['ID']);
+                SQLInsert('shouts', $shout);
+            }
+            $sent = 1;
+        }
+        $json_out(array('sent' => $sent, 'error' => $user_id ? '' : 'login'));
+    }
     $image = $save_upload('image', $image_ext, $max_media);
     if ($image == '') {
         // снимок с камеры (отдельный пункт меню)
@@ -308,6 +353,66 @@ if ($me_name != '') {
         );
     }
 }
+// общий чат MajorDoMo и публичные комнаты: последние записи shouts.
+// Свои — записанные с этого терминала (source terminalID) или его копии «всем» (source «terminal: Название»)
+$shout_rows = array();
+$shout_chats = array(0 => 'house');
+foreach ($shout_rooms as $room) {
+    $shout_chats[(int)$room['ID']] = 'shout:' . $room['ID'];
+}
+foreach ($shout_chats as $room_id => $chat_key) {
+    $rows = SQLSelect("SELECT shouts.*, users.NAME AS USER_NAME, users.COLOR AS USER_COLOR FROM shouts"
+        . " LEFT JOIN users ON shouts.MEMBER_ID=users.ID WHERE shouts.ROOM_ID=" . (int)$room_id . " ORDER BY shouts.ID DESC LIMIT 50");
+    foreach ($rows as $row) {
+        $source = (string)$row['SOURCE'];
+        $text = html_entity_decode((string)$row['MESSAGE'], ENT_QUOTES, 'UTF-8');
+        $author = ((int)$row['MEMBER_ID'] && $row['USER_NAME'] != '') ? $row['USER_NAME'] : $computer_name;
+        $color = ((int)$row['MEMBER_ID'] && trim((string)$row['USER_COLOR']) != '') ? trim($row['USER_COLOR']) : '';
+        // копия сообщения терминала «всем»: автор — терминал, имя из начала текста убираем
+        if (preg_match('/^terminal: (.+)$/u', $source, $m)) {
+            $author = $m[1];
+            if (strpos($text, $author . ': ') === 0) {
+                $text = substr($text, strlen($author . ': '));
+            }
+        } elseif (preg_match('/^terminal(\d+)$/', $source, $m) && (int)$row['MEMBER_ID']) {
+            // написано с терминала: «Пользователь (Терминал)»
+            foreach ($all_terminals as $t) {
+                if ((int)$t['ID'] == (int)$m[1]) {
+                    $author .= ' (' . $t['TITLE'] . ')';
+                }
+            }
+        }
+        $mine = !empty($me['ID']) && ($source == 'terminal' . $me['ID'] || $source == 'terminal: ' . $me['TITLE']);
+        $image = '';
+        if ($row['IMAGE'] != '') {
+            $path = (string)$row['IMAGE'];
+            if (strpos($path, ROOT) === 0) {
+                $path = substr($path, strlen(ROOT));
+            }
+            if (preg_match('/^https?:/i', $path)) {
+                $image = $path;
+            } elseif (file_exists(ROOT . ltrim($path, '/'))) {
+                $image = ROOTHTML . ltrim($path, '/');
+            }
+        }
+        $ts = strtotime($row['ADDED']);
+        $shout_rows[] = array(
+            'id' => (int)$row['ID'],
+            'chat' => $chat_key,
+            'incoming' => !$mine,
+            'other' => '',
+            'other_title' => $author,
+            'color' => $color,
+            'text' => $text,
+            'image' => $image,
+            'sound' => '', 'video' => '', 'file' => '', 'file_name' => '',
+            'time' => date('d.m H:i', $ts),
+            'ts' => $ts,
+        );
+    }
+}
+$conversation = array_merge($conversation, $shout_rows);
+
 if (gr('ajax') && gr('list')) {
     $json_out(array('messages' => $conversation, 'chats' => $chats));
 }

@@ -80,6 +80,8 @@
 	@keyframes tg-blink { 50% { opacity: .2; } }
 	.tg-rec-time { font-variant-numeric: tabular-nums; }
 	.tg-recording .tg-rec { display: flex; }
+	.tg-text-only #tm_attach, .tg-text-only #tm_voice { display: none; }
+	.tg-readonly { padding: 12px; text-align: center; font-size: 13px; color: var(--tg-muted); background: var(--tg-panel); border-top: 1px solid var(--tg-border); display: none; }
 	.tg-recording #tm_attach, .tg-recording #tm_text, .tg-recording #tm_voice { display: none; }
 	.tg-status { font-size: 12px; color: var(--tg-muted); padding: 2px 12px; background: var(--tg-panel); }
 	.tg-status:empty { display: none; }
@@ -159,7 +161,8 @@
 
 			<div class="tg-files" id="tm_files"></div>
 			<div class="tg-status" id="tm_status"></div>
-			<div class="tg-compose">
+			<div class="tg-readonly" id="tm_readonly"><#LANG_TERMINALS_LOGIN_TO_WRITE#></div>
+			<div class="tg-compose" id="tm_compose">
 				<div class="tg-menu" id="tm_menu">
 					<label>🖼 <#LANG_TERMINALS_PHOTO#><input type="file" name="image" accept="image/*" style="display:none"></label>
 					<label>📷 <#LANG_TERMINALS_CAMERA#><input type="file" name="image_camera" accept="image/*" capture="environment" style="display:none"></label>
@@ -218,7 +221,8 @@
 		chooseThis: '<#LANG_TERMINALS_CHOOSE_THIS#>', sending: '<#LANG_TERMINALS_SENDING#>', notSent: '<#LANG_TERMINALS_NOT_SENT#>',
 		sendError: '<#LANG_TERMINALS_SEND_ERROR#>', file: '<#LANG_TERMINALS_FILE#>', video: '<#LANG_TERMINALS_VIDEO#>', send: '<#LANG_TERMINALS_SEND#>',
 		record: '<#LANG_TERMINALS_RECORD_VOICE#>', tooBig: '<#LANG_TERMINALS_FILE_TOO_BIG#>', badType: '<#LANG_TERMINALS_FILE_TYPE#>',
-		uploadError: '<#LANG_TERMINALS_UPLOAD_ERROR#>', micHttps: '<#LANG_TERMINALS_MIC_HTTPS#>', micDenied: '<#LANG_TERMINALS_MIC_DENIED#>'
+		uploadError: '<#LANG_TERMINALS_UPLOAD_ERROR#>', houseSub: '<#LANG_TERMINALS_HOUSE_CHAT#>',
+		shoutroomSub: '<#LANG_TERMINALS_SHOUTROOM#>', login: '<#LANG_TERMINALS_LOGIN_TO_WRITE#>', micHttps: '<#LANG_TERMINALS_MIC_HTTPS#>', micDenied: '<#LANG_TERMINALS_MIC_DENIED#>'
 	};
 	var tmMaxMedia = parseFloat('[#MAX_MEDIA_MB#]') || 15, tmMaxFile = parseFloat('[#MAX_FILE_MB#]') || 50;
 
@@ -271,7 +275,7 @@
 		return tmColors[h % tmColors.length];
 	}
 	function tmAvatar(el, chat) {
-		var icons = {all: '📢', room: '🏠', group: '👥'};
+		var icons = {all: '📢', room: '🏠', group: '👥', house: '💬', shoutroom: '🗨️'};
 		el.textContent = icons[chat.type] || (chat.title || '?').trim().charAt(0).toUpperCase();
 		el.style.background = tmColor(chat.key);
 	}
@@ -307,10 +311,12 @@
 		var box = document.getElementById('tm_chats');
 		var q = document.getElementById('tm_search').value.trim().toLowerCase();
 		var last = {};
-		tmConversation.forEach(function (m) { if (!last[m.chat] || m.id > last[m.chat].id) last[m.chat] = m; });
+		// последнее сообщение чата — по времени, внутри секунды — по номеру
+		function later(a, b) { return (a.ts || 0) != (b.ts || 0) ? (a.ts || 0) > (b.ts || 0) : a.id > b.id; }
+		tmConversation.forEach(function (m) { if (!last[m.chat] || later(m, last[m.chat])) last[m.chat] = m; });
 		var list = tmChats.map(function (c, i) { return {chat: c, last: last[c.key], order: i}; });
 		list.sort(function (a, b) {
-			if (a.last && b.last) return b.last.id - a.last.id;
+			if (a.last && b.last) return later(a.last, b.last) ? -1 : 1;
 			if (a.last || b.last) return a.last ? -1 : 1;
 			return a.order - b.order;
 		});
@@ -362,6 +368,8 @@
 
 	function tmMembersText(chat) {
 		if (chat.type == 'term') return chat.members[0] == chat.title ? '' : chat.members[0];
+		if (chat.type == 'house') return tmText.houseSub;
+		if (chat.type == 'shoutroom') return tmText.shoutroomSub;
 		var me = tmMe();
 		return chat.members.filter(function (n) { return n != me; }).map(tmTitle).join(', ');
 	}
@@ -378,7 +386,14 @@
 		tmAvatar(document.getElementById('tm_chat_avatar'), chat);
 		document.getElementById('tm_chat_title').textContent = chat.title;
 		var sub = tmMembersText(chat);
-		document.getElementById('tm_chat_sub').textContent = (chat.type == 'term' || !sub) ? sub : tmText.members + ': ' + sub;
+		var plain = (chat.type == 'term' || chat.type == 'house' || chat.type == 'shoutroom' || !sub);
+		document.getElementById('tm_chat_sub').textContent = plain ? sub : tmText.members + ': ' + sub;
+		// общий чат MajorDoMo: только текст; без входа на сайт — только чтение
+		document.getElementById('tm_compose').classList.toggle('tg-text-only', !!chat.text_only);
+		document.getElementById('tm_compose').style.display = chat.readonly ? 'none' : '';
+		document.getElementById('tm_readonly').style.display = chat.readonly ? 'block' : 'none';
+		if (chat.text_only && tmRec) tmRecStop(null);
+		tmSendIcon();
 		document.getElementById('tm_edit_group').style.display = (chat.type == 'group' && tmMe()) ? '' : 'none';
 		document.getElementById('tm_status').textContent = '';
 		tmRender(true);
@@ -437,7 +452,11 @@
 
 	// кнопка справа: «Отправить», когда есть текст, вложение или идёт запись; иначе — микрофон (голосовое)
 	var tmSendBtn = document.getElementById('tm_send');
-	function tmMicMode() { return !tmRec && !tmInput.value.trim() && !tmHasFiles(); }
+	function tmMicMode() {
+		var chat = tmChat(tmCurrent);
+		if (chat && chat.text_only) return false;
+		return !tmRec && !tmInput.value.trim() && !tmHasFiles();
+	}
 	function tmSendIcon() {
 		var mic = tmMicMode();
 		tmSendBtn.title = mic ? tmText.record : tmText.send;
@@ -544,10 +563,10 @@
 			if (m.incoming && chat.type != 'term') {
 				var who = document.createElement('div');
 				who.className = 'tg-from';
-				who.style.color = tmColor('term:' + m.other);
+				who.style.color = m.color || tmColor('term:' + (m.other || m.other_title));
 				who.textContent = m.other_title;
-				// имя отправителя — открыть личный чат с ним
-				who.addEventListener('click', function () { if (tmChat('term:' + m.other)) tmOpen('term:' + m.other); });
+				// имя отправителя-терминала — открыть личный чат с ним
+				who.addEventListener('click', function () { if (m.other && tmChat('term:' + m.other)) tmOpen('term:' + m.other); });
 				div.appendChild(who);
 			}
 			if (m.image) {
@@ -672,6 +691,14 @@
 					tmInputs().forEach(function (input) { input.value = ''; });
 					tmFiles();
 					tmRefresh(function () { tmOpen(tmCurrent); });
+					// общий чат: ответ дома приходит не сразу — проверить ещё пару раз
+					var sentChat = tmChat(tmCurrent);
+					if (sentChat && sentChat.type == 'house') {
+						setTimeout(tmRefresh, 2000);
+						setTimeout(tmRefresh, 6000);
+					}
+				} else if (res.error == 'login') {
+					status.textContent = tmText.login;
 				}
 			})
 			.catch(function () { status.textContent = tmText.sendError; })
@@ -797,7 +824,9 @@
 	}
 	setInterval(function () {
 		var now = Date.now();
-		if (now - tmLastPoll >= (tmWsOpen ? 60000 : 15000)) { tmLastPoll = now; tmRefresh(); }
+		// общий чат MajorDoMo в вебсокет не пишет: пока он открыт — опрос раз в 5 с
+		var open = tmChat(tmCurrent), house = open && (open.type == 'house' || open.type == 'shoutroom');
+		if (now - tmLastPoll >= (house ? 5000 : (tmWsOpen ? 60000 : 15000))) { tmLastPoll = now; tmRefresh(); }
 	}, 5000);
 	tmWebSocket();
 </script>
