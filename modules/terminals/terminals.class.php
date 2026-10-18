@@ -237,7 +237,8 @@ class terminals extends module
         }
     }
 
-    function terminalSay($terminal_rec, $message, $level, $image = '', $sender = '')
+    // $message_id — номер сообщения страницы «Сообщения» (terminals_messages): отметка «доставлено»
+    function terminalSay($terminal_rec, $message, $level, $image = '', $sender = '', $message_id = 0)
     {
         $asking = 0;
         if ($level === 'ask') {
@@ -252,7 +253,7 @@ class terminals extends module
             return false;
         }
         if (terminalsQueueUsed(terminalsQueueAddon($terminal_rec))) {
-            return terminalsQueueAdd($terminal_rec, $asking ? 'ask' : 'say', $message, $level, '', $image, $sender);
+            return terminalsQueueAdd($terminal_rec, $asking ? 'ask' : 'say', $message, $level, '', $image, $sender, $message_id);
         }
         DebMes("Saying to " . $terminal_rec['TITLE'] . ' (level ' . $level . '): ' . $message, 'terminals');
         include_once DIR_MODULES . 'terminals/tts_addon.class.php';
@@ -267,6 +268,10 @@ class terminals extends module
                 $result = $tts->ask($message, $level);
             } else {
                 $result = $tts->say($message, $level);
+            }
+            // дополнение без очереди приняло сообщение — доставлено
+            if ($message_id && $result !== false && function_exists('terminalsMessagesDelivered')) {
+                terminalsMessagesDelivered($message_id);
             }
         } else {
             DebMes("Could not find $addon_file", 'terminals');
@@ -307,7 +312,8 @@ class terminals extends module
             }
             // картинка и отправитель — от terminalsSend()
             $this->terminalSay($terminal_rec, $details['message'], $details['level'],
-                isset($details['image']) ? (string)$details['image'] : '', isset($details['from']) ? (string)$details['from'] : '');
+                isset($details['image']) ? (string)$details['image'] : '', isset($details['from']) ? (string)$details['from'] : '',
+                isset($details['message_id']) ? (int)$details['message_id'] : 0);
         } elseif ($event == 'SAY_CACHED_READY') {
             $filename = $details['filename'];
             if (!file_exists($filename)) return false;
@@ -484,6 +490,7 @@ class terminals extends module
  terminals_queue: FILENAME varchar(255) NOT NULL DEFAULT ''
  terminals_queue: IMAGE varchar(255) NOT NULL DEFAULT ''
  terminals_queue: SENDER varchar(255) NOT NULL DEFAULT ''
+ terminals_queue: MESSAGE_IDS varchar(255) NOT NULL DEFAULT ''
  terminals_queue: ADDED int(10) NOT NULL DEFAULT '0'
  terminals_queue: STARTED int(10) NOT NULL DEFAULT '0'
  terminals_queue: FINISH int(10) NOT NULL DEFAULT '0'
@@ -507,6 +514,8 @@ class terminals extends module
  terminals_messages: FILE_NAME varchar(255) NOT NULL DEFAULT ''
  terminals_messages: CHAT varchar(50) NOT NULL DEFAULT ''
  terminals_messages: SEND_ID varchar(32) NOT NULL DEFAULT ''
+ terminals_messages: DELIVERED int(10) NOT NULL DEFAULT '0'
+ terminals_messages: READ_AT int(10) NOT NULL DEFAULT '0'
  terminals_messages: INDEX (TO_NAME)
 
  terminals_colors: ID int(10) unsigned NOT NULL auto_increment
@@ -516,6 +525,7 @@ class terminals extends module
  terminals_groups: ID int(10) unsigned NOT NULL auto_increment
  terminals_groups: TITLE varchar(255) NOT NULL DEFAULT ''
  terminals_groups: MEMBERS text
+ terminals_groups: NOTE text
  terminals_groups: ADDED int(10) NOT NULL DEFAULT '0'
 EOD;
         parent::dbInstall($data);

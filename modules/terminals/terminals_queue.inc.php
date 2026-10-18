@@ -44,14 +44,17 @@ function terminalsQueueUsed($tts)
     return is_object($tts) && method_exists($tts, 'useQueue') && $tts->useQueue();
 }
 
-// $kind: say, ask, cached (голос фразы), sound (звуковой файл — terminalsSend); $sender — от кого (заголовок окна)
-function terminalsQueueAdd($terminal_rec, $kind, $message, $level, $file, $image = '', $sender = '')
+// $kind: say, ask, cached (голос фразы), sound (звуковой файл — terminalsSend); $sender — от кого (заголовок окна);
+// $message_ids — номера сообщений страницы «Сообщения» (через запятую): когда запись отдана устройству — «доставлено»
+function terminalsQueueAdd($terminal_rec, $kind, $message, $level, $file, $image = '', $sender = '', $message_ids = '')
 {
+    $message_ids = implode(',', array_filter(array_map('intval', explode(',', (string)$message_ids))));
     $tid = isset($terminal_rec['ID']) ? (int)$terminal_rec['ID'] : 0;
     $urgent = ($kind == 'ask' || (int)$level >= terminals::QUEUE_URGENT_LEVEL);
     if (!$tid || !terminalsQueueLock($tid)) {
         // без ID или очередь занята другим процессом слишком долго — не теряем сообщение
         $played = terminalsQueuePlay($terminal_rec, $kind, $message, $level, $file, $image, $sender);
+        terminalsQueueDelivered($played[0], $message_ids);
         return $played[0];
     }
     $now = time();
@@ -68,7 +71,15 @@ function terminalsQueueAdd($terminal_rec, $kind, $message, $level, $file, $image
         $busy = true;
     }
 
+    if (!empty($current['ID']) && $current['MESSAGE'] === $key) {
+        // голос фразы, которая уже отдана устройству, — к тому же сообщению
+        if ($message_ids == '' && !empty($current['MESSAGE_IDS'])) {
+            $message_ids = (string)$current['MESSAGE_IDS'];
+        }
+    }
     if ($busy && $current['MESSAGE'] === $key) {
+        // та же фраза уже звучит — это сообщение тоже доставлено
+        terminalsQueueDelivered(true, $message_ids);
         if ($kind == 'cached' && $current['FILENAME'] == '') {
             // голос фразы, текст которой уже показан: звучит сразу, терминал занят дольше
             // (с картинкой этой фразы, если она была)
@@ -95,6 +106,7 @@ function terminalsQueueAdd($terminal_rec, $kind, $message, $level, $file, $image
         if ($sender == '') {
             $sender = (string)$waiting['SENDER'];
         }
+        $message_ids = terminalsQueueIds($waiting['MESSAGE_IDS'], $message_ids);
         SQLExec("DELETE FROM terminals_queue WHERE ID=" . (int)$waiting['ID']);
         $waiting = array();
     }
@@ -113,6 +125,11 @@ function terminalsQueueAdd($terminal_rec, $kind, $message, $level, $file, $image
             $waiting['SENDER'] = $sender;
             $changed = true;
         }
+        $ids = terminalsQueueIds($waiting['MESSAGE_IDS'], $message_ids);
+        if ($ids != $waiting['MESSAGE_IDS']) {
+            $waiting['MESSAGE_IDS'] = $ids;
+            $changed = true;
+        }
         if ($changed) {
             SQLUpdate('terminals_queue', $waiting);
         }
@@ -128,6 +145,7 @@ function terminalsQueueAdd($terminal_rec, $kind, $message, $level, $file, $image
         'FILENAME' => (string)$file,
         'IMAGE' => (string)$image,
         'SENDER' => (string)$sender,
+        'MESSAGE_IDS' => $message_ids,
         'ADDED' => $now,
         'STARTED' => 0,
         'FINISH' => 0,
@@ -160,6 +178,7 @@ function terminalsQueueAdd($terminal_rec, $kind, $message, $level, $file, $image
         }
         $rec['STARTED'] = $now;
         $played = terminalsQueuePlay($terminal_rec, $kind, $message, $level, $file, $image, $sender);
+        terminalsQueueDelivered($played[0], $message_ids);
         $rec['FINISH'] = $now + $played[1];
         SQLInsert('terminals_queue', $rec);
         $result = $played[0];
@@ -218,6 +237,7 @@ function terminalsQueueNext($tid, $check = 0)
         $now = time();
         $message = json_decode($next['MESSAGE'], true);
         $played = terminalsQueuePlay($terminal_rec, $next['KIND'], is_string($message) ? $message : '', (int)$next['LEVEL'], $next['FILENAME'], (string)$next['IMAGE'], (string)$next['SENDER']);
+        terminalsQueueDelivered($played[0], isset($next['MESSAGE_IDS']) ? $next['MESSAGE_IDS'] : '');
         $next['STARTED'] = $now;
         $next['FINISH'] = $now + $played[1];
         SQLUpdate('terminals_queue', $next);
@@ -232,6 +252,21 @@ function terminalsQueueNext($tid, $check = 0)
     // очередь пуста — вернуть то, что играло до сообщений
     terminalsQueueRestoreState($terminal_rec);
     terminalsQueueUnlock($tid);
+}
+
+// Объединить списки номеров сообщений («1,2» + «3» = «1,2,3»)
+function terminalsQueueIds($a, $b)
+{
+    $ids = array_unique(array_filter(array_map('intval', array_merge(explode(',', (string)$a), explode(',', (string)$b)))));
+    return substr(implode(',', $ids), 0, 255);
+}
+
+// Дополнение приняло запись очереди — её сообщения страницы «Сообщения» доставлены
+function terminalsQueueDelivered($played, $message_ids)
+{
+    if ($played && $message_ids != '' && function_exists('terminalsMessagesDelivered')) {
+        terminalsMessagesDelivered($message_ids);
+    }
 }
 
 // Отдать сообщение дополнению TTS. Возвращает [результат дополнения, сколько секунд терминал занят].

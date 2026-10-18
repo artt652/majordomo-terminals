@@ -74,7 +74,7 @@
 	.tg-caps span { font-size: 12px; background: rgba(127,127,127,.15); border-radius: 10px; padding: 2px 9px; }
 	.tg-note { font-size: 13px; color: var(--tg-muted); padding: 2px 0 6px; }
 	.tg-palette { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 0 8px; }
-	.tg-palette button { width: 26px; height: 26px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; color: var(--tg-muted); background: none; font-size: 15px; }
+	.tg-palette button { width: 24px; height: 24px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; color: var(--tg-muted); background: none; font-size: 15px; }
 	.tg-palette button.tg-sel { border-color: var(--tg-text); }
 	.tg-info .tg-member { padding: 5px 0; }
 	.tg-list { flex: 1; overflow-y: auto; padding: 10px 10px 4px; display: flex; flex-direction: column; gap: 4px; }
@@ -87,6 +87,12 @@
 	.tg-msg img { display: block; max-width: 100%; max-height: 320px; border-radius: 8px; margin: 2px 0 4px; cursor: pointer; }
 	.tg-msg video { display: block; max-width: 100%; max-height: 360px; border-radius: 8px; margin: 2px 0 4px; background: #000; }
 	.tg-msg audio { display: block; width: 240px; max-width: 100%; margin: 2px 0 4px; }
+	.tg-ticks { display: inline-block; vertical-align: -1px; margin-left: 3px; color: var(--tg-time); }
+	.tg-ticks.tg-read { color: var(--tg-accent); }
+	.tg-chat.tg-active .tg-ticks { color: rgba(255,255,255,.85); }
+	.tg-note-text { white-space: pre-wrap; word-break: break-word; font-size: 14px; padding: 2px 0 8px; }
+	.tg-dialog textarea { width: 100%; border: 1px solid var(--tg-border); border-radius: 8px; background: transparent; color: var(--tg-text);
+		padding: 6px 8px; font-size: 14px; resize: vertical; min-height: 54px; outline: none; }
 	.tg-time { float: right; font-size: 11px; color: var(--tg-time); margin: 6px 0 0 10px; white-space: nowrap; }
 	.tg-day { align-self: center; font-size: 12px; color: #fff; background: rgba(0,0,0,.25); padding: 2px 10px; border-radius: 10px; margin: 6px 0; }
 	.tg-files { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px; background: var(--tg-panel); }
@@ -240,6 +246,7 @@
 		<div class="tg-dialog">
 			<h3 id="tm_modal_title"><#LANG_TERMINALS_NEW_GROUP#></h3>
 			<div class="tg-field"><input type="text" id="tm_group_title" placeholder="<#LANG_TERMINALS_GROUP_NAME#>" maxlength="100"></div>
+			<div class="tg-field"><textarea id="tm_group_note" rows="2" maxlength="1000" placeholder="<#LANG_TERMINALS_GROUP_NOTE#>"></textarea></div>
 			<div class="tg-label"><#LANG_TERMINALS_GROUP_MEMBERS#></div>
 			<div class="tg-members" id="tm_group_members"></div>
 			<div class="tg-hint"><#LANG_TERMINALS_GROUP_HINT#></div>
@@ -278,7 +285,10 @@
 		settings: '<#LANG_TERMINALS_SETTINGS#>', color: '<#LANG_TERMINALS_AVATAR_COLOR#>', resetColor: '<#LANG_TERMINALS_COLOR_DEFAULT#>',
 		loggedAs: '<#LANG_TERMINALS_LOGGED_AS#>', notLogged: '<#LANG_TERMINALS_NOT_LOGGED#>', loading: '<#LANG_TERMINALS_LOADING#>',
 		thisTerminal: '<#LANG_TERMINALS_THIS_TERMINAL#>', wsOn: '<#LANG_TERMINALS_WS_ON#>', wsOff: '<#LANG_TERMINALS_WS_OFF#>',
-		wsWait: '<#LANG_TERMINALS_WS_WAIT#>', wsNone: '<#LANG_TERMINALS_WS_NONE#>',
+		wsWait: '<#LANG_TERMINALS_WS_WAIT#>', stSent: '<#LANG_TERMINALS_ST_SENT#>', stDelivered: '<#LANG_TERMINALS_ST_DELIVERED#>',
+		stRead: '<#LANG_TERMINALS_ST_READ#>', groupNote: '<#LANG_TERMINALS_GROUP_NOTE#>', created: '<#LANG_TERMINALS_CREATED#>',
+		descAll: '<#LANG_TERMINALS_DESC_ALL#>', descRoom: '<#LANG_TERMINALS_DESC_ROOM#>', descGroup: '<#LANG_TERMINALS_DESC_GROUP#>',
+		descHouse: '<#LANG_TERMINALS_DESC_HOUSE#>', descShoutroom: '<#LANG_TERMINALS_DESC_SHOUTROOM#>', wsNone: '<#LANG_TERMINALS_WS_NONE#>',
 		shoutroomSub: '<#LANG_TERMINALS_SHOUTROOM#>', login: '<#LANG_TERMINALS_LOGIN_TO_WRITE#>', micHttps: '<#LANG_TERMINALS_MIC_HTTPS#>', micDenied: '<#LANG_TERMINALS_MIC_DENIED#>'
 	};
 	var tmMaxMedia = parseFloat('[#MAX_MEDIA_MB#]') || 15, tmMaxFile = parseFloat('[#MAX_FILE_MB#]') || 50;
@@ -364,15 +374,49 @@
 		if (chat.type != 'term') return m.other_title + ': ' + text;
 		return text;
 	}
+	// непрочитанные: переписка терминалов — по отметке сервера (видна на всех устройствах),
+	// общий чат и его комнаты — по последнему просмотренному в этом браузере
+	function tmShoutChat(key) { return key == 'house' || key.indexOf('shout:') === 0; }
 	function tmUnread(key) {
-		var read = parseInt(tmStore('read_' + tmMe() + '_' + key) || '0', 10), n = 0;
-		tmConversation.forEach(function (m) { if (m.chat == key && m.incoming && m.id > read) n++; });
+		var read = parseInt(tmStore('read_' + tmMe() + '_' + key) || '0', 10), n = 0, shout = tmShoutChat(key);
+		tmConversation.forEach(function (m) {
+			if (m.chat == key && m.incoming && (shout ? m.id > read : !m.read)) n++;
+		});
 		return n;
 	}
+	// чат открыт и виден на экране — отметить прочитанным (на сервере — для галочек отправителя)
+	var tmReadPending = {};
 	function tmMarkRead(key) {
-		var max = 0;
-		tmConversation.forEach(function (m) { if (m.chat == key && m.id > max) max = m.id; });
-		if (max) tmStore('read_' + tmMe() + '_' + key, String(max));
+		if (document.visibilityState && document.visibilityState != 'visible') return;
+		if (window.matchMedia && window.matchMedia('(max-width: 720px)').matches && !tmApp.classList.contains('tg-open')) return;
+		if (tmShoutChat(key)) {
+			var max = 0;
+			tmConversation.forEach(function (m) { if (m.chat == key && m.id > max) max = m.id; });
+			if (max) tmStore('read_' + tmMe() + '_' + key, String(max));
+			return;
+		}
+		var unread = tmConversation.filter(function (m) { return m.chat == key && m.incoming && !m.read; });
+		if (!unread.length || tmReadPending[key] || !tmMe()) return;
+		tmReadPending[key] = true;
+		tmGroupPost({mode: 'mark_read', chat: key}, function () {
+			unread.forEach(function (m) { m.read = 1; });
+			tmReadPending[key] = false;
+			tmRenderChats();
+		});
+		setTimeout(function () { tmReadPending[key] = false; }, 5000);
+	}
+	document.addEventListener('visibilitychange', function () {
+		if (document.visibilityState == 'visible' && tmCurrent) { tmMarkRead(tmCurrent); tmRefresh(); }
+	});
+	// галочки отправленного: ✓ отправлено, ✓✓ доставлено, синие ✓✓ — прочитано
+	function tmTicks(status) {
+		var span = document.createElement('span');
+		span.className = 'tg-ticks' + (status >= 3 ? ' tg-read' : '');
+		span.title = [tmText.stSent, tmText.stSent, tmText.stDelivered, tmText.stRead][status] || '';
+		span.innerHTML = status >= 2
+			? '<svg width="17" height="11" viewBox="0 0 17 11" aria-hidden="true"><path d="M1 5.5l3.2 3.2L11 1.8M7.2 8.2l.6.5L14.8 1.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+			: '<svg width="12" height="11" viewBox="0 0 12 11" aria-hidden="true"><path d="M1.2 5.5l3.2 3.2L10.8 1.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+		return span;
 	}
 
 	// список чатов: с перепиской — по последнему сообщению, остальные — в исходном порядке
@@ -410,7 +454,8 @@
 			if (item.last) {
 				var time = document.createElement('div');
 				time.className = 'tg-chat-time';
-				time.textContent = (item.last.time || '').split(' ')[1] || '';
+				if (!item.last.incoming && item.last.status) time.appendChild(tmTicks(item.last.status));
+				time.appendChild(document.createTextNode(' ' + ((item.last.time || '').split(' ')[1] || '')));
 				top.appendChild(time);
 			}
 			body.appendChild(top);
@@ -692,6 +737,7 @@
 			var t = document.createElement('span');
 			t.className = 'tg-time';
 			t.textContent = (m.time || '').split(' ')[1] || '';
+			if (!m.incoming && m.status) t.appendChild(tmTicks(m.status));
 			div.appendChild(t);
 			if (m.text) {
 				div.appendChild(document.createTextNode(m.text));
@@ -791,6 +837,7 @@
 		tmEditing = chat;
 		document.getElementById('tm_modal_title').textContent = chat ? tmText.editGroup : tmText.newGroup;
 		document.getElementById('tm_group_title').value = chat ? chat.title : '';
+		document.getElementById('tm_group_note').value = chat ? (chat.note || '') : '';
 		document.getElementById('tm_group_delete').style.display = chat ? '' : 'none';
 		var box = document.getElementById('tm_group_members');
 		box.innerHTML = '';
@@ -839,7 +886,7 @@
 		if (!title) { document.getElementById('tm_group_title').focus(); return; }
 		if (!members.length) return;
 		var id = tmEditing ? tmEditing.key.split(':')[1] : '';
-		tmGroupPost({mode: 'group_save', id: id, title: title, 'members[]': members}, function (res) {
+		tmGroupPost({mode: 'group_save', id: id, title: title, note: document.getElementById('tm_group_note').value, 'members[]': members}, function (res) {
 			if (!res.ok) return;
 			tmGroupClose();
 			tmRefresh(function () { tmOpen(res.key); });
@@ -975,10 +1022,20 @@
 		} else if (chat.type == 'house' || chat.type == 'shoutroom') {
 			status.textContent = chat.type == 'house' ? tmText.houseSub : tmText.shoutroomSub;
 			var sec = tmInfoSection('');
+			sec.appendChild(tmEl('div', 'tg-note-text', chat.type == 'house' ? tmText.descHouse : tmText.descShoutroom));
+			if (chat.type == 'shoutroom' && (chat.created_by || chat.created)) {
+				sec.appendChild(tmEl('div', 'tg-note', tmText.created + ': ' + [chat.created_by, chat.created].filter(Boolean).join(', ')));
+			}
 			sec.appendChild(tmEl('div', 'tg-note', tmUserName ? tmText.loggedAs.replace('%s', tmUserName) : tmText.notLogged));
 			tmInfoPalette(key);
 		} else {
 			status.textContent = tmText.members + ': ' + chat.members.length;
+			// своя заметка группы и что это за чат
+			if (chat.type == 'group' && chat.note) {
+				tmInfoSection(tmText.groupNote).appendChild(tmEl('div', 'tg-note-text', chat.note));
+			}
+			var desc = {all: tmText.descAll, room: tmText.descRoom, group: tmText.descGroup}[chat.type];
+			if (desc) tmInfoSection('').appendChild(tmEl('div', 'tg-note', desc));
 			tmInfoMembers(tmInfoSection(tmText.members), chat.members);
 			if (chat.type == 'group' && me) {
 				var edit = tmEl('button', 'tg-btn', tmText.editGroup);
@@ -1027,7 +1084,7 @@
 			var v = d && d.EVENT_DATA ? d.EVENT_DATA.VALUE : null;
 			if (typeof v == 'string') { try { v = JSON.parse(v); } catch (e) { v = null; } }
 			var me = tmMe();
-			if (d && d.EVENT_DATA && d.EVENT_DATA.NAME == 'TERMINAL_MESSAGE' && (!v || v.TO == me || v.FROM == me)) {
+			if (d && d.EVENT_DATA && d.EVENT_DATA.NAME == 'TERMINAL_MESSAGE' && (!v || v.FROM == me || (Array.isArray(v.TO) ? v.TO.indexOf(me) >= 0 : v.TO == me))) {
 				tmRefresh();
 			}
 		};

@@ -93,12 +93,33 @@ function terminalsSend($to, $message, $options = array())
         $sender_title = $sender . ' · ' . trim((string)$options['chat_title']);
     }
     $sent = 0;
+    $recipients = array();
+    $from_name = (isset($from['NAME']) && !empty($from['ID'])) ? $from['NAME'] : $sender;
     foreach ((array)$to as $destination) {
         $terminal_rec = terminalsFind($destination);
         if (empty($terminal_rec['ID'])) {
             DebMes('terminalsSend: terminal not found: ' . $destination, 'terminals');
             continue;
         }
+        // переписка терминалов (страница «Сообщения»): сначала запись — её номер идёт с сообщением
+        // до устройства, по нему ставится «доставлено». Текст хранится в JSON, чтобы не терять эмодзи
+        $rec = array(
+            'FROM_NAME' => $from_name,
+            'TO_NAME' => $terminal_rec['NAME'],
+            'MESSAGE' => json_encode($message),
+            'IMAGE' => $image,
+            'SOUND' => $sound,
+            'FILE' => $file,
+            'VIDEO' => $video,
+            'FILE_NAME' => $file_name,
+            'ADDED' => time(),
+            'CHAT' => $chat,
+            'SEND_ID' => $send_id,
+        );
+        $rec['ID'] = SQLInsert('terminals_messages', $rec);
+        $message_id = (int)$rec['ID'];
+        $recipients[] = $terminal_rec['NAME'];
+        $sent++;
         // терминал без «Может проговаривать» (например, только браузер со страницей «Сообщения»)
         // получает сообщение только в переписку — на его страницу, без доставки дополнению TTS
         $speaks = $terminal_rec['CANTTS'] && $terminal_rec['TTS_TYPE'] != '';
@@ -109,9 +130,9 @@ function terminalsSend($to, $message, $options = array())
         // звук перед сообщением
         if ($sound != '' && is_object($tts) && method_exists($tts, 'playFile')) {
             if (terminalsQueueUsed($tts)) {
-                terminalsQueueAdd($terminal_rec, 'sound', '', $level, $sound, '', $sender_title);
-            } else {
-                $tts->playFile($sound, $level, $sender_title);
+                terminalsQueueAdd($terminal_rec, 'sound', '', $level, $sound, '', $sender_title, $message_id);
+            } elseif ($tts->playFile($sound, $level, $sender_title)) {
+                terminalsMessagesDelivered($message_id);
             }
         }
         // видео: окно видео на устройстве, если дополнение умеет (pipup: sendVideo по ссылке, со звуком).
@@ -127,6 +148,9 @@ function terminalsSend($to, $message, $options = array())
                 }
             }
             $video_shown = $url && (bool)$tts->sendVideo($url, '', $sender_title, 'video', array('muted' => false, 'duration' => $duration));
+            if ($video_shown) {
+                terminalsMessagesDelivered($message_id);
+            }
         }
         // только файл или видео, которое устройство не покажет: на устройство — текст без озвучки
         // («Файл: имя», «Видео»), сам файл — на странице «Сообщения»
@@ -134,42 +158,55 @@ function terminalsSend($to, $message, $options = array())
             include_once(DIR_MODULES . 'terminals/terminals.class.php');
             $terminals = new terminals();
             $label = ($file != '') ? terminalsLang('TERMINALS_FILE') . ': ' . $file_name : terminalsLang('TERMINALS_VIDEO');
-            $terminals->terminalSay($terminal_rec, $label, $level, '', $sender_title);
+            $terminals->terminalSay($terminal_rec, $label, $level, '', $sender_title, $message_id);
         }
         if ($speaks && ($message != '' || $image != '')) {
             if ($voice && $message != '') {
                 // как sayTo(): терминалы и генераторы речи получают событие SAYTO
                 processSubscriptionsSafe('SAYTO', array('level' => $level, 'message' => $message,
-                    'destination' => $terminal_rec['NAME'], 'image' => $image, 'from' => $sender_title));
+                    'destination' => $terminal_rec['NAME'], 'image' => $image, 'from' => $sender_title, 'message_id' => $message_id));
             } else {
                 include_once(DIR_MODULES . 'terminals/terminals.class.php');
                 $terminals = new terminals();
-                $terminals->terminalSay($terminal_rec, $message, $level, $image, $sender_title);
+                $terminals->terminalSay($terminal_rec, $message, $level, $image, $sender_title, $message_id);
             }
         }
-        // переписка терминалов (страница «Сообщения»): текст хранится в JSON, чтобы не терять эмодзи
-        $rec = array(
-            'FROM_NAME' => isset($from['NAME']) && !empty($from['ID']) ? $from['NAME'] : $sender,
-            'TO_NAME' => $terminal_rec['NAME'],
-            'MESSAGE' => json_encode($message),
-            'IMAGE' => $image,
-            'SOUND' => $sound,
-            'FILE' => $file,
-            'VIDEO' => $video,
-            'FILE_NAME' => $file_name,
-            'ADDED' => time(),
-            'CHAT' => $chat,
-            'SEND_ID' => $send_id,
-        );
-        $rec['ID'] = SQLInsert('terminals_messages', $rec);
-        // открытые страницы «Сообщения» получают событие через вебсокет и сразу обновляют переписку
-        if (function_exists('postToWebSocketQueue')) {
-            postToWebSocketQueue('TERMINAL_MESSAGE', json_encode(array('ID' => (int)$rec['ID'],
-                'FROM' => $rec['FROM_NAME'], 'TO' => $rec['TO_NAME'])), 'PostEvent');
-        }
-        $sent++;
+    }
+    // открытые страницы «Сообщения» получают одно событие на отправку (кэш вебсокета хранит
+    // только последнее событие с этим именем) и сразу обновляют переписку
+    if (count($recipients)) {
+        terminalsMessagesNotify($from_name, $recipients);
     }
     return $sent;
+}
+
+// Событие вебсокета TERMINAL_MESSAGE для страниц «Сообщения»: FROM — кто, TO — список, кого касается
+function terminalsMessagesNotify($from, $to)
+{
+    if (function_exists('postToWebSocketQueue')) {
+        postToWebSocketQueue('TERMINAL_MESSAGE', json_encode(array('FROM' => (string)$from, 'TO' => array_values(array_unique((array)$to)),
+            'TIME' => time())), 'PostEvent');
+    }
+}
+
+// Сообщения доставлены (дополнение устройства приняло их или страница получателя загрузила):
+// $ids — номер или список через запятую. Отправители узнают об этом через вебсокет
+function terminalsMessagesDelivered($ids)
+{
+    $ids = implode(',', array_filter(array_map('intval', is_array($ids) ? $ids : explode(',', (string)$ids))));
+    if ($ids == '') {
+        return;
+    }
+    $rows = SQLSelect("SELECT DISTINCT FROM_NAME, TO_NAME FROM terminals_messages WHERE ID IN ($ids) AND DELIVERED=0");
+    if (!count($rows)) {
+        return;
+    }
+    SQLExec("UPDATE terminals_messages SET DELIVERED=" . time() . " WHERE ID IN ($ids) AND DELIVERED=0");
+    $senders = array();
+    foreach ($rows as $row) {
+        $senders[] = $row['FROM_NAME'];
+    }
+    terminalsMessagesNotify($rows[0]['TO_NAME'], $senders);
 }
 
 // Терминал по имени, названию или адресу

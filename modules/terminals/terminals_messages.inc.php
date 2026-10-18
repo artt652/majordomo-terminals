@@ -159,11 +159,15 @@ $chats[] = array('key' => 'house', 'type' => 'house', 'title' => $computer_name,
 $shout_rooms = array();
 $has_rooms = SQLSelectOne("SHOW TABLES LIKE 'shoutrooms'");
 if (!empty($has_rooms)) {
-    $shout_rooms = SQLSelect("SELECT ID, TITLE FROM shoutrooms WHERE IS_PUBLIC=1 ORDER BY PRIORITY DESC, TITLE");
+    $shout_rooms = SQLSelect("SELECT shoutrooms.ID, shoutrooms.TITLE, shoutrooms.ADDED, users.NAME AS USER_NAME FROM shoutrooms"
+        . " LEFT JOIN users ON users.ID=shoutrooms.ADDED_BY WHERE shoutrooms.IS_PUBLIC=1 ORDER BY shoutrooms.PRIORITY DESC, shoutrooms.TITLE");
 }
 foreach ($shout_rooms as $room) {
+    // кто и когда создал комнату — для карточки
+    $created = (!empty($room['ADDED']) && strtotime($room['ADDED']) > 0) ? date('d.m.Y', strtotime($room['ADDED'])) : '';
     $chats[] = array('key' => 'shout:' . $room['ID'], 'type' => 'shoutroom', 'title' => $room['TITLE'], 'members' => array(),
-        'readonly' => ($user_id && $me_name != '') ? 0 : 1, 'text_only' => 1);
+        'readonly' => ($user_id && $me_name != '') ? 0 : 1, 'text_only' => 1,
+        'created_by' => (string)$room['USER_NAME'], 'created' => $created);
 }
 // комнаты, к которым привязаны терминалы: участники — терминалы комнаты
 $rooms = SQLSelect("SELECT ID, TITLE FROM locations ORDER BY PRIORITY DESC, TITLE");
@@ -183,7 +187,8 @@ foreach ($rooms as $room) {
 foreach (SQLSelect("SELECT * FROM terminals_groups ORDER BY TITLE") as $group) {
     $members = $group_members($group);
     if ($me_name == '' || in_array($me_name, $members, true)) {
-        $chats[] = array('key' => 'group:' . $group['ID'], 'type' => 'group', 'title' => $group['TITLE'], 'members' => $members);
+        $chats[] = array('key' => 'group:' . $group['ID'], 'type' => 'group', 'title' => $group['TITLE'], 'members' => $members,
+            'note' => (isset($group['NOTE']) && is_string(json_decode($group['NOTE'], true))) ? json_decode($group['NOTE'], true) : '');
     }
 }
 // личные чаты со всеми терминалами
@@ -264,6 +269,12 @@ if (gr('mode') == 'group_save' && $me_name != '') {
         }
         $group['TITLE'] = $title;
         $group['MEMBERS'] = json_encode($list);
+        // своя заметка к группе (до 1000 символов); в JSON — чтобы эмодзи не терялись в utf8-таблице
+        $note = trim((string)gr('note'));
+        if (function_exists('mb_substr')) {
+            $note = mb_substr($note, 0, 1000, 'UTF-8');
+        }
+        $group['NOTE'] = ($note != '') ? json_encode($note) : '';
         if (!empty($group['ID'])) {
             SQLUpdate('terminals_groups', $group);
         } else {
@@ -359,6 +370,46 @@ if ($this->mode == 'send_message' || gr('mode') == 'send_message') {
     $out['SEND_FAILED'] = $sent ? 0 : 1;
 }
 
+// прочитано: получатель открыл чат на своей странице — его входящие в этом чате прочитаны (и доставлены)
+if (gr('mode') == 'mark_read' && $me_name != '') {
+    $key = (string)gr('chat');
+    $cond = '';
+    if (strpos($key, 'term:') === 0) {
+        $cond = "CHAT='' AND FROM_NAME='" . DBSafe(substr($key, 5)) . "'";
+    } elseif (preg_match('/^(all|room:\d+|group:\d+)$/', $key)) {
+        $cond = "CHAT='" . DBSafe($key) . "'";
+    }
+    $count = 0;
+    if ($cond != '') {
+        $rows = SQLSelect("SELECT ID, FROM_NAME FROM terminals_messages WHERE TO_NAME='" . DBSafe($me_name) . "' AND READ_AT=0 AND $cond");
+        if (count($rows)) {
+            $ids = array();
+            $senders = array();
+            foreach ($rows as $row) {
+                $ids[] = (int)$row['ID'];
+                $senders[] = $row['FROM_NAME'];
+            }
+            $now = time();
+            SQLExec("UPDATE terminals_messages SET READ_AT=$now, DELIVERED=IF(DELIVERED=0, $now, DELIVERED) WHERE ID IN (" . implode(',', $ids) . ")");
+            terminalsMessagesNotify($me_name, $senders);
+            $count = count($ids);
+        }
+    }
+    $json_out(array('ok' => 1, 'read' => $count));
+}
+
+// доставлено: страница получателя загрузила переписку
+if ($me_name != '') {
+    $rows = SQLSelect("SELECT ID FROM terminals_messages WHERE TO_NAME='" . DBSafe($me_name) . "' AND DELIVERED=0");
+    if (count($rows)) {
+        $ids = array();
+        foreach ($rows as $row) {
+            $ids[] = (int)$row['ID'];
+        }
+        terminalsMessagesDelivered($ids);
+    }
+}
+
 // переписка этого терминала: входящие и отправленные. Чат сообщения — групповой (all, room:, group:)
 // или личный (term:собеседник). Отправка в группу — по строке на получателя: показываем одну (SEND_ID)
 $conversation = array();
@@ -372,10 +423,16 @@ if ($me_name != '') {
         $chat_key = (isset($row['CHAT']) && $row['CHAT'] != '') ? $row['CHAT'] : 'term:' . $other;
         $send_id = (isset($row['SEND_ID']) && $row['SEND_ID'] != '') ? $row['SEND_ID'] : 'id' . $row['ID'];
         $uniq = $chat_key . '|' . $send_id . '|' . ($incoming ? 'in' : 'out');
+        // состояние отправленного: 1 — отправлено, 2 — доставлено, 3 — прочитано;
+        // в группе — лучшее по всем получателям (как в мессенджерах: прочитал хотя бы один)
+        $state = !empty($row['READ_AT']) ? 3 : (!empty($row['DELIVERED']) ? 2 : 1);
         if (isset($seen[$uniq])) {
+            if (!$incoming && $state > $conversation[$seen[$uniq]]['status']) {
+                $conversation[$seen[$uniq]]['status'] = $state;
+            }
             continue;
         }
-        $seen[$uniq] = 1;
+        $seen[$uniq] = count($conversation);
         $text = json_decode($row['MESSAGE'], true);
         $conversation[] = array(
             'id' => (int)$row['ID'],
@@ -391,6 +448,8 @@ if ($me_name != '') {
             'file_name' => isset($row['FILE_NAME']) ? $row['FILE_NAME'] : '',
             'time' => date('d.m H:i', (int)$row['ADDED']),
             'ts' => (int)$row['ADDED'],
+            'status' => $incoming ? 0 : $state,
+            'read' => ($incoming && !empty($row['READ_AT'])) ? 1 : 0,
         );
     }
 }
