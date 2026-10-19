@@ -6,26 +6,26 @@
 
 | Файл | Что это |
 |---|---|
-| `modules/terminals/terminals.class.php` | Изменён: очередь сообщений для дополнений с `useQueue()`, события `MINUTELY` и `startup`, таблицы `terminals_queue` и `terminals_state` |
-| `modules/terminals/terminals_queue.inc.php` | Новый: логика очереди, сохранение и восстановление плеера, сторож |
-| `modules/terminals/tts/mediaplayer.addon.php` | Изменён: собственная очередь на заданиях `allsay-target-*` убрана, добавлены `useQueue()`, `saveState()`, `restoreState()` |
-| `modules/terminals/terminals_settings.inc.php` | Новый: настройки дополнений TTS и плеера, поля объявляет дополнение |
-| `modules/terminals/terminals_edit.inc.php` | Изменён: поля дополнений в форме терминала и их сохранение |
-| `templates/terminals/terminals_edit.html` | Изменён: поля плеера и TTS строятся по описанию из дополнения, без жёстко прописанного списка |
-| `modules/app_player/addons/{dnla,chromecast,foobar,ghn,majordroid,mpd}.addon.php` | Изменены: объявляют свои поля (`settingsFields()`) вместо перечня в шаблоне |
-| `modules/app_messages/app_messages.class.php`, `modules/app_messages/app`, `img/modules/app_messages.png` | Новые: приложение «Сообщения» — открывает страницу «Сообщения» как приложение MajorDoMo |
-| `modules/terminals/terminals_messages.inc.php` | Новый: страница «Сообщения» — обмен сообщениями между терминалами |
-| `templates/terminals/action_usual.html` | Новый: шаблон страницы «Сообщения» |
-| `templates/terminals/terminals.html` | Изменён: frontend модуля показывает страницу «Сообщения» |
-| `modules/terminals/terminals_send.inc.php` | Новый: сообщение на терминал — `terminalsSend()` и форма в карточке терминала |
-| `languages/terminals_default.php`, `terminals_ru.php`, `terminals_ua.php` | Новые: переводы модуля (английский, русский, украинский) |
-| `modules/terminals/tts/mpd_tts.addon.php` | Новый: сообщения на MPD без потери плейлиста (проверено на MPD 0.23) |
-| `modules/terminals/tts/lms_tts.addon.php` | Новый: то же для Logitech Media Server (не проверено на устройстве) |
-| `modules/terminals/tts/kodi_tts.addon.php` | Новый: то же для Kodi (не проверено на устройстве) |
-| `modules/terminals/tts/chromecast_tts.addon.php` | Новый: Chromecast, музыка возвращается с прежней позиции (не проверено на устройстве) |
-| `modules/terminals/tts/dnla_tts.addon.php` | Новый: DLNA, сообщение перекодируется из wav в mp3 (не проверено на устройстве) |
-| `modules/terminals/tts/pipup.addon.php` | Новый: тип терминала PiPup (уведомления, картинки, звук, видео на Android-устройстве) |
-| `modules/app_player/addons/pipup_play.addon.php` | Новый: плеер PiPup |
+| `modules/terminals/`<br>`terminals.class.php` | Изменён: очередь сообщений для дополнений с `useQueue()`, события `MINUTELY` и `startup`, таблицы `terminals_queue` и `terminals_state` |
+| `modules/terminals/`<br>`terminals_queue.inc.php` | Новый: логика очереди, сохранение и восстановление плеера, сторож |
+| `modules/terminals/tts/`<br>`mediaplayer.addon.php` | Изменён: собственная очередь на заданиях `allsay-target-*` убрана, добавлены `useQueue()`, `saveState()`, `restoreState()` |
+| `modules/terminals/`<br>`terminals_settings.inc.php` | Новый: настройки дополнений TTS и плеера, поля объявляет дополнение |
+| `modules/terminals/`<br>`terminals_edit.inc.php` | Изменён: поля дополнений в форме терминала и их сохранение |
+| `templates/terminals/`<br>`terminals_edit.html` | Изменён: поля плеера и TTS строятся по описанию из дополнения, без жёстко прописанного списка |
+| `modules/app_player/addons/`<br>`dnla.addon.php`<br>`chromecast.addon.php`<br>`foobar.addon.php`<br>`ghn.addon.php`<br>`majordroid.addon.php`<br>`mpd.addon.php` | Изменены: объявляют свои поля (`settingsFields()`) вместо перечня в шаблоне |
+| `modules/app_messages/`<br>`app_messages.class.php`<br>`app`<br>`img/modules/`<br>`app_messages.png` | Новые: приложение «Сообщения» — открывает страницу «Сообщения» как приложение MajorDoMo |
+| `modules/terminals/`<br>`terminals_messages.inc.php` | Новый: страница «Сообщения» — обмен сообщениями между терминалами |
+| `templates/terminals/`<br>`action_usual.html` | Новый: шаблон страницы «Сообщения» |
+| `templates/terminals/`<br>`terminals.html` | Изменён: frontend модуля показывает страницу «Сообщения» |
+| `modules/terminals/`<br>`terminals_send.inc.php` | Новый: сообщение на терминал — `terminalsSend()` и форма в карточке терминала |
+| `languages/`<br>`terminals_default.php`<br>`terminals_ru.php`<br>`terminals_ua.php` | Новые: переводы модуля (английский, русский, украинский) |
+| `modules/terminals/tts/`<br>`mpd_tts.addon.php` | Новый: сообщения на MPD без потери плейлиста (проверено на MPD 0.23) |
+| `modules/terminals/tts/`<br>`lms_tts.addon.php` | Новый: то же для Logitech Media Server (не проверено на устройстве) |
+| `modules/terminals/tts/`<br>`kodi_tts.addon.php` | Новый: то же для Kodi (не проверено на устройстве) |
+| `modules/terminals/tts/`<br>`chromecast_tts.addon.php` | Новый: Chromecast, музыка возвращается с прежней позиции (не проверено на устройстве) |
+| `modules/terminals/tts/`<br>`dnla_tts.addon.php` | Новый: DLNA, сообщение перекодируется из wav в mp3 (не проверено на устройстве) |
+| `modules/terminals/tts/`<br>`pipup.addon.php` | Новый: тип терминала PiPup (уведомления, картинки, звук, видео на Android-устройстве) |
+| `modules/app_player/addons/`<br>`pipup_play.addon.php` | Новый: плеер PiPup |
 
 ## Очередь сообщений
 
