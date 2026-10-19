@@ -116,6 +116,13 @@ if (is_array($rec) && !empty($rec['ID'])) {
     $out['TOKEN_PAGE'] = ROOTHTML . 'popup/app_messages.html';
 }
 
+// открыть вкладку той формы, кнопку которой нажали
+if (strpos((string)$this->mode, 'token_') === 0) {
+    $out['TAB'] = 'tab_access';
+} elseif ($this->mode == 'send') {
+    $out['TAB'] = 'tab_send';
+}
+
 $out['SEND_TERMINALS'] = SQLSelect("SELECT NAME, TITLE FROM terminals WHERE ID!=" . (int)(is_array($rec) ? $rec['ID'] : 0) . " ORDER BY TITLE");
 $out['SEND_SOUNDS'] = array();
 $sound_files = is_dir(ROOT . 'cms/sounds') ? scandir(ROOT . 'cms/sounds') : array();

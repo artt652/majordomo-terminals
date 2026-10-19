@@ -19,12 +19,22 @@
 </ul>
 
 
+[#if ID!=""#]
+<!-- вкладки: настройки терминала, доступ к странице «Сообщения», сообщение на терминал -->
+<ul class="nav nav-tabs" id="term_tabs">
+	<li class="active"><a href="#tab_settings" data-tab="tab_settings"><#LANG_TERMINALS_SETTINGS#></a></li>
+	<li><a href="#tab_access" data-tab="tab_access"><#LANG_TERMINALS_TOKEN_TITLE#></a></li>
+	<li><a href="#tab_send" data-tab="tab_send"><#LANG_TERMINALS_SEND_TO_THIS#></a></li>
+</ul>
+[#endif ID#]
+<div class="tab-content" style="padding-top:15px">
+<div class="tab-pane active" id="tab_settings">
 <form action="?" method="post" enctype="multipart/form-data" class="form-horizontal" name="frmEdit">
 [#if OK#]
-<div class="alert alert-success"><#LANG_DATA_SAVED#></div>
+<div class="form-group"><div class="col-lg-offset-4 col-lg-5"><div class="alert alert-success"><#LANG_DATA_SAVED#></div></div></div>
 [#endif OK#]
 [#if ERR#]
-<div class="alert alert-danger"><#LANG_FILLOUT_REQURED#></div>
+<div class="form-group"><div class="col-lg-offset-4 col-lg-5"><div class="alert alert-danger"><#LANG_FILLOUT_REQURED#></div></div></div>
 [#endif ERR#]
 
 
@@ -407,24 +417,35 @@
 <input type="hidden" name="tts_settings_json" value="">
 <input type="hidden" name="player_settings_json" value="">
 </form>
+</div>
 
 [#if ID!=""#]
 <!-- ключ доступа к странице «Сообщения» -->
+<div class="tab-pane" id="tab_access">
 <form action="?" method="post" class="form-horizontal" name="frmToken">
-<fieldset style="margin-top:20px">
-<legend style="font-size:18px"><#LANG_TERMINALS_TOKEN_TITLE#></legend>
-[#if TOKEN_REVOKED="1"#]<div class="alert alert-info"><#LANG_TERMINALS_TOKEN_REVOKED#></div>[#endif TOKEN_REVOKED#]
-[#if TOKEN_SAVED="1"#]<div class="alert alert-success"><#LANG_DATA_SAVED#></div>[#endif TOKEN_SAVED#]
+[#if TOKEN_REVOKED="1"#]<div class="form-group"><div class="col-lg-offset-4 col-lg-5"><div class="alert alert-info"><#LANG_TERMINALS_TOKEN_REVOKED#></div></div></div>[#endif TOKEN_REVOKED#]
+[#if TOKEN_SAVED="1"#]<div class="form-group"><div class="col-lg-offset-4 col-lg-5"><div class="alert alert-success"><#LANG_DATA_SAVED#></div></div></div>[#endif TOKEN_SAVED#]
 [#if TOKEN_NEW!=""#]
-<div class="alert alert-warning" id="token_new">
-	<p><b><#LANG_TERMINALS_TOKEN_SHOW_ONCE#></b></p>
-	<div class="input-group" style="margin:8px 0">
-		<input type="text" class="form-control" id="token_link" readonly onclick="this.select()">
-		<span class="input-group-btn"><button class="btn btn-default" type="button" onclick="tokenCopy()"><#LANG_TERMINALS_TOKEN_COPY#></button></span>
+<!-- новый ключ: показывается один раз -->
+<div class="form-group">
+	<div class="col-lg-offset-4 col-lg-5">
+		<div class="alert alert-warning"><#LANG_TERMINALS_TOKEN_SHOW_ONCE#></div>
+		<div class="input-group">
+			<input type="text" class="form-control" id="token_link" readonly onclick="this.select()">
+			<span class="input-group-btn"><button class="btn btn-default" type="button" onclick="tokenCopy()"><#LANG_TERMINALS_TOKEN_COPY#></button></span>
+		</div>
 	</div>
-	<div id="token_qr" style="background:#fff;display:inline-block;padding:6px;border-radius:6px"></div>
-	<p style="margin-top:8px"><#LANG_TERMINALS_TOKEN_API#></p>
-	<pre id="token_api" style="white-space:pre-wrap;font-size:12px"></pre>
+</div>
+<div class="form-group">
+	<label class="col-lg-4 control-label">QR:</label>
+	<div class="col-lg-5"><div class="thumbnail" id="token_qr" style="display:inline-block;margin:0"></div></div>
+</div>
+<div class="form-group">
+	<label class="col-lg-4 control-label">API:</label>
+	<div class="col-lg-5">
+		<p class="form-control-static"><#LANG_TERMINALS_TOKEN_API#></p>
+		<pre id="token_api" style="white-space:pre-wrap;margin:0"></pre>
+	</div>
 </div>
 <script src="<#ROOTHTML#>templates/terminals/js/qrcode.js"></script>
 <script type="text/javascript">
@@ -469,19 +490,18 @@
 		[#if TOKEN_EXISTS="1"#]<button class="btn btn-default" type="submit" onclick="this.form.mode.value='token_revoke';return confirm('<#LANG_TERMINALS_TOKEN_REVOKE_CONFIRM#>');"><#LANG_TERMINALS_TOKEN_REVOKE#></button>[#endif#]
 	</div>
 </div>
-</fieldset>
 <input type="hidden" name="id" value="<#ID#>">
 <input type="hidden" name="view_mode" value="<#VIEW_MODE#>">
 <input type="hidden" name="edit_mode" value="<#EDIT_MODE#>">
 <input type="hidden" name="mode" value="">
 </form>
+</div>
 
 <!-- сообщение на этот терминал: текст (с озвучкой), картинка, звук, отправитель (terminals_send.inc.php) -->
+<div class="tab-pane" id="tab_send">
 <form action="?" method="post" class="form-horizontal" name="frmSend">
-<fieldset style="margin-top:20px">
-<legend style="font-size:18px"><#LANG_TERMINALS_SEND_TO_THIS#></legend>
-[#if SENT="1"#]<div class="alert alert-success"><#LANG_TERMINALS_MESSAGE_SENT#></div>[#endif SENT#]
-[#if SEND_FAILED="1"#]<div class="alert alert-danger"><#LANG_TERMINALS_MESSAGE_NOT_SENT#></div>[#endif SEND_FAILED#]
+[#if SENT="1"#]<div class="form-group"><div class="col-lg-offset-4 col-lg-5"><div class="alert alert-success"><#LANG_TERMINALS_MESSAGE_SENT#></div></div></div>[#endif SENT#]
+[#if SEND_FAILED="1"#]<div class="form-group"><div class="col-lg-offset-4 col-lg-5"><div class="alert alert-danger"><#LANG_TERMINALS_MESSAGE_NOT_SENT#></div></div></div>[#endif SEND_FAILED#]
 <div class="form-group">
 	<label class="col-lg-4 control-label"><#LANG_TERMINALS_TEXT#>:</label>
 	<div class="col-lg-5"><textarea name="send_message" class="form-control" rows="2"></textarea></div>
@@ -520,11 +540,36 @@
 <div class="form-group">
 	<div class="col-lg-offset-4 col-lg-5"><input class="btn btn-default" type="submit" value="<#LANG_TERMINALS_SEND#>"></div>
 </div>
-</fieldset>
 <input type="hidden" name="id" value="<#ID#>">
 <input type="hidden" name="view_mode" value="<#VIEW_MODE#>">
 <input type="hidden" name="edit_mode" value="<#EDIT_MODE#>">
 <input type="hidden" name="mode" value="send">
 </form>
+</div>
 [#endif ID#]
+</div>
+
+<script type="text/javascript">
+	// вкладки карточки: без bootstrap.js; после кнопок формы ключа или отправки — та же вкладка
+	(function () {
+		var nav = document.getElementById('term_tabs');
+		if (!nav) return;
+		function show(id) {
+			Array.prototype.forEach.call(nav.querySelectorAll('a[data-tab]'), function (a) {
+				var on = a.getAttribute('data-tab') == id;
+				a.parentNode.classList.toggle('active', on);
+				document.getElementById(a.getAttribute('data-tab')).classList.toggle('active', on);
+			});
+		}
+		Array.prototype.forEach.call(nav.querySelectorAll('a[data-tab]'), function (a) {
+			a.addEventListener('click', function (e) {
+				e.preventDefault();
+				show(a.getAttribute('data-tab'));
+				if (window.history && history.replaceState) history.replaceState(null, '', '#' + a.getAttribute('data-tab'));
+			});
+		});
+		var start = '[#TAB#]' || (location.hash || '').substr(1);
+		if (start && document.getElementById(start)) show(start);
+	})();
+</script>
 
