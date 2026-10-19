@@ -81,6 +81,8 @@ $dictionary = array(
 	'TERMINALS_TOKEN_CREATED'          => 'created',
 	'TERMINALS_TOKEN_LAST_USED'        => 'last used',
 	'TERMINALS_TOKEN_REQUIRED'         => 'Require the key',
+	'TERMINALS_TOKEN_ONLY_ON'          => 'Enabled for all terminals: the Messages page opens only with a key. The checkbox below has no effect now.',
+	'TERMINALS_TOKEN_ONLY_LINK'        => 'Change in the Messages page settings',
 	'TERMINALS_TOKEN_HELP'             => 'With the key the device opens the page as this terminal; without it (by address, session or from=) this terminal is not opened. The key also works for the API: sending and reading messages from scripts and apps.',
 	'TERMINALS_TOKEN_CREATE'           => 'Create key',
 	'TERMINALS_TOKEN_RECREATE'         => 'Create a new key',
