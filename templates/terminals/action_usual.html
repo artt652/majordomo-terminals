@@ -421,13 +421,32 @@
 
 	function tmMe() { return document.getElementById('tm_from').value; }
 
-	// запоминание настроек в браузере (может быть недоступно — тогда просто не запоминаем)
+	// Настройки страницы в браузере — в cookie: панель управления MajorDoMo (templates/panel.html)
+	// при каждом открытии вызывает localStorage.clear(), и тема, фон, масштаб, открытый чат и прочитанное
+	// в общем чате слетали. Значения, сохранённые раньше в localStorage, переносятся при первом чтении
+	function tmCookie(name, value) {
+		var n = 'tmmsg_' + encodeURIComponent(name).replace(/[()]/g, escape);
+		if (value === undefined) {
+			var m = document.cookie.match(new RegExp('(?:^|; )' + n.replace(/[.*+?^${}|[\]\\%]/g, '\\$&') + '=([^;]*)'));
+			return m ? decodeURIComponent(m[1]) : null;
+		}
+		document.cookie = n + '=' + encodeURIComponent(value) + '; path=/; max-age=315360000; SameSite=Lax';
+		return null;
+	}
 	function tmStore(key, value) {
 		try {
-			if (value === undefined) return localStorage.getItem('terminals_msg_' + key);
-			localStorage.setItem('terminals_msg_' + key, value);
+			if (value !== undefined) {
+				tmCookie(key, value);
+				return null;
+			}
+			var v = tmCookie(key);
+			if (v === null) {
+				// перенос из localStorage (прежнее место)
+				try { v = localStorage.getItem('terminals_msg_' + key); } catch (e) { v = null; }
+				if (v !== null) tmCookie(key, v);
+			}
+			return v;
 		} catch (e) { return null; }
-		return null;
 	}
 
 	// тема (светлая, тёмная, как в системе) и фон — меню у кнопки темы, запоминаются в браузере
