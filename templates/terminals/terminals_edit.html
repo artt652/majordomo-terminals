@@ -328,7 +328,10 @@
 	// список открывается и стрелкой мыши, и клавишей «вниз»
 	function terminalCombo(input, options) {
 		var wrap = document.createElement('div');
-		wrap.style.position = 'relative';
+		// отдельный блок во всю ширину колонки: на узком экране подпись в панели (admin.css) — плавающая
+		// шириной 240px, обычный блок начинался бы рядом с ней, а список уходил бы под неё — поле ввода
+		// поверх списка оказывалось выше него
+		wrap.style.cssText = 'position:relative;display:flow-root;width:100%';
 		var select = document.createElement('select');
 		select.className = 'form-control';
 		select.tabIndex = -1;
