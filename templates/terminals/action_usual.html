@@ -104,7 +104,9 @@
 	.tg-zoom button:disabled { opacity: .4; cursor: default; }
 	.tg-zoom .tg-zoom-value { flex: 1; width: auto; font-size: 13px; font-weight: 600; }
 	.tg-look-themes button.tg-sel { border-color: var(--tg-accent); color: var(--tg-accent); font-weight: 600; }
-	.tg-walls { display: flex; gap: 6px; flex-wrap: wrap; }
+	.tg-walls { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+	.tg-look-check { display: flex; align-items: center; gap: 8px; margin: 2px 0 0; font-size: 13px; font-weight: normal; color: var(--tg-text); cursor: pointer; }
+	.tg-look-check input { width: 16px; height: 16px; margin: 0; accent-color: var(--tg-accent); }
 	.tg-walls button { width: 38px; height: 54px; border-radius: 8px; border: 2px solid transparent; cursor: pointer; padding: 0; }
 	.tg-walls button.tg-sel { border-color: var(--tg-accent); }
 	/* в сети — зелёная точка на аватарке */
@@ -252,6 +254,8 @@
 				<button type="button" data-theme="dark"><#LANG_TERMINALS_THEME_DARK#></button>
 				<button type="button" data-theme=""><#LANG_TERMINALS_THEME_SYSTEM#></button>
 			</div>
+			<h4><#LANG_TERMINALS_WALLPAPER#></h4>
+			<div class="tg-walls" id="tm_walls"></div>
 			<div id="tm_zoom_box">
 				<h4><#LANG_TERMINALS_ZOOM#></h4>
 				<div class="tg-zoom">
@@ -260,8 +264,7 @@
 					<button type="button" id="tm_zoom_in" title="<#LANG_TERMINALS_ZOOM_IN#>">+</button>
 				</div>
 			</div>
-			<h4><#LANG_TERMINALS_WALLPAPER#></h4>
-			<div class="tg-walls" id="tm_walls"></div>
+			<label class="tg-look-check"><input type="checkbox" id="tm_hide_empty"> <#LANG_TERMINALS_HIDE_EMPTY_ROOMS#></label>
 		</div>
 		<div class="tg-search"><input type="text" id="tm_search" placeholder="<#LANG_TERMINALS_SEARCH#>" autocomplete="off"></div>
 		<div class="tg-chats" id="tm_chats"></div>
@@ -434,6 +437,14 @@
 	document.getElementById('tm_zoom_in').addEventListener('click', function () { tmStepZoom(1); });
 	document.getElementById('tm_zoom_value').addEventListener('click', function () { tmStore('zoom', '1'); tmApplyZoom(); });
 	tmApplyZoom();
+	// «Скрывать комнаты без терминалов»: по умолчанию включено, запоминается в браузере
+	function tmHideEmpty() { return tmStore('hide_empty') !== '0'; }
+	var tmHideBox = document.getElementById('tm_hide_empty');
+	tmHideBox.checked = tmHideEmpty();
+	tmHideBox.addEventListener('change', function () {
+		tmStore('hide_empty', tmHideBox.checked ? '1' : '0');
+		tmRenderChats();
+	});
 	function tmApplyLook() {
 		var theme = tmStore('theme') || '';
 		tmTheme(theme ? theme == 'dark' : !!(tmDarkQuery && tmDarkQuery.matches));
@@ -602,6 +613,8 @@
 		list.forEach(function (item) {
 			var c = item.chat;
 			if (q && (c.title || '').toLowerCase().indexOf(q) < 0) return;
+			// комнаты без терминалов — по галочке в меню «Тема и фон» (открытую не прячем)
+			if (tmHideEmpty() && c.type == 'room' && !c.members.length && c.key != tmCurrent) return;
 			var row = document.createElement('div');
 			row.className = 'tg-chat' + (c.key == tmCurrent ? ' tg-active' : '');
 			var av = document.createElement('div');

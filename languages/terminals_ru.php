@@ -75,6 +75,7 @@ $dictionary = array(
 	'TERMINALS_THEME_SYSTEM'         => 'Как в системе',
 	'TERMINALS_WALLPAPER'            => 'Фон чатов',
 	'TERMINALS_ZOOM'                 => 'Масштаб',
+	'TERMINALS_HIDE_EMPTY_ROOMS'     => 'Скрывать комнаты без терминалов',
 	'TERMINALS_ZOOM_IN'              => 'Крупнее',
 	'TERMINALS_ZOOM_OUT'             => 'Мельче',
 	'TERMINALS_ZOOM_RESET'           => 'Сбросить на 100%',

@@ -75,6 +75,7 @@ $dictionary = array(
 	'TERMINALS_THEME_SYSTEM'         => 'System',
 	'TERMINALS_WALLPAPER'            => 'Chat background',
 	'TERMINALS_ZOOM'                 => 'Scale',
+	'TERMINALS_HIDE_EMPTY_ROOMS'     => 'Hide rooms without terminals',
 	'TERMINALS_ZOOM_IN'              => 'Larger',
 	'TERMINALS_ZOOM_OUT'             => 'Smaller',
 	'TERMINALS_ZOOM_RESET'           => 'Reset to 100%',
