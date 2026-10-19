@@ -19,6 +19,14 @@ class app_messages extends module
         $this->checkInstalled();
     }
 
+    // Параметры модуля для ссылок и форм панели управления (как у остальных модулей): без этого
+    // parseLinks() не передаёт в pd состояние панели (action=app_messages), и форма настроек,
+    // отправленная из панели, попадает на стартовую страницу — модуль не вызывается
+    function saveParams($data = 1)
+    {
+        return parent::saveParams(array());
+    }
+
     function run()
     {
         $terminals = new terminals();
