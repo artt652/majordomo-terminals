@@ -580,3 +580,7 @@ $out['MAX_MEDIA_MB'] = round($max_media / 1048576, 1);
 $out['MAX_FILE_MB'] = round($max_file / 1048576, 1);
 // вебсокет MajorDoMo: мгновенное обновление переписки; без него — опрос
 $out['WS_PORT'] = (defined('WEBSOCKETS_PORT') && !(defined('DISABLE_WEBSOCKETS') && DISABLE_WEBSOCKETS == 1)) ? (int)WEBSOCKETS_PORT : '';
+// внешний адрес вебсокета (настройка приложения «Сообщения»): используется, когда страница открыта
+// не по локальному адресу (интернет, обратный прокси); локально — порт WEBSOCKETS_PORT на том же хосте
+$this->getConfig();
+$out['WS_EXTERNAL_JSON'] = json_encode(isset($this->config['MESSAGES_WS_EXTERNAL']) ? terminalsWsUrl($this->config['MESSAGES_WS_EXTERNAL']) : '', $flags);

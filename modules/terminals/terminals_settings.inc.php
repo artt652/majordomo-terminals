@@ -290,3 +290,14 @@ function terminalsInfo($terminal_rec)
     }
     return $info;
 }
+
+// Адрес вебсокета для внешнего доступа к странице «Сообщения»: ws://… или wss://… (полный адрес)
+// либо путь от адреса страницы (/majordomo — через тот же хост и порт, например за обратным прокси); иначе ''
+function terminalsWsUrl($value)
+{
+    $value = trim((string)$value);
+    if (preg_match('~^wss?://[^\s"\'<>]+$~i', $value) || preg_match('~^/[^\s"\'<>]*$~', $value)) {
+        return $value;
+    }
+    return '';
+}
