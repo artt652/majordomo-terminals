@@ -47,6 +47,9 @@ class app_messages extends module
                 . '<div class="form-group"><div class="col-sm-offset-4 col-sm-8"><button type="submit" class="btn btn-primary">'
                 . $h(terminalsLang('TERMINALS_SAVE')) . '</button>'
                 . ($saved ? ' <span class="text-success">&#10003;</span>' : '') . '</div></div></form>';
+            // как шаблоны модулей: action="?" формы — в адрес панели с этим модулем (pd, md), иначе
+            // форма уходит на admin.php без модуля и настройка не сохраняется
+            $this->result = $this->parseLinks($this->result);
             return;
         }
         $terminals->action = '';
