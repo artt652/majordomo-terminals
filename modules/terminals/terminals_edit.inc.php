@@ -116,12 +116,14 @@ if (is_array($rec) && !empty($rec['ID'])) {
     $out['TOKEN_PAGE'] = ROOTHTML . 'popup/app_messages.html';
 }
 
-// открыть вкладку той формы, кнопку которой нажали
+// открыть вкладку той формы, кнопку которой нажали. Через $this->tab: после admin() модуль
+// записывает $out['TAB'] = $this->tab (terminals.class.php), прямое $out['TAB'] затиралось
 if (strpos((string)$this->mode, 'token_') === 0) {
-    $out['TAB'] = 'tab_access';
+    $this->tab = 'tab_access';
 } elseif ($this->mode == 'send') {
-    $out['TAB'] = 'tab_send';
+    $this->tab = 'tab_send';
 }
+$out['TAB'] = isset($this->tab) ? $this->tab : '';
 
 $out['SEND_TERMINALS'] = SQLSelect("SELECT NAME, TITLE FROM terminals WHERE ID!=" . (int)(is_array($rec) ? $rec['ID'] : 0) . " ORDER BY TITLE");
 $out['SEND_SOUNDS'] = array();
