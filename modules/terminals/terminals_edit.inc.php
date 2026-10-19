@@ -97,6 +97,25 @@ if ($this->mode == 'send' && is_array($rec) && !empty($rec['ID'])) {
     $out['SENT'] = terminalsSend($rec['NAME'], gr('send_message'), $send_options) ? 1 : 0;
     $out['SEND_FAILED'] = $out['SENT'] ? 0 : 1;
 }
+// ключ доступа к странице «Сообщения»: создать (показывается один раз), отозвать, «Требовать ключ»
+if (is_array($rec) && !empty($rec['ID'])) {
+    if ($this->mode == 'token_create') {
+        $out['TOKEN_NEW'] = terminalsTokenCreate($rec['ID']);
+    } elseif ($this->mode == 'token_revoke') {
+        terminalsTokenRevoke($rec['ID']);
+        $out['TOKEN_REVOKED'] = 1;
+    } elseif ($this->mode == 'token_required') {
+        terminalsTokenSetRequired($rec['ID'], gr('token_required', 'int'));
+        $out['TOKEN_SAVED'] = 1;
+    }
+    $token_row = terminalsTokenRow($rec['ID']);
+    $out['TOKEN_REQUIRED'] = !empty($token_row['REQUIRED']) ? 1 : 0;
+    $out['TOKEN_EXISTS'] = !empty($token_row['TOKEN_HASH']) ? 1 : 0;
+    $out['TOKEN_CREATED'] = !empty($token_row['CREATED']) ? date('d.m.Y H:i', (int)$token_row['CREATED']) : '';
+    $out['TOKEN_LAST_USED'] = !empty($token_row['LAST_USED']) ? date('d.m.Y H:i', (int)$token_row['LAST_USED']) : '';
+    $out['TOKEN_PAGE'] = ROOTHTML . 'popup/app_messages.html';
+}
+
 $out['SEND_TERMINALS'] = SQLSelect("SELECT NAME, TITLE FROM terminals WHERE ID!=" . (int)(is_array($rec) ? $rec['ID'] : 0) . " ORDER BY TITLE");
 $out['SEND_SOUNDS'] = array();
 $sound_files = is_dir(ROOT . 'cms/sounds') ? scandir(ROOT . 'cms/sounds') : array();

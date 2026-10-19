@@ -115,6 +115,11 @@
 	.tg-head .tg-avatar.tg-online::after { width: 11px; height: 11px; }
 	.tg-sub.tg-online-text { color: var(--tg-accent); }
 	.tg-clickable { cursor: pointer; }
+	.tg-lock { position: absolute; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; padding: 16px;
+		background: var(--tg-wall); }
+	.tg-lock-box { background: var(--tg-panel); color: var(--tg-text); border-radius: 14px; padding: 24px; max-width: 420px; text-align: center;
+		box-shadow: 0 8px 32px rgba(0,0,0,.2); line-height: 1.45; }
+	.tg-lock-icon { font-size: 40px; margin-bottom: 10px; }
 	.tg-me { display: flex; align-items: center; gap: 10px; min-width: 0; }
 	.tg-me .tg-title { min-width: 0; }
 	/* индикатор вебсокета */
@@ -339,6 +344,18 @@
 			</div>
 		</form>
 	</div>
+
+	[#if LOCK!=""#]
+	<!-- страница закрыта: нужен ключ, ключ недействителен или не пускают правила безопасности -->
+	<div class="tg-lock">
+		<div class="tg-lock-box">
+			<div class="tg-lock-icon">🔒</div>
+			[#if LOCK="need_key"#]<div><#LANG_TERMINALS_LOCK_NEED_KEY#></div>[#endif#]
+			[#if LOCK="bad_key"#]<div><#LANG_TERMINALS_LOCK_BAD_KEY#></div>[#endif#]
+			[#if LOCK="rules"#]<div><#LANG_TERMINALS_LOCK_RULES#></div>[#endif#]
+		</div>
+	</div>
+	[#endif LOCK#]
 
 	<!-- карточка чата: возможности и настройки терминала, участники, цвет аватарки -->
 	<div class="tg-modal" id="tm_info_modal">

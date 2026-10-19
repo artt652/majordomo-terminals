@@ -51,17 +51,112 @@ $max_media = $limit(15 * 1024 * 1024);
 $max_file = $limit(50 * 1024 * 1024);
 $upload_error = '';
 
-// терминал этого устройства: выбранный на странице (from), из сессии или по адресу устройства
+// Терминал этого устройства.
+// 1) Ключ (terminals_auth.inc.php): ?token=… (ссылка из карточки терминала, API) или cookie tmmsg_key.
+// 2) Без ключа — выбранный на странице (from), из сессии или по адресу устройства, если у терминала
+//    не включено «Требовать ключ» и не включена общая настройка «Страница „Сообщения“ только по ключу».
+// Затем «Контроль доступа» (правила безопасности) своего терминала: не пускает — страница закрыта.
+$this->getConfig();
+$token_only = !empty($this->config['MESSAGES_TOKEN_ONLY']);
 $me = array();
-if (gr('from') != '') {
-    $me = terminalsFind(gr('from'));
+$by_key = false;
+$lock = '';
+$key = trim((string)gr('token'));
+$key_from_url = ($key != '');
+if (!$key_from_url && !empty($_COOKIE['tmmsg_key'])) {
+    $key = (string)$_COOKIE['tmmsg_key'];
 }
-if (empty($me['ID']) && is_object($session) && !empty($session->data['TERMINAL'])) {
-    $me = terminalsFind($session->data['TERMINAL']);
+if ($key != '') {
+    $me = terminalsTokenFind($key);
+    if (!empty($me['ID'])) {
+        $by_key = true;
+        if ($key_from_url) {
+            terminalsTokenCookie(strtolower($key));
+            // страница по ссылке с ключом: ключ — в cookie, из адресной строки и истории — убрать
+            if (!gr('ajax') && gr('mode') == '' && !headers_sent()) {
+                $query = $_GET;
+                unset($query['token']);
+                $uri = strtok((string)$_SERVER['REQUEST_URI'], '?');
+                header('Location: ' . $uri . (count($query) ? '?' . http_build_query($query) : ''));
+                exit;
+            }
+        }
+    } elseif ($key_from_url) {
+        $lock = 'bad_key';
+    } else {
+        // ключ в cookie больше не действует (отозван, пересоздан, терминал удалён)
+        terminalsTokenCookie('');
+    }
 }
-if (empty($me['ID']) && !empty($_SERVER['REMOTE_ADDR'])) {
-    $list = getTerminalsByHost($_SERVER['REMOTE_ADDR'], 1);
-    $me = !empty($list[0]['ID']) ? $list[0] : array();
+if (!$by_key && $lock == '') {
+    if (gr('from') != '') {
+        $me = terminalsFind(gr('from'));
+    }
+    if (empty($me['ID']) && is_object($session) && !empty($session->data['TERMINAL'])) {
+        $me = terminalsFind($session->data['TERMINAL']);
+    }
+    if (empty($me['ID']) && !empty($_SERVER['REMOTE_ADDR'])) {
+        $list = getTerminalsByHost($_SERVER['REMOTE_ADDR'], 1);
+        $me = !empty($list[0]['ID']) ? $list[0] : array();
+    }
+    if ($token_only || (!empty($me['ID']) && terminalsTokenRequired($me['ID']))) {
+        $me = array();
+        $lock = 'need_key';
+    }
+}
+// Правила безопасности ядра смотрят терминал в сессии: на время запроса в ней — этот терминал.
+// Вход по ключу записывается в сессию насовсем (правила ядра на этом устройстве видят проверенный
+// терминал); иначе сессия в конце запроса возвращается как была
+$session_terminal = (is_object($session) && isset($session->data['TERMINAL'])) ? $session->data['TERMINAL'] : null;
+$finish_session = function () use (&$session, &$by_key, $session_terminal) {
+    if (!is_object($session)) {
+        return;
+    }
+    if (!$by_key) {
+        if ($session_terminal === null) {
+            unset($session->data['TERMINAL'], $session->data['TERMINAL_ID']);
+        } else {
+            $session->data['TERMINAL'] = $session_terminal;
+        }
+    }
+    if (method_exists($session, 'save')) {
+        $session->save();
+    }
+};
+if (!empty($me['ID']) && is_object($session)) {
+    $session->data['TERMINAL'] = $me['NAME'];
+    unset($session->data['TERMINAL_ID']);
+    if (function_exists('checkAccess') && !checkAccess('terminal', $me['ID'])) {
+        $me = array();
+        $by_key = false;
+        $lock = 'rules';
+    }
+}
+// страница закрыта: API получает ошибку, страница — только пояснение, без чатов и переписки
+if ($lock != '') {
+    $finish_session();
+    if (gr('ajax')) {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(array('sent' => 0, 'ok' => 0, 'error' => ($lock == 'rules') ? 'rules' : 'key'));
+        exit;
+    }
+    $out['LOCK'] = $lock;
+    $out['ME_NAME'] = '';
+    $out['ME_TITLE'] = '';
+    $out['ALL_TERMINALS'] = array();
+    foreach (array('CONVERSATION_JSON', 'CHATS_JSON') as $k) {
+        $out[$k] = '[]';
+    }
+    foreach (array('TITLES_JSON', 'STATUS_JSON', 'COLORS_JSON', 'EMOJIS_JSON') as $k) {
+        $out[$k] = '{}';
+    }
+    $out['USER_NAME_JSON'] = '""';
+    $out['WS_EXTERNAL_JSON'] = '""';
+    $out['WS_PORT'] = '';
+    $out['MAX_MEDIA_MB'] = 15;
+    $out['MAX_FILE_MB'] = 50;
+    $out['MESSAGES_PAGE'] = 1;
+    return;
 }
 
 // сохранить загруженный файл в cms/cached/terminals; вернуть путь от веб-корня или ''
@@ -123,6 +218,11 @@ if (!empty($me['ID']) && (empty($me['LATEST_ACTIVITY']) || strtotime($me['LATEST
     SQLUpdate('terminals', $activity);
 }
 foreach (SQLSelect("SELECT ID, NAME, TITLE, LOCATION_ID, LATEST_ACTIVITY, IS_ONLINE FROM terminals ORDER BY TITLE") as $t) {
+    // «Контроль доступа» терминала-получателя: не пускает этот терминал (пользователя, время) — его не видно,
+    // ни в личных чатах, ни в составе комнат и групп, и сообщения от этого терминала ему не уходят
+    if (!empty($me['ID']) && $t['NAME'] != $me['NAME'] && function_exists('checkAccess') && !checkAccess('terminal', $t['ID'])) {
+        continue;
+    }
     $all_terminals[$t['NAME']] = $t;
 }
 $me_name = !empty($me['ID']) ? $me['NAME'] : '';
@@ -232,7 +332,8 @@ $find_chat = function ($key) use (&$chats) {
     return array();
 };
 
-$json_out = function ($data) {
+$json_out = function ($data) use ($finish_session) {
+    $finish_session();
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode($data);
     exit;
@@ -334,7 +435,7 @@ if (gr('mode') == 'group_delete' && $me_name != '') {
 }
 
 // общий чат MajorDoMo и его комнаты: только текст, от пользователя, вошедшего на сайт. Возвращает 1 — записано
-$send_to_shouts = function ($chat, $text) use ($user_id, $me, $me_name) {
+$send_to_shouts = function ($chat, $text) use ($user_id, $me, $me_name, &$session) {
     $text = trim((string)$text);
     if ($text == '' || !$user_id || $me_name == '') {
         return 0;
@@ -348,6 +449,18 @@ $send_to_shouts = function ($chat, $text) use ($user_id, $me, $me_name) {
         $activity = array('ID' => (int)$me['ID'], 'LATEST_ACTIVITY' => $now, 'LATEST_REQUEST_TIME' => $now,
             'LATEST_REQUEST' => htmlspecialchars($text), 'IS_ONLINE' => 1);
         SQLUpdate('terminals', $activity);
+        // правила шаблонов поведения смотрят терминал в сессии, а событие COMMAND получает эту сессию:
+        // в ней должен быть этот терминал, сохранённый до say()
+        if (is_object($session)) {
+            $session->data['TERMINAL'] = $me['NAME'];
+            unset($session->data['TERMINAL_ID']);
+            if (method_exists($session, 'save')) {
+                $session->save();
+            }
+            if (function_exists('session_write_close') && session_id()) {
+                session_write_close();
+            }
+        }
         say(htmlspecialchars($text), 0, $user_id, 'terminal' . $me['ID']);
     } else {
         $shout = array('MESSAGE' => htmlspecialchars($text), 'IMAGE' => '', 'ADDED' => date('Y-m-d H:i:s'),
@@ -656,3 +769,4 @@ $out['WS_PORT'] = (defined('WEBSOCKETS_PORT') && !(defined('DISABLE_WEBSOCKETS')
 // не по локальному адресу (интернет, обратный прокси); локально — порт WEBSOCKETS_PORT на том же хосте
 $this->getConfig();
 $out['WS_EXTERNAL_JSON'] = json_encode(isset($this->config['MESSAGES_WS_EXTERNAL']) ? terminalsWsUrl($this->config['MESSAGES_WS_EXTERNAL']) : '', $flags);
+$finish_session();

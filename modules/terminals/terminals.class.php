@@ -13,6 +13,7 @@
 include_once(DIR_MODULES . 'terminals/terminals_queue.inc.php');
 include_once(DIR_MODULES . 'terminals/terminals_settings.inc.php');
 include_once(DIR_MODULES . 'terminals/terminals_send.inc.php');
+include_once(DIR_MODULES . 'terminals/terminals_auth.inc.php');
 
 class terminals extends module
 {
@@ -203,6 +204,7 @@ class terminals extends module
             SQLExec('DELETE FROM `terminals` WHERE `ID` = ' . $rec['ID']);
             SQLExec('DELETE FROM `terminals_queue` WHERE `TERMINAL_ID` = ' . (int)$rec['ID']);
             SQLExec('DELETE FROM `terminals_state` WHERE `TERMINAL_ID` = ' . (int)$rec['ID']);
+            SQLExec('DELETE FROM `terminals_tokens` WHERE `TERMINAL_ID` = ' . (int)$rec['ID']);
         }
     }
 
@@ -434,6 +436,7 @@ class terminals extends module
         SQLDropTable('terminals_messages');
         SQLDropTable('terminals_groups');
         SQLDropTable('terminals_colors');
+        SQLDropTable('terminals_tokens');
         unsubscribeFromEvent($this->name, 'SAY');
         unsubscribeFromEvent($this->name, 'SAYTO');
         unsubscribeFromEvent($this->name, 'ASK');
@@ -518,6 +521,14 @@ class terminals extends module
  terminals_messages: DELIVERED int(10) NOT NULL DEFAULT '0'
  terminals_messages: READ_AT int(10) NOT NULL DEFAULT '0'
  terminals_messages: INDEX (TO_NAME)
+
+ terminals_tokens: ID int(10) unsigned NOT NULL auto_increment
+ terminals_tokens: TERMINAL_ID int(10) NOT NULL DEFAULT '0'
+ terminals_tokens: TOKEN_HASH varchar(64) NOT NULL DEFAULT ''
+ terminals_tokens: REQUIRED int(3) NOT NULL DEFAULT '0'
+ terminals_tokens: CREATED int(10) NOT NULL DEFAULT '0'
+ terminals_tokens: LAST_USED int(10) NOT NULL DEFAULT '0'
+ terminals_tokens: INDEX (TERMINAL_ID)
 
  terminals_colors: ID int(10) unsigned NOT NULL auto_increment
  terminals_colors: CHAT_KEY varchar(100) NOT NULL DEFAULT ''
