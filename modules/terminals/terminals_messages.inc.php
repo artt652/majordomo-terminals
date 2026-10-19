@@ -213,9 +213,9 @@ foreach (SQLSelect("SELECT * FROM terminals_colors") as $row) {
 foreach ($chats as $i => $chat) {
     $chats[$i]['color'] = isset($colors[$chat['key']]) ? $colors[$chat['key']] : '';
 }
-// эмодзи-аватарка — у терминалов, своих групп и чатов MajorDoMo (у комнат и «Все терминалы» — свои значки)
+// эмодзи-аватарка — у терминалов, комнат, своих групп и чатов MajorDoMo (у «Все терминалы» — свой значок)
 $emoji_allowed = function ($key) {
-    return (bool)preg_match('/^(term:.+|group:\d+|house|shout:\d+)$/', $key);
+    return (bool)preg_match('/^(term:.+|room:\d+|group:\d+|house|shout:\d+)$/', $key);
 };
 // статус терминалов: в сети, на связи, последняя активность
 $statuses = array();

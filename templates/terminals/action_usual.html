@@ -1101,7 +1101,7 @@
 	// эмодзи-аватарка (терминалы, свои группы, чаты MajorDoMo) и цвет — общие для всех устройств
 	var tmEmojiList = ['🏠', '🍳', '🛋️', '🛏️', '🚪', '🛁', '🧸', '💻', '📺', '📱', '🖥️', '🔊', '🎵', '📻', '🎧', '🤖', '💡', '🌡️',
 		'🌿', '🌞', '🌙', '⭐', '❤️', '🔔', '📢', '🎮', '📷', '🚗', '🏡', '👪', '👶', '👵', '🐱', '🐶', '☕', '🍽️', '🧺', '🔧', '🛡️', '🎉'];
-	function tmEmojiAllowed(key) { return /^(term:.+|group:\d+|house|shout:\d+)$/.test(key); }
+	function tmEmojiAllowed(key) { return /^(term:.+|room:\d+|group:\d+|house|shout:\d+)$/.test(key); }
 	function tmInfoPalette(key) {
 		if (tmEmojiAllowed(key)) {
 			var esec = tmInfoSection(tmText.emoji);
