@@ -31,34 +31,34 @@
 <div class="tab-pane active" id="tab_settings">
 <form action="?" method="post" enctype="multipart/form-data" class="form-horizontal" name="frmEdit">
 [#if OK#]
-<div class="form-group"><div class="col-lg-offset-4 col-lg-5"><div class="alert alert-success"><#LANG_DATA_SAVED#></div></div></div>
+<div class="form-group"><div class="col-lg-offset-4 col-lg-8"><div class="alert alert-success"><#LANG_DATA_SAVED#></div></div></div>
 [#endif OK#]
 [#if ERR#]
-<div class="form-group"><div class="col-lg-offset-4 col-lg-5"><div class="alert alert-danger"><#LANG_FILLOUT_REQURED#></div></div></div>
+<div class="form-group"><div class="col-lg-offset-4 col-lg-8"><div class="alert alert-danger"><#LANG_FILLOUT_REQURED#></div></div></div>
 [#endif ERR#]
 
 
 
 <div class="form-group ">
         <label class="col-lg-4 control-label" for="inputTitle"><#LANG_SYSTEM_NAME#>:<font color="red">*</font></label>
-        <div class="col-lg-5"><input type="text"  class="form-control [#if ERR_NAME#]alert-danger[#endif#]"  name="name" value="[#NAME#]"></div>
+        <div class="col-lg-8"><input type="text"  class="form-control [#if ERR_NAME#]alert-danger[#endif#]"  name="name" value="[#NAME#]"></div>
 </div>
 
 <div class="form-group ">
         <label class="col-lg-4 control-label" for="inputTitle"><#LANG_TITLE#>:<font color="red">*</font></label>
-        <div class="col-lg-5"><input type="text"  class="form-control [#if ERR_TITLE#]alert-danger[#endif#]"  name="title" value="[#TITLE#]"></div>
+        <div class="col-lg-8"><input type="text"  class="form-control [#if ERR_TITLE#]alert-danger[#endif#]"  name="title" value="[#TITLE#]"></div>
 </div>
 
 <div class="form-group ">
         <label class="col-lg-4 control-label" for="inputTitle"><#LANG_HOSTNAME#>:<font color="red">*</font></label>
-        <div class="col-lg-5"><input type="text"  class="form-control [#if ERR_HOST#]alert-danger[#endif#]"  name="host" value="[#HOST#]"></div>
+        <div class="col-lg-8"><input type="text"  class="form-control [#if ERR_HOST#]alert-danger[#endif#]"  name="host" value="[#HOST#]"></div>
 </div>
 
 
 
 <div class="form-group">
   <label class="col-lg-4 control-label"><#LANG_LINKED_OBJECT#>:<#LANG_HCB#>linked_object_terminal<#LANG_HCE#></label>
-   <div class="col-lg-5">
+   <div class="col-lg-8">
        <input type="text" name="linked_object" id="linked_object" value="[#LINKED_OBJECT#]"  class="form-control">
     </div>
 </div>
@@ -66,7 +66,7 @@
 
 <div class="form-group ">
   <label class="col-lg-4 control-label"><#LANG_LOCATION#> терминала: <#LANG_HCB#>location<#LANG_HCE#></label>
-  <div class="col-lg-5"><select name="location" class="form-control">
+  <div class="col-lg-8"><select name="location" class="form-control">
    <option value="">Выберите местоположение терминала
     [#begin LOCATIONS#]<option value="[#TITLE#]"[#if TITLE="<#LOCATION_TITLE#>"#] selected[#endif#]>[#TITLE#]
    [#end LOCATIONS#]
@@ -86,7 +86,7 @@
         </script>
 
     <div class="form-group">
-            <div class="col-lg-offset-4 col-lg-5 ">
+            <div class="col-lg-offset-4 col-lg-8">
                     <div class="checkbox">
                             <label>
                                     <input type="checkbox" value="1" id='majordroid_api' onClick='majordroidChanged();' name="majordroid_api" [#if MAJORDROID_API="1"#] checked[#endif#]> MajorDroid API
@@ -101,7 +101,7 @@
 
     <div class="form-group">
       <label class="control-label"><#LANG_PROPERTY#>:<#LANG_HCB#>linked_property_terminal<#LANG_HCE#></label>
-       <div class="col-lg-5">
+       <div class="col-lg-8">
          <div class="form-inline">
           <div class="form-group col-lg-5">
            <input type="text" name="level_linked_property" id="level_linked_property" value="[#LEVEL_LINKED_PROPERTY#]"  class="form-control">
@@ -135,7 +135,8 @@
 </script>
 
     <div class="form-group">
-        <div class="col-lg-offset-4 col-lg-5 ">
+        <label class="col-lg-4 control-label"><#LANG_TERMINALS_TTS#>:</label>
+        <div class="col-lg-8">
             <div class="checkbox">
                 <label>
                     <input type="checkbox" value="1" id='cantts' name="cantts" onClick='canTTSChanged();' [#if CANTTS="1"#] checked[#endif#]> <#LANG_CAN_TTS#>
@@ -148,7 +149,7 @@
     <div id="ttsDetails"[#if CANTTS!="1"#] style="display:none"[#endif#]>
         <div class="form-group">
             <label class="col-lg-4 control-label" for="tts_type"><#LANG_TTS_TYPE#>:</label>
-            <div class="col-lg-5">
+            <div class="col-lg-8">
                 <select id="tts_type" name="tts_type" class="form-control" onchange="return tts_type_select($(this).val());">
                     <option value=""><#LANG_NONE#></option>
                     [#begin TTS_ADDONS#]
@@ -162,7 +163,7 @@
         </div>
         <div class="form-group ">
             <label class="col-lg-4 control-label" for="min_msg_level"><#LANG_MIN_MSG_LEVEL#>:</label>
-            <div class="col-lg-5"><input type="text"  class="form-control" id="min_msg_level"  name="min_msg_level" value="[#MIN_MSG_LEVEL#]"></div>
+            <div class="col-lg-8"><input type="text"  class="form-control" id="min_msg_level"  name="min_msg_level" value="[#MIN_MSG_LEVEL#]"></div>
         </div>
         <!-- поля дополнения TTS: строятся по settingsFields() дополнения -->
         <div id="tts_settings"></div>
@@ -170,7 +171,8 @@
 
 
 <div class="form-group">
-        <div class="col-lg-offset-4 col-lg-5 ">
+        <label class="col-lg-4 control-label"><#LANG_TERMINALS_PLAYER#>:</label>
+        <div class="col-lg-8">
                 <div class="checkbox">
                         <label>
                                 <input type="checkbox" value="1" id='canplay' onClick='canPlayChanged();' name="canplay" [#if CANPLAY="1"#] checked[#endif#]> <#LANG_CAN_PLAY_MEDIA#>
@@ -183,7 +185,7 @@
 	<div class="form-group ">
 		<label class="col-lg-4 control-label" for="inputTitle"><#LANG_PLAYER_TYPE#>:
 		</label>
-		<div class="col-lg-5">
+		<div class="col-lg-8">
 			<select name="player_type" class="form-control" onchange="return player_type_select($(this).val());">
 				<option value=""><#LANG_DEFAULT#>
 				[#begin PLAYER_ADDONS#]
@@ -270,7 +272,7 @@
 		label.textContent = field.TITLE + ':';
 		row.appendChild(label);
 		var col = document.createElement('div');
-		col.className = 'col-lg-5';
+		col.className = 'col-lg-8';
 		row.appendChild(col);
 		var name = kind + '_setting[' + field.NAME + ']';
 		var value = String(terminalFieldValue(kind, addon, field));
@@ -390,7 +392,7 @@
 [#if ID!=""#]
     <div class="form-group ">
         <label class="col-lg-4 control-label" for="inputTitle"><#LANG_ACCESS_CONTROL#>:<#LANG_HCB#>access_control<#LANG_HCE#></label>
-        <div class="col-lg-5">
+        <div class="col-lg-8">
             <a  onClick="return openModalTWindow('security', '<#LANG_ACCESS_CONTROL#>', this.href, 800, 600);"
                     class="btn btn-default"
                     href="?(panel:{action=security_rules})&object_type=terminal&object_id=[#ID#]&print=1"
@@ -400,7 +402,7 @@
 [#endif ID#]
 <!-- разграничение прав доступа к терминалам -->
 <div class="form-group">
-     <div class="col-lg-offset-4 col-lg-5">
+     <div class="col-lg-offset-4 col-lg-8">
  [#if ID!=""#]
  <input class="btn btn-default btn-primary" type="submit" name="subm" value="<#LANG_SUBMIT#>">
  [#else ID#]
@@ -423,12 +425,12 @@
 <!-- ключ доступа к странице «Сообщения» -->
 <div class="tab-pane" id="tab_access">
 <form action="?" method="post" class="form-horizontal" name="frmToken">
-[#if TOKEN_REVOKED="1"#]<div class="form-group"><div class="col-lg-offset-4 col-lg-5"><div class="alert alert-info"><#LANG_TERMINALS_TOKEN_REVOKED#></div></div></div>[#endif TOKEN_REVOKED#]
-[#if TOKEN_SAVED="1"#]<div class="form-group"><div class="col-lg-offset-4 col-lg-5"><div class="alert alert-success"><#LANG_DATA_SAVED#></div></div></div>[#endif TOKEN_SAVED#]
+[#if TOKEN_REVOKED="1"#]<div class="form-group"><div class="col-lg-offset-4 col-lg-8"><div class="alert alert-info"><#LANG_TERMINALS_TOKEN_REVOKED#></div></div></div>[#endif TOKEN_REVOKED#]
+[#if TOKEN_SAVED="1"#]<div class="form-group"><div class="col-lg-offset-4 col-lg-8"><div class="alert alert-success"><#LANG_DATA_SAVED#></div></div></div>[#endif TOKEN_SAVED#]
 [#if TOKEN_NEW!=""#]
 <!-- новый ключ: показывается один раз -->
 <div class="form-group">
-	<div class="col-lg-offset-4 col-lg-5">
+	<div class="col-lg-offset-4 col-lg-8">
 		<div class="alert alert-warning"><#LANG_TERMINALS_TOKEN_SHOW_ONCE#></div>
 		<div class="input-group">
 			<input type="text" class="form-control" id="token_link" readonly onclick="this.select()">
@@ -438,11 +440,11 @@
 </div>
 <div class="form-group">
 	<label class="col-lg-4 control-label">QR:</label>
-	<div class="col-lg-5"><div class="thumbnail" id="token_qr" style="display:inline-block;margin:0"></div></div>
+	<div class="col-lg-8"><div class="thumbnail" id="token_qr" style="display:inline-block;margin:0"></div></div>
 </div>
 <div class="form-group">
 	<label class="col-lg-4 control-label">API:</label>
-	<div class="col-lg-5">
+	<div class="col-lg-8">
 		<p class="form-control-static"><#LANG_TERMINALS_TOKEN_API#></p>
 		<pre id="token_api" style="white-space:pre-wrap;margin:0"></pre>
 	</div>
@@ -474,18 +476,18 @@
 [#endif TOKEN_NEW#]
 <div class="form-group">
 	<label class="col-lg-4 control-label"><#LANG_TERMINALS_TOKEN#>:</label>
-	<div class="col-lg-5"><p class="form-control-static">
+	<div class="col-lg-8"><p class="form-control-static">
 		[#if TOKEN_EXISTS="1"#]<#LANG_TERMINALS_TOKEN_CREATED#> [#TOKEN_CREATED#][#if TOKEN_LAST_USED!=""#], <#LANG_TERMINALS_TOKEN_LAST_USED#> [#TOKEN_LAST_USED#][#endif TOKEN_LAST_USED#][#else TOKEN_EXISTS#]<#LANG_TERMINALS_TOKEN_NONE#>[#endif TOKEN_EXISTS#]
 	</p></div>
 </div>
 <div class="form-group">
-	<div class="col-lg-offset-4 col-lg-5">
+	<div class="col-lg-offset-4 col-lg-8">
 		<div class="checkbox"><label><input type="checkbox" name="token_required" value="1"[#if TOKEN_REQUIRED="1"#] checked[#endif#] onchange="this.form.mode.value='token_required';this.form.submit();"> <#LANG_TERMINALS_TOKEN_REQUIRED#></label></div>
 		<p class="help-block"><#LANG_TERMINALS_TOKEN_HELP#></p>
 	</div>
 </div>
 <div class="form-group">
-	<div class="col-lg-offset-4 col-lg-5">
+	<div class="col-lg-offset-4 col-lg-8">
 		<button class="btn btn-default" type="submit" onclick="this.form.mode.value='token_create';[#if TOKEN_EXISTS="1"#]return confirm('<#LANG_TERMINALS_TOKEN_RECREATE_CONFIRM#>');[#endif#]">[#if TOKEN_EXISTS="1"#]<#LANG_TERMINALS_TOKEN_RECREATE#>[#else#]<#LANG_TERMINALS_TOKEN_CREATE#>[#endif#]</button>
 		[#if TOKEN_EXISTS="1"#]<button class="btn btn-default" type="submit" onclick="this.form.mode.value='token_revoke';return confirm('<#LANG_TERMINALS_TOKEN_REVOKE_CONFIRM#>');"><#LANG_TERMINALS_TOKEN_REVOKE#></button>[#endif#]
 	</div>
@@ -500,24 +502,24 @@
 <!-- сообщение на этот терминал: текст (с озвучкой), картинка, звук, отправитель (terminals_send.inc.php) -->
 <div class="tab-pane" id="tab_send">
 <form action="?" method="post" class="form-horizontal" name="frmSend">
-[#if SENT="1"#]<div class="form-group"><div class="col-lg-offset-4 col-lg-5"><div class="alert alert-success"><#LANG_TERMINALS_MESSAGE_SENT#></div></div></div>[#endif SENT#]
-[#if SEND_FAILED="1"#]<div class="form-group"><div class="col-lg-offset-4 col-lg-5"><div class="alert alert-danger"><#LANG_TERMINALS_MESSAGE_NOT_SENT#></div></div></div>[#endif SEND_FAILED#]
+[#if SENT="1"#]<div class="form-group"><div class="col-lg-offset-4 col-lg-8"><div class="alert alert-success"><#LANG_TERMINALS_MESSAGE_SENT#></div></div></div>[#endif SENT#]
+[#if SEND_FAILED="1"#]<div class="form-group"><div class="col-lg-offset-4 col-lg-8"><div class="alert alert-danger"><#LANG_TERMINALS_MESSAGE_NOT_SENT#></div></div></div>[#endif SEND_FAILED#]
 <div class="form-group">
 	<label class="col-lg-4 control-label"><#LANG_TERMINALS_TEXT#>:</label>
-	<div class="col-lg-5"><textarea name="send_message" class="form-control" rows="2"></textarea></div>
+	<div class="col-lg-8"><textarea name="send_message" class="form-control" rows="2"></textarea></div>
 </div>
 <div class="form-group">
-	<div class="col-lg-offset-4 col-lg-5">
+	<div class="col-lg-offset-4 col-lg-8">
 		<div class="checkbox"><label><input type="checkbox" name="send_voice" value="1" checked> <#LANG_TERMINALS_VOICE_TEXT#></label></div>
 	</div>
 </div>
 <div class="form-group">
 	<label class="col-lg-4 control-label"><#LANG_TERMINALS_IMAGE#>:</label>
-	<div class="col-lg-5"><input type="text" name="send_image" class="form-control" placeholder="<#LANG_TERMINALS_IMAGE_HINT#>"></div>
+	<div class="col-lg-8"><input type="text" name="send_image" class="form-control" placeholder="<#LANG_TERMINALS_IMAGE_HINT#>"></div>
 </div>
 <div class="form-group">
 	<label class="col-lg-4 control-label"><#LANG_TERMINALS_SOUND_BEFORE#>:</label>
-	<div class="col-lg-5">
+	<div class="col-lg-8">
 		<select name="send_sound" class="form-control">
 			<option value=""><#LANG_TERMINALS_NONE#></option>
 			[#begin SEND_SOUNDS#]<option value="[#FILE#]">[#TITLE#]</option>[#end SEND_SOUNDS#]
@@ -526,7 +528,7 @@
 </div>
 <div class="form-group">
 	<label class="col-lg-4 control-label"><#LANG_TERMINALS_FROM#>:</label>
-	<div class="col-lg-5">
+	<div class="col-lg-8">
 		<select name="send_from" class="form-control">
 			<option value=""><#LANG_TERMINALS_NOT_SET#></option>
 			[#begin SEND_TERMINALS#]<option value="[#NAME#]">[#TITLE#]</option>[#end SEND_TERMINALS#]
@@ -535,10 +537,10 @@
 </div>
 <div class="form-group">
 	<label class="col-lg-4 control-label"><#LANG_TERMINALS_LEVEL#>:</label>
-	<div class="col-lg-5"><input type="number" name="send_level" class="form-control" placeholder="<#LANG_TERMINALS_LEVEL_HINT#>"></div>
+	<div class="col-lg-8"><input type="number" name="send_level" class="form-control" placeholder="<#LANG_TERMINALS_LEVEL_HINT#>"></div>
 </div>
 <div class="form-group">
-	<div class="col-lg-offset-4 col-lg-5"><input class="btn btn-default" type="submit" value="<#LANG_TERMINALS_SEND#>"></div>
+	<div class="col-lg-offset-4 col-lg-8"><input class="btn btn-default" type="submit" value="<#LANG_TERMINALS_SEND#>"></div>
 </div>
 <input type="hidden" name="id" value="<#ID#>">
 <input type="hidden" name="view_mode" value="<#VIEW_MODE#>">
