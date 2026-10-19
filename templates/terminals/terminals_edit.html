@@ -431,6 +431,7 @@
 <div class="tab-pane" id="tab_access">
 <form action="?" method="post" class="form-horizontal" name="frmToken">
 [#if TOKEN_RECREATED="1"#]<div class="alert alert-success"><#LANG_TERMINALS_TOKEN_RECREATED#></div>[#endif TOKEN_RECREATED#]
+[#if USE_TOKENS!="1"#]<div class="alert alert-info"><#LANG_TERMINALS_TOKENS_OFF#> <a href="?(panel:{action=app_messages})"><#LANG_TERMINALS_TOKENS_SETTINGS#></a></div>[#endif USE_TOKENS#]
 <div class="form-group">
 	<div class="col-lg-offset-2 col-lg-5">
 		<p class="help-block"><#LANG_TERMINALS_TOKEN_HELP#></p>

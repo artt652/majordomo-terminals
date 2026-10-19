@@ -275,7 +275,18 @@
 				<div class="tg-title" id="tm_me_title"><#LANG_TERMINALS_MESSAGES#></div>
 				[#endif ME_NAME#]
 				[#if AS_ADMIN!="1"#]
+				[#if ME_NAME=""#]
+				<!-- прежний режим (без ключей): терминал не узнан — выбрать на странице -->
+				<div class="tg-sub"><#LANG_TERMINALS_THIS_TERMINAL#>:
+					<select id="tm_from">
+						<option value=""><#LANG_TERMINALS_CHOOSE#></option>
+						[#begin ALL_TERMINALS#]<option value="[#NAME#]">[#TITLE#]</option>[#end ALL_TERMINALS#]
+					</select>
+				</div>
+				<div class="tg-sub" title="<#LANG_TERMINALS_NOT_RECOGNIZED#>"><#LANG_TERMINALS_NOT_RECOGNIZED#></div>
+				[#else ME_NAME#]
 				<input type="hidden" id="tm_from" value="[#ME_NAME#]">
+				[#endif ME_NAME#]
 				[#endif AS_ADMIN#]
 			</div>
 			<span class="tg-ws" id="tm_ws" title=""></span>
@@ -1598,7 +1609,7 @@
 	}
 
 	// терминал выбран на странице — загрузить его чаты
-	// панель управления: другой терминал — страница заново от его имени (заголовок, чаты, вебсокет)
+	// другой терминал (панель управления; прежний режим — неузнанное устройство): страница заново от его имени
 	document.getElementById('tm_from').addEventListener('change', function () {
 		var q = new URLSearchParams(location.search);
 		q.set('from', tmMe());

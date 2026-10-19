@@ -50,20 +50,26 @@ $max_media = $limit(15 * 1024 * 1024);
 $max_file = $limit(50 * 1024 * 1024);
 $upload_error = '';
 
-// Терминал этого устройства.
+// Терминал этого устройства. Два режима — настройка приложения «Сообщения» «Использовать ключи доступа»
+// (MESSAGES_USE_TOKENS в настройках модуля «Терминалы»):
+// — выключена (по умолчанию, как было): выбранный на странице (from), из сессии или по адресу устройства;
+//   не узнан — выбирается на странице; сессия и правила безопасности не трогаются;
+// — включена:
 // 1) Ключ (terminals_auth.inc.php): ?token=… (ссылка из карточки терминала, API) или cookie tmmsg_key —
 //    страница открывается как терминал ключа. Ключ важнее всего остального.
 // 2) Без ключа — только тот, кто вошёл в панель управления в этом браузере (в общей сессии ядра
 //    AUTHORIZED, modules/panel.class.php): по умолчанию как MAIN, выбор любого терминала — from=.
 // 3) Иначе страница закрыта. Адрес устройства, ?terminal= и сессия терминал не определяют.
 // Затем «Контроль доступа» (правила безопасности) своего терминала: не пускает — страница закрыта.
+$this->getConfig();
+$use_tokens = !empty($this->config['MESSAGES_USE_TOKENS']);
 $me = array();
 $by_key = false;
 $as_admin = false;
 $lock = '';
-$key = trim((string)gr('token'));
+$key = $use_tokens ? trim((string)gr('token')) : '';
 $key_from_url = ($key != '');
-if (!$key_from_url && !empty($_COOKIE['tmmsg_key'])) {
+if ($use_tokens && !$key_from_url && !empty($_COOKIE['tmmsg_key'])) {
     $key = (string)$_COOKIE['tmmsg_key'];
 }
 if ($key != '') {
@@ -89,7 +95,19 @@ if ($key != '') {
         $key_bad = true;
     }
 }
-if (!$by_key) {
+if (!$use_tokens) {
+    // прежний режим: выбранный на странице (from), из сессии или по адресу устройства
+    if (gr('from') != '') {
+        $me = terminalsFind(gr('from'));
+    }
+    if (empty($me['ID']) && is_object($session) && !empty($session->data['TERMINAL'])) {
+        $me = terminalsFind($session->data['TERMINAL']);
+    }
+    if (empty($me['ID']) && !empty($_SERVER['REMOTE_ADDR'])) {
+        $list = getTerminalsByHost($_SERVER['REMOTE_ADDR'], 1);
+        $me = !empty($list[0]['ID']) ? $list[0] : array();
+    }
+} elseif (!$by_key) {
     if (is_object($session) && !empty($session->data['AUTHORIZED'])) {
         $as_admin = true;
         if (gr('from') != '') {
@@ -110,8 +128,8 @@ if (!$by_key) {
 // Вход по ключу записывается в сессию насовсем (правила ядра на этом устройстве видят проверенный
 // терминал); иначе сессия в конце запроса возвращается как была
 $session_terminal = (is_object($session) && isset($session->data['TERMINAL'])) ? $session->data['TERMINAL'] : null;
-$finish_session = function () use (&$session, &$by_key, $session_terminal) {
-    if (!is_object($session)) {
+$finish_session = function () use (&$session, &$by_key, $session_terminal, $use_tokens) {
+    if (!is_object($session) || !$use_tokens) {
         return;
     }
     if (!$by_key) {
@@ -125,7 +143,7 @@ $finish_session = function () use (&$session, &$by_key, $session_terminal) {
         $session->save();
     }
 };
-if (!empty($me['ID']) && is_object($session)) {
+if ($use_tokens && !empty($me['ID']) && is_object($session)) {
     $session->data['TERMINAL'] = $me['NAME'];
     unset($session->data['TERMINAL_ID']);
     if (function_exists('checkAccess') && !checkAccess('terminal', $me['ID'])) {
@@ -225,7 +243,7 @@ if (!$peek && !empty($me['ID']) && (empty($me['LATEST_ACTIVITY']) || strtotime($
 foreach (SQLSelect("SELECT ID, NAME, TITLE, LOCATION_ID, LATEST_ACTIVITY, IS_ONLINE FROM terminals ORDER BY TITLE") as $t) {
     // «Контроль доступа» терминала-получателя: не пускает этот терминал (пользователя, время) — его не видно,
     // ни в личных чатах, ни в составе комнат и групп, и сообщения от этого терминала ему не уходят
-    if (!empty($me['ID']) && $t['NAME'] != $me['NAME'] && function_exists('checkAccess') && !checkAccess('terminal', $t['ID'])) {
+    if ($use_tokens && !empty($me['ID']) && $t['NAME'] != $me['NAME'] && function_exists('checkAccess') && !checkAccess('terminal', $t['ID'])) {
         continue;
     }
     $all_terminals[$t['NAME']] = $t;

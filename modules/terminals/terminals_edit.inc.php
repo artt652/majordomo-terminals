@@ -108,6 +108,9 @@ if (is_array($rec) && !empty($rec['ID'])) {
     $out['TOKEN_CREATED'] = !empty($token_row['CREATED']) ? date('d.m.Y H:i', (int)$token_row['CREATED']) : '';
     $out['TOKEN_LAST_USED'] = !empty($token_row['LAST_USED']) ? date('d.m.Y H:i', (int)$token_row['LAST_USED']) : '';
     $out['TOKEN_PAGE'] = ROOTHTML . 'popup/app_messages.html';
+    // ключи действуют, только если в настройках «Сообщений» включено «Использовать ключи доступа»
+    $this->getConfig();
+    $out['USE_TOKENS'] = !empty($this->config['MESSAGES_USE_TOKENS']) ? 1 : 0;
 }
 
 // открыть вкладку той формы, кнопку которой нажали. Через $this->tab: после admin() модуль
