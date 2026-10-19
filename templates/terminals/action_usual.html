@@ -612,12 +612,14 @@
 	}
 
 	// открыть чат
-	function tmOpen(key) {
+	// Открыть чат. keep — только перерисовать (обновление переписки): не менять экран и историю
+	function tmOpen(key, keep) {
 		var chat = tmChat(key);
 		tmCurrent = chat ? key : '';
 		tmApp.classList.toggle('tg-no-chat', !chat);
-		tmApp.classList.toggle('tg-open', !!chat);
+		if (!chat || !keep) tmApp.classList.toggle('tg-open', !!chat);
 		if (!chat) { tmRenderChats(); return; }
+		if (!keep) tmPushChat();
 		tmStore('chat_' + tmMe(), key);
 		document.getElementById('tm_chat_value').value = key;
 		tmAvatar(document.getElementById('tm_chat_avatar'), chat);
@@ -643,9 +645,34 @@
 		tmRender(true);
 		tmRenderChats();
 	}
+	// «Назад» (кнопка телефона или браузера) при открытом чате — в список чатов, а не на прежнюю страницу:
+	// открытие чата добавляет шаг истории, возврат по нему закрывает чат
+	var tmHistory = false;
+	function tmNarrow() { return !!(window.matchMedia && window.matchMedia('(max-width: 720px)').matches); }
+	function tmPushChat() {
+		if (tmHistory || !window.history || !history.pushState) return;
+		try { history.pushState({tmChat: 1}, document.title, location.href); tmHistory = true; } catch (e) {}
+	}
+	function tmCloseChat() {
+		if (tmNarrow()) {
+			// телефон: экран списка, чат остаётся выделенным
+			tmApp.classList.remove('tg-open');
+			tmRenderChats();
+		} else {
+			// широкий экран: чат закрывается, справа — «Выберите чат»
+			tmStore('chat_' + tmMe(), '');
+			tmOpen('');
+		}
+	}
+	window.addEventListener('popstate', function () {
+		if (!tmHistory) return;
+		tmHistory = false;
+		tmInfoClose();
+		tmGroupClose();
+		tmCloseChat();
+	});
 	document.getElementById('tm_back').addEventListener('click', function () {
-		tmApp.classList.remove('tg-open');
-		tmRenderChats();
+		if (tmHistory) history.back(); else tmCloseChat();
 	});
 
 	// вложения: меню 📎, выбранные файлы — «фишками» над полем ввода
@@ -889,7 +916,7 @@
 				if (then) { then(); return; }
 				if (changed) {
 					if (tmCurrent && !tmChat(tmCurrent)) { tmOpen(''); return; }
-					if (tmCurrent) tmOpen(tmCurrent); else tmRenderChats();
+					if (tmCurrent) tmOpen(tmCurrent, true); else tmRenderChats();
 				}
 			})
 			.catch(function () {});
@@ -936,7 +963,7 @@
 					tmGrow();
 					tmInputs().forEach(function (input) { input.value = ''; });
 					tmFiles();
-					tmRefresh(function () { tmOpen(tmCurrent); });
+					tmRefresh(function () { tmOpen(tmCurrent, true); });
 					// общий чат: ответ дома приходит не сразу — проверить ещё пару раз
 					var sentChat = tmChat(tmCurrent);
 					if (sentChat && sentChat.type == 'house') {
@@ -1116,7 +1143,7 @@
 			// новые значения — с сервера (эмодзи проверяется там)
 			tmRefresh(function () {
 				if (tmInfoKey == key) tmInfo(key);
-				if (tmCurrent) tmOpen(tmCurrent); else tmRenderChats();
+				if (tmCurrent) tmOpen(tmCurrent, true); else tmRenderChats();
 			});
 		});
 	}
@@ -1334,8 +1361,8 @@
 	// старт: открыть сохранённый чат (на узком экране — список чатов)
 	var tmSaved = tmStore('chat_' + tmMe());
 	if (tmSaved && tmChat(tmSaved)) {
-		tmOpen(tmSaved);
-		if (window.matchMedia && window.matchMedia('(max-width: 720px)').matches) tmApp.classList.remove('tg-open');
+		// телефон: сначала список (чат выделен); широкий экран: чат открыт, «Назад» закроет его
+		tmOpen(tmSaved, tmNarrow());
 	} else {
 		tmOpen('');
 	}
