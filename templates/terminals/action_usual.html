@@ -115,6 +115,8 @@
 	.tg-head .tg-avatar.tg-online::after { width: 11px; height: 11px; }
 	.tg-sub.tg-online-text { color: var(--tg-accent); }
 	.tg-clickable { cursor: pointer; }
+	.tg-me { display: flex; align-items: center; gap: 10px; min-width: 0; }
+	.tg-me .tg-title { min-width: 0; }
 	/* индикатор вебсокета */
 	.tg-ws { width: 9px; height: 9px; border-radius: 50%; background: #9aa0a6; flex: none; margin-right: 2px; }
 	.tg-ws.tg-ws-on { background: #4fce5d; }
@@ -244,7 +246,15 @@
 	<div class="tg-side">
 		<div class="tg-head">
 			<div class="tg-grow">
-				<div class="tg-title[#if ME_NAME!=""#] tg-clickable[#endif ME_NAME#]" id="tm_me_title"><#LANG_TERMINALS_MESSAGES#>[#if ME_TITLE!=""#] — [#ME_TITLE#][#endif ME_TITLE#]</div>
+				[#if ME_NAME!=""#]
+				<!-- этот терминал: аватарка и имя, как в списке чатов; нажатие — его карточка -->
+				<div class="tg-me tg-clickable" id="tm_me_title" title="<#LANG_TERMINALS_INFO#>">
+					<div class="tg-avatar" id="tm_me_avatar"></div>
+					<div class="tg-title">[#ME_TITLE#]</div>
+				</div>
+				[#else ME_NAME#]
+				<div class="tg-title" id="tm_me_title"><#LANG_TERMINALS_MESSAGES#></div>
+				[#endif ME_NAME#]
 				[#if ME_NAME=""#]
 				<div class="tg-sub"><#LANG_TERMINALS_THIS_TERMINAL#>:
 					<select id="tm_from">
@@ -643,8 +653,14 @@
 		return span;
 	}
 
+	// аватарка этого терминала в шапке списка (эмодзи, цвет, «в сети» — как у него в списках других)
+	function tmMeAvatar() {
+		var el = document.getElementById('tm_me_avatar');
+		if (el && tmMe()) tmAvatar(el, {key: 'term:' + tmMe(), type: 'term', title: tmTitle(tmMe())});
+	}
 	// список чатов: с перепиской — по последнему сообщению, остальные — в исходном порядке
 	function tmRenderChats() {
+		tmMeAvatar();
 		var box = document.getElementById('tm_chats');
 		var q = document.getElementById('tm_search').value.trim().toLowerCase();
 		var last = {};
