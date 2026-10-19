@@ -367,7 +367,7 @@
 		stRead: '<#LANG_TERMINALS_ST_READ#>', groupNote: '<#LANG_TERMINALS_GROUP_NOTE#>', created: '<#LANG_TERMINALS_CREATED#>',
 		descAll: '<#LANG_TERMINALS_DESC_ALL#>', descRoom: '<#LANG_TERMINALS_DESC_ROOM#>', descGroup: '<#LANG_TERMINALS_DESC_GROUP#>',
 		descHouse: '<#LANG_TERMINALS_DESC_HOUSE#>', descShoutroom: '<#LANG_TERMINALS_DESC_SHOUTROOM#>', wsNone: '<#LANG_TERMINALS_WS_NONE#>',
-		shoutroomSub: '<#LANG_TERMINALS_SHOUTROOM#>', login: '<#LANG_TERMINALS_LOGIN_TO_WRITE#>', micHttps: '<#LANG_TERMINALS_MIC_HTTPS#>', micDenied: '<#LANG_TERMINALS_MIC_DENIED#>'
+		shoutroomSub: '<#LANG_TERMINALS_SHOUTROOM#>', roomEmpty: '<#LANG_TERMINALS_ROOM_EMPTY#>', noTerminals: '<#LANG_TERMINALS_NO_TERMINALS#>', login: '<#LANG_TERMINALS_LOGIN_TO_WRITE#>', micHttps: '<#LANG_TERMINALS_MIC_HTTPS#>', micDenied: '<#LANG_TERMINALS_MIC_DENIED#>'
 	};
 	var tmMaxMedia = parseFloat('[#MAX_MEDIA_MB#]') || 15, tmMaxFile = parseFloat('[#MAX_FILE_MB#]') || 50;
 
@@ -608,7 +608,8 @@
 		if (chat.type == 'house') return tmText.houseSub;
 		if (chat.type == 'shoutroom') return tmText.shoutroomSub;
 		var me = tmMe();
-		return chat.members.filter(function (n) { return n != me; }).map(tmTitle).join(', ');
+		var others = chat.members.filter(function (n) { return n != me; }).map(tmTitle).join(', ');
+		return (!others && chat.type == 'room') ? tmText.noTerminals : others;
 	}
 
 	// открыть чат
@@ -625,7 +626,7 @@
 		tmAvatar(document.getElementById('tm_chat_avatar'), chat);
 		document.getElementById('tm_chat_title').textContent = chat.title;
 		var sub = tmMembersText(chat);
-		var plain = (chat.type == 'term' || chat.type == 'house' || chat.type == 'shoutroom' || !sub);
+		var plain = (chat.type == 'term' || chat.type == 'house' || chat.type == 'shoutroom' || chat.empty || !sub);
 		var subEl = document.getElementById('tm_chat_sub');
 		subEl.textContent = plain ? sub : tmText.members + ': ' + sub;
 		subEl.classList.remove('tg-online-text');
@@ -638,6 +639,8 @@
 		document.getElementById('tm_compose').classList.toggle('tg-text-only', !!chat.text_only);
 		document.getElementById('tm_compose').style.display = chat.readonly ? 'none' : '';
 		document.getElementById('tm_readonly').style.display = chat.readonly ? 'block' : 'none';
+		// почему нельзя писать: комната без других терминалов или не выполнен вход на сайт (общий чат)
+		document.getElementById('tm_readonly').textContent = chat.empty ? tmText.roomEmpty : tmText.login;
 		if (chat.text_only && tmRec) tmRecStop(null);
 		tmSendIcon();
 		document.getElementById('tm_edit_group').style.display = (chat.type == 'group' && tmMe()) ? '' : 'none';

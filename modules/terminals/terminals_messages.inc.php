@@ -178,10 +178,10 @@ foreach ($rooms as $room) {
             $members[] = $name;
         }
     }
-    // комната, где только этот терминал, не показывается — в ней некому писать
-    if (count(array_diff($members, array($me_name)))) {
-        $chats[] = array('key' => 'room:' . $room['ID'], 'type' => 'room', 'title' => $room['TITLE'], 'members' => $members);
-    }
+    // все комнаты MajorDoMo; в комнате без других терминалов писать некому — чат только для чтения
+    $empty = count(array_diff($members, array($me_name))) ? 0 : 1;
+    $chats[] = array('key' => 'room:' . $room['ID'], 'type' => 'room', 'title' => $room['TITLE'], 'members' => $members,
+        'readonly' => $empty, 'empty' => $empty);
 }
 // свои группы: видны участникам (если терминал не определился — все)
 foreach (SQLSelect("SELECT * FROM terminals_groups ORDER BY TITLE") as $group) {
