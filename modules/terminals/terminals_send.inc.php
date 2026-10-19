@@ -138,7 +138,7 @@ function terminalsSend($to, $message, $options = array())
             }
         }
         // видео: окно видео на устройстве, если дополнение умеет (pipup: sendVideo по ссылке, со звуком).
-        // В очередь не ставится — окно видео живёт своим сроком
+        // Через очередь: ждёт конца текущего сообщения и держит терминал на время ролика (срочные прерывают)
         $video_shown = false;
         if ($speaks && $video != '' && is_object($tts) && method_exists($tts, 'sendVideo')) {
             $url = method_exists($tts, 'fileUrl') ? $tts->fileUrl($video) : $video;
@@ -149,9 +149,15 @@ function terminalsSend($to, $message, $options = array())
                     $duration = min($seconds + 3, 600);
                 }
             }
-            $video_shown = $url && (bool)$tts->sendVideo($url, '', $sender_title, 'video', array('muted' => false, 'duration' => $duration));
-            if ($video_shown) {
-                terminalsMessagesDelivered($message_id);
+            $video_args = array($url, '', $sender_title, 'video', array('muted' => false, 'duration' => $duration));
+            if ($url && terminalsQueueUsed($tts)) {
+                $video_shown = (bool)terminalsQueueCall($terminal_rec, 'sendVideo', $video_args,
+                    array('level' => $level, 'busy' => $duration, 'message_ids' => $message_id));
+            } else {
+                $video_shown = $url && (bool)call_user_func_array(array($tts, 'sendVideo'), $video_args);
+                if ($video_shown) {
+                    terminalsMessagesDelivered($message_id);
+                }
             }
         }
         // только файл или видео, которое устройство не покажет: на устройство — текст без озвучки

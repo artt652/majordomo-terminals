@@ -83,7 +83,13 @@ class pipup_play extends app_player_addon
                 // Постоянный id для адреса: повторный playMedia() того же потока продлевает
                 // открытое окно (PiPup только перезапускает таймер), а не открывает новое
                 $options['id'] = 'play_' . md5($url);
-                $ok = $pipup->sendVideo($url, '', '▶', $type, $options);
+                if ($type == 'video' && $local !== false) {
+                    // видеофайл из веб-корня — через очередь, после звучащего сообщения
+                    $ok = $this->send($pipup, 'sendVideo', array($url, '', '▶', $type, $options));
+                } else {
+                    // поток (камера, rtsp, HLS, WebRTC, страница) — сразу: окно продлевается по тому же id
+                    $ok = $pipup->sendVideo($url, '', '▶', $type, $options);
+                }
                 break;
             default: // audio
                 $ok = $this->send($pipup, 'sendSound', array($url, '', '', ($seconds > 0) ? $seconds + 2 : 15));
@@ -108,9 +114,9 @@ class pipup_play extends app_player_addon
         return $this->success;
     }
 
-    // Картинка и звук — через очередь сообщений терминала (terminalsQueueCall), если его озвучка —
-    // тоже pipup: не перебивают звучащее сообщение, показываются после него. Терминал не держат
-    // (музыка не задерживает сообщения). Видео — сразу: окно продлевается по тому же id
+    // Картинка, звук и видеофайл — через очередь сообщений терминала (terminalsQueueCall), если его
+    // озвучка — тоже pipup: не перебивают звучащее сообщение, показываются после него. Терминал не
+    // держат (музыка и ролики плеера не задерживают сообщения). Видеопотоки — сразу (play())
     private function send($pipup, $method, $args)
     {
         if (is_array($this->terminal) && !empty($this->terminal['ID']) && isset($this->terminal['TTS_TYPE'])

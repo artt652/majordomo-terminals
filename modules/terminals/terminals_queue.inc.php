@@ -20,15 +20,16 @@
  *   есть isPlaying() и плеер к этому времени ещё играет сообщение, ожидание продлевается по 2 с,
  *   не больше terminals::QUEUE_PLAYING_CHECKS раз. Нет isPlaying() или плеер не ответил —
  *   остаётся расчётное время.
- * - вызовы методов дополнения из сценариев (terminalsQueueCall(): sendImage, sendSound, sendWebImage
- *   у pipup) встают в ту же очередь: ждут конца текущего сообщения, звук держит терминал своё время,
- *   картинка — нет (только порядок). Видео в очередь не ставится (окно продлевается по тому же id).
+ * - вызовы методов дополнения (terminalsQueueCall(): sendImage, sendSound, sendWebImage, sendVideo
+ *   у pipup) встают в ту же очередь: ждут конца текущего сообщения, звук и видео держат терминал своё
+ *   время, картинка — нет (только порядок). Видеопотоки (камеры) в очередь не ставятся — их окно
+ *   продлевается повторным вызовом с тем же id, их отправляют напрямую.
  */
 
 // Методы дополнения, которые можно ставить в очередь через terminalsQueueCall()
 function terminalsQueueCallMethods()
 {
-    return array('sendImage', 'sendSound', 'sendWebImage');
+    return array('sendImage', 'sendSound', 'sendWebImage', 'sendVideo');
 }
 
 // Вызвать метод дополнения TTS терминала через очередь (для сценариев):
@@ -36,7 +37,9 @@ function terminalsQueueCallMethods()
 // $terminal — имя, название или запись терминала; $args — аргументы метода, как при прямом вызове.
 // $options: 'level' — уровень (>= QUEUE_URGENT_LEVEL — срочно, прерывает обычное сообщение);
 //           'busy' — сколько секунд терминал занят после вызова (по умолчанию у sendSound —
-//           длительность окна, 4-й аргумент, иначе 15 с; у картинок 0 — следующее сразу).
+//           длительность окна, 4-й аргумент, иначе 15 с; у sendVideo — duration из опций, иначе 60 с;
+//           у картинок 0 — следующее сразу);
+//           'message_ids' — номера сообщений страницы «Сообщения»: отдано устройству — «доставлено».
 // Дополнение без очереди (useQueue) — метод вызывается сразу. Возвращает результат метода
 // (или true — поставлено в очередь), false — нет терминала, дополнения или такого метода.
 function terminalsQueueCall($terminal, $method, $args = array(), $options = array())
@@ -58,11 +61,14 @@ function terminalsQueueCall($terminal, $method, $args = array(), $options = arra
         $busy = (int)$options['busy'];
     } elseif ($method == 'sendSound') {
         $busy = isset($args[3]) ? (int)$args[3] : 15;
+    } elseif ($method == 'sendVideo') {
+        $busy = (isset($args[4]) && is_array($args[4]) && !empty($args[4]['duration'])) ? (int)$args[4]['duration'] : 60;
     } else {
         $busy = 0;
     }
     $call = array('method' => $method, 'args' => $args, 'busy' => max(0, $busy));
-    return terminalsQueueAdd($terminal_rec, 'call', $call, isset($options['level']) ? (int)$options['level'] : 0, '');
+    return terminalsQueueAdd($terminal_rec, 'call', $call, isset($options['level']) ? (int)$options['level'] : 0, '',
+        '', '', isset($options['message_ids']) ? (string)$options['message_ids'] : '');
 }
 
 // Дополнение TTS терминала (или null)
