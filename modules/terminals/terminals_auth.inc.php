@@ -2,11 +2,11 @@
 /*
  * Ключ доступа терминала к странице «Сообщения» и к её API.
  *
- * Ключ создаётся в карточке терминала и показывается один раз (ссылка и QR-код); в базе хранится
- * только его хэш (sha256) — таблица terminals_tokens. На устройстве ключ открывают ссылкой
- * …/popup/app_messages.html?token=КЛЮЧ: страница запоминает его в cookie и дальше узнаёт терминал по нему.
- * «Требовать ключ» у терминала: без ключа (по адресу устройства, сессии или from=) страница его не откроет.
- * Общая настройка модуля MESSAGES_TOKEN_ONLY — страница только по ключу для всех терминалов.
+ * У каждого терминала свой ключ (таблица terminals_tokens). Он создаётся сам — при открытии карточки
+ * терминала и при установке/обновлении модуля — и всегда виден в карточке (ссылка и QR-код): хранится
+ * как есть, карточку видит только тот, кто вошёл в панель управления. На устройстве ключ открывают
+ * ссылкой …/popup/app_messages.html?token=КЛЮЧ: страница запоминает его в cookie и дальше узнаёт
+ * терминал по нему. Без ключа страница пускает только того, кто вошёл в панель управления в этом браузере.
  */
 
 // Запись ключа терминала (или пустой массив)
@@ -16,15 +16,20 @@ function terminalsTokenRow($terminal_id)
     return !empty($row['ID']) ? $row : array();
 }
 
-// Создать ключ (прежний перестаёт работать). Возвращает ключ — его показывают один раз
+// Новый случайный ключ: 40 шестнадцатеричных знаков
+function terminalsTokenNew()
+{
+    return function_exists('random_bytes') ? bin2hex(random_bytes(20)) : sha1(uniqid('', true) . mt_rand() . microtime());
+}
+
+// Создать ключ заново (прежний сразу перестаёт работать). Возвращает новый ключ
 function terminalsTokenCreate($terminal_id)
 {
-    $token = function_exists('random_bytes') ? bin2hex(random_bytes(20)) : sha1(uniqid('', true) . mt_rand() . microtime());
     $row = terminalsTokenRow($terminal_id);
     if (empty($row['ID'])) {
-        $row = array('TERMINAL_ID' => (int)$terminal_id, 'REQUIRED' => 0);
+        $row = array('TERMINAL_ID' => (int)$terminal_id);
     }
-    $row['TOKEN_HASH'] = hash('sha256', $token);
+    $row['TOKEN'] = terminalsTokenNew();
     $row['CREATED'] = time();
     $row['LAST_USED'] = 0;
     if (!empty($row['ID'])) {
@@ -32,44 +37,36 @@ function terminalsTokenCreate($terminal_id)
     } else {
         SQLInsert('terminals_tokens', $row);
     }
-    return $token;
+    return $row['TOKEN'];
 }
 
-// Отозвать ключ (настройка «Требовать ключ» остаётся)
-function terminalsTokenRevoke($terminal_id)
-{
-    SQLExec("UPDATE terminals_tokens SET TOKEN_HASH='', CREATED=0, LAST_USED=0 WHERE TERMINAL_ID=" . (int)$terminal_id);
-}
-
-// «Требовать ключ»
-function terminalsTokenSetRequired($terminal_id, $required)
+// Ключ терминала; нет — создать
+function terminalsTokenGet($terminal_id)
 {
     $row = terminalsTokenRow($terminal_id);
-    if (empty($row['ID'])) {
-        $row = array('TERMINAL_ID' => (int)$terminal_id, 'TOKEN_HASH' => '', 'CREATED' => 0, 'LAST_USED' => 0);
+    if (!empty($row['TOKEN'])) {
+        return $row['TOKEN'];
     }
-    $row['REQUIRED'] = $required ? 1 : 0;
-    if (!empty($row['ID'])) {
-        SQLUpdate('terminals_tokens', $row);
-    } else {
-        SQLInsert('terminals_tokens', $row);
-    }
+    return terminalsTokenCreate($terminal_id);
 }
 
-function terminalsTokenRequired($terminal_id)
+// Ключи всем терминалам, у которых их нет (установка и обновление модуля)
+function terminalsTokenEnsureAll()
 {
-    $row = terminalsTokenRow($terminal_id);
-    return !empty($row['REQUIRED']);
+    $list = SQLSelect("SELECT t.ID FROM terminals t LEFT JOIN terminals_tokens k ON k.TERMINAL_ID=t.ID WHERE k.TOKEN IS NULL OR k.TOKEN=''");
+    foreach ((array)$list as $rec) {
+        terminalsTokenCreate($rec['ID']);
+    }
 }
 
 // Терминал по ключу (или пустой массив); отмечает, когда ключ использовался (не чаще раза в минуту)
 function terminalsTokenFind($token)
 {
-    $token = trim((string)$token);
-    if (!preg_match('/^[0-9a-f]{32,64}$/i', $token)) {
+    $token = strtolower(trim((string)$token));
+    if (!preg_match('/^[0-9a-f]{32,64}$/', $token)) {
         return array();
     }
-    $row = SQLSelectOne("SELECT * FROM terminals_tokens WHERE TOKEN_HASH='" . DBSafe(hash('sha256', strtolower($token))) . "'");
+    $row = SQLSelectOne("SELECT * FROM terminals_tokens WHERE TOKEN='" . DBSafe($token) . "'");
     if (empty($row['ID'])) {
         return array();
     }

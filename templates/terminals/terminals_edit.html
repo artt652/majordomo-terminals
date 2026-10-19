@@ -427,13 +427,10 @@
 <!-- ключ доступа к странице «Сообщения» -->
 <div class="tab-pane" id="tab_access">
 <form action="?" method="post" class="form-horizontal" name="frmToken">
-[#if TOKEN_REVOKED="1"#]<div class="alert alert-info"><#LANG_TERMINALS_TOKEN_REVOKED#></div>[#endif TOKEN_REVOKED#]
-[#if TOKEN_SAVED="1"#]<div class="alert alert-success"><#LANG_DATA_SAVED#></div>[#endif TOKEN_SAVED#]
-[#if TOKEN_NEW!=""#]
-<!-- новый ключ: показывается один раз -->
-<div class="alert alert-warning"><#LANG_TERMINALS_TOKEN_SHOW_ONCE#></div>
+[#if TOKEN_RECREATED="1"#]<div class="alert alert-success"><#LANG_TERMINALS_TOKEN_RECREATED#></div>[#endif TOKEN_RECREATED#]
 <div class="form-group">
 	<div class="col-lg-offset-2 col-lg-5">
+		<p class="help-block"><#LANG_TERMINALS_TOKEN_HELP#></p>
 		<div class="input-group">
 			<input type="text" class="form-control" id="token_link" readonly onclick="this.select()">
 			<span class="input-group-btn"><button class="btn btn-default" type="button" onclick="tokenCopy()"><#LANG_TERMINALS_TOKEN_COPY#></button></span>
@@ -452,7 +449,7 @@
 <script src="<#ROOTHTML#>templates/terminals/js/qrcode.js"></script>
 <script type="text/javascript">
 	(function () {
-		var token = '[#TOKEN_NEW#]';
+		var token = '[#TOKEN#]';
 		var page = location.protocol + '//' + location.host + '[#TOKEN_PAGE#]';
 		var link = page + '?token=' + token;
 		document.getElementById('token_link').value = link;
@@ -473,24 +470,15 @@
 		};
 	})();
 </script>
-[#endif TOKEN_NEW#]
 <div class="form-group">
 	<label class="col-lg-4 control-label"><#LANG_TERMINALS_TOKEN#>:</label>
 	<div class="col-lg-5"><p class="form-control-static">
-		[#if TOKEN_EXISTS="1"#]<#LANG_TERMINALS_TOKEN_CREATED#> [#TOKEN_CREATED#][#if TOKEN_LAST_USED!=""#], <#LANG_TERMINALS_TOKEN_LAST_USED#> [#TOKEN_LAST_USED#][#endif TOKEN_LAST_USED#][#else TOKEN_EXISTS#]<#LANG_TERMINALS_TOKEN_NONE#>[#endif TOKEN_EXISTS#]
+		<#LANG_TERMINALS_TOKEN_CREATED#> [#TOKEN_CREATED#][#if TOKEN_LAST_USED!=""#], <#LANG_TERMINALS_TOKEN_LAST_USED#> [#TOKEN_LAST_USED#][#endif TOKEN_LAST_USED#]
 	</p></div>
 </div>
 <div class="form-group">
 	<div class="col-lg-offset-2 col-lg-5">
-		[#if TOKEN_ONLY="1"#]<div class="alert alert-info"><#LANG_TERMINALS_TOKEN_ONLY_ON#> <a href="?(panel:{action=app_messages})"><#LANG_TERMINALS_TOKEN_ONLY_LINK#></a></div>[#endif TOKEN_ONLY#]
-		<div class="checkbox[#if TOKEN_ONLY="1"#] disabled[#endif#]"><label><input type="checkbox" name="token_required" value="1"[#if TOKEN_REQUIRED="1"#] checked[#endif#][#if TOKEN_ONLY="1"#] checked disabled[#endif#] onchange="this.form.mode.value='token_required';this.form.submit();"> <#LANG_TERMINALS_TOKEN_REQUIRED#></label></div>
-		<p class="help-block"><#LANG_TERMINALS_TOKEN_HELP#></p>
-	</div>
-</div>
-<div class="form-group">
-	<div class="col-lg-offset-2 col-lg-5">
-		<button class="btn btn-default" type="submit" onclick="this.form.mode.value='token_create';[#if TOKEN_EXISTS="1"#]return confirm('<#LANG_TERMINALS_TOKEN_RECREATE_CONFIRM#>');[#endif#]">[#if TOKEN_EXISTS="1"#]<#LANG_TERMINALS_TOKEN_RECREATE#>[#else#]<#LANG_TERMINALS_TOKEN_CREATE#>[#endif#]</button>
-		[#if TOKEN_EXISTS="1"#]<button class="btn btn-default" type="submit" onclick="this.form.mode.value='token_revoke';return confirm('<#LANG_TERMINALS_TOKEN_REVOKE_CONFIRM#>');"><#LANG_TERMINALS_TOKEN_REVOKE#></button>[#endif#]
+		<button class="btn btn-default" type="submit" onclick="this.form.mode.value='token_create';return confirm('<#LANG_TERMINALS_TOKEN_RECREATE_CONFIRM#>');"><#LANG_TERMINALS_TOKEN_RECREATE#></button>
 	</div>
 </div>
 <input type="hidden" name="id" value="<#ID#>">

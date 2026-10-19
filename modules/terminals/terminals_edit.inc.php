@@ -97,27 +97,17 @@ if ($this->mode == 'send' && is_array($rec) && !empty($rec['ID'])) {
     $out['SENT'] = terminalsSend($rec['NAME'], gr('send_message'), $send_options) ? 1 : 0;
     $out['SEND_FAILED'] = $out['SENT'] ? 0 : 1;
 }
-// ключ доступа к странице «Сообщения»: создать (показывается один раз), отозвать, «Требовать ключ»
+// ключ доступа к странице «Сообщения»: всегда есть (нет — создаётся), «Пересоздать» — новый
 if (is_array($rec) && !empty($rec['ID'])) {
     if ($this->mode == 'token_create') {
-        $out['TOKEN_NEW'] = terminalsTokenCreate($rec['ID']);
-    } elseif ($this->mode == 'token_revoke') {
-        terminalsTokenRevoke($rec['ID']);
-        $out['TOKEN_REVOKED'] = 1;
-    } elseif ($this->mode == 'token_required') {
-        terminalsTokenSetRequired($rec['ID'], gr('token_required', 'int'));
-        $out['TOKEN_SAVED'] = 1;
+        terminalsTokenCreate($rec['ID']);
+        $out['TOKEN_RECREATED'] = 1;
     }
+    $out['TOKEN'] = terminalsTokenGet($rec['ID']);
     $token_row = terminalsTokenRow($rec['ID']);
-    $out['TOKEN_REQUIRED'] = !empty($token_row['REQUIRED']) ? 1 : 0;
-    $out['TOKEN_EXISTS'] = !empty($token_row['TOKEN_HASH']) ? 1 : 0;
     $out['TOKEN_CREATED'] = !empty($token_row['CREATED']) ? date('d.m.Y H:i', (int)$token_row['CREATED']) : '';
     $out['TOKEN_LAST_USED'] = !empty($token_row['LAST_USED']) ? date('d.m.Y H:i', (int)$token_row['LAST_USED']) : '';
     $out['TOKEN_PAGE'] = ROOTHTML . 'popup/app_messages.html';
-    // общая настройка «Страница „Сообщения“ только по ключу» (задаётся в app_messages): при ней
-    // галочка «Требовать ключ» не действует — в карточке показываем это
-    $this->getConfig();
-    $out['TOKEN_ONLY'] = !empty($this->config['MESSAGES_TOKEN_ONLY']) ? 1 : 0;
 }
 
 // открыть вкладку той формы, кнопку которой нажали. Через $this->tab: после admin() модуль

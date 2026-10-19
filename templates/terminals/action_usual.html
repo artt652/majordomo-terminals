@@ -50,6 +50,8 @@
 	.tg-head .tg-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 	.tg-sub { font-size: 13px; color: var(--tg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 	.tg-sub select { background: var(--tg-input); color: var(--tg-text); border: 0; border-radius: 8px; padding: 2px 6px; max-width: 100%; }
+	.tg-admin-as { display: flex; align-items: center; gap: 6px; }
+	.tg-admin-as select { min-width: 0; flex: 1; }
 	.tg-grow { flex: 1; min-width: 0; }
 	.tg-icon { background: none; border: 0; color: var(--tg-muted); font-size: 20px; line-height: 1; padding: 8px; border-radius: 50%; cursor: pointer; flex: none; }
 	.tg-icon:hover { background: rgba(127,127,127,.15); }
@@ -120,7 +122,6 @@
 	.tg-lock-box { background: var(--tg-panel); color: var(--tg-text); border-radius: 14px; padding: 24px; max-width: 420px; text-align: center;
 		box-shadow: 0 8px 32px rgba(0,0,0,.2); line-height: 1.45; }
 	.tg-lock-icon { font-size: 40px; margin-bottom: 10px; }
-	.tg-lock-ip { margin-top: 10px; font-size: 13px; color: var(--tg-muted, #8a8a8a); }
 	.tg-me { display: flex; align-items: center; gap: 10px; min-width: 0; }
 	.tg-me .tg-title { min-width: 0; }
 	/* индикатор вебсокета */
@@ -261,17 +262,16 @@
 				[#else ME_NAME#]
 				<div class="tg-title" id="tm_me_title"><#LANG_TERMINALS_MESSAGES#></div>
 				[#endif ME_NAME#]
-				[#if ME_NAME=""#]
-				<div class="tg-sub"><#LANG_TERMINALS_THIS_TERMINAL#>:
+				[#if AS_ADMIN="1"#]
+				<!-- вход из панели управления (без ключа): от имени какого терминала -->
+				<div class="tg-sub tg-admin-as" title="<#LANG_TERMINALS_ADMIN_AS_HINT#>"><#LANG_TERMINALS_ADMIN_AS#>:
 					<select id="tm_from">
-						<option value=""><#LANG_TERMINALS_CHOOSE#></option>
-						[#begin ALL_TERMINALS#]<option value="[#NAME#]">[#TITLE#]</option>[#end ALL_TERMINALS#]
+						[#begin ALL_TERMINALS#]<option value="[#NAME#]"[#if NAME="<#ME_NAME#>"#] selected[#endif#]>[#TITLE#]</option>[#end ALL_TERMINALS#]
 					</select>
 				</div>
-				<div class="tg-sub" title="<#LANG_TERMINALS_NOT_RECOGNIZED#>"><#LANG_TERMINALS_NOT_RECOGNIZED#></div>
-				[#else ME_NAME#]
+				[#else AS_ADMIN#]
 				<input type="hidden" id="tm_from" value="[#ME_NAME#]">
-				[#endif ME_NAME#]
+				[#endif AS_ADMIN#]
 			</div>
 			<span class="tg-ws" id="tm_ws" title=""></span>
 			<button type="button" class="tg-icon" id="tm_new_group" title="<#LANG_TERMINALS_NEW_GROUP#>"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M19 8v6M16 11h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
@@ -347,17 +347,13 @@
 	</div>
 
 	[#if LOCK!=""#]
-	<!-- страница закрыта: нужен ключ, ключ недействителен, устройство не узнано по адресу, чужой ?terminal= или не пускают правила безопасности -->
+	<!-- страница закрыта: нужен ключ, ключ недействителен или не пускают правила безопасности -->
 	<div class="tg-lock">
 		<div class="tg-lock-box">
 			<div class="tg-lock-icon">🔒</div>
 			[#if LOCK="need_key"#]<div><#LANG_TERMINALS_LOCK_NEED_KEY#></div>[#endif#]
 			[#if LOCK="bad_key"#]<div><#LANG_TERMINALS_LOCK_BAD_KEY#></div>[#endif#]
 			[#if LOCK="rules"#]<div><#LANG_TERMINALS_LOCK_RULES#></div>[#endif#]
-			[#if LOCK="unknown"#]<div><#LANG_TERMINALS_LOCK_UNKNOWN#></div>[#endif#]
-			[#if LOCK="not_this_device"#]<div><#LANG_TERMINALS_LOCK_NOT_THIS_DEVICE#></div>[#endif#]
-			[#if LOCK="unknown"#]<div class="tg-lock-ip"><#LANG_TERMINALS_LOCK_IP#>: [#LOCK_IP#]</div>[#endif#]
-			[#if LOCK="not_this_device"#]<div class="tg-lock-ip"><#LANG_TERMINALS_LOCK_IP#>: [#LOCK_IP#]</div>[#endif#]
 		</div>
 	</div>
 	[#endif LOCK#]
@@ -1597,8 +1593,11 @@
 	}
 
 	// терминал выбран на странице — загрузить его чаты
+	// панель управления: другой терминал — страница заново от его имени (заголовок, чаты, вебсокет)
 	document.getElementById('tm_from').addEventListener('change', function () {
-		tmRefresh(function () { tmOpen(tmStore('chat_' + tmMe()) || ''); });
+		var q = new URLSearchParams(location.search);
+		q.set('from', tmMe());
+		location.search = q.toString();
 	});
 
 	// старт: открыть сохранённый чат (на узком экране — список чатов)

@@ -51,17 +51,15 @@ $max_file = $limit(50 * 1024 * 1024);
 $upload_error = '';
 
 // Терминал этого устройства.
-// 1) Ключ (terminals_auth.inc.php): ?token=… (ссылка из карточки терминала, API) или cookie tmmsg_key.
-//    Ключ важнее адреса: с ключом страница открывается с любого адреса.
-// 2) Без ключа — только по адресу устройства (IP = «Хост» терминала). Имя из ?terminal=, from= или
-//    сессии выбирает терминал лишь среди терминалов с этим адресом; чужое имя в ?terminal=/from= —
-//    отказ. Устройство, не узнанное по адресу, не пускается. Без ключа нельзя и тогда, когда у
-//    терминала включено «Требовать ключ» или включена общая настройка «Страница „Сообщения“ только по ключу».
+// 1) Ключ (terminals_auth.inc.php): ?token=… (ссылка из карточки терминала, API) или cookie tmmsg_key —
+//    страница открывается как терминал ключа. Ключ важнее всего остального.
+// 2) Без ключа — только тот, кто вошёл в панель управления в этом браузере (в общей сессии ядра
+//    AUTHORIZED, modules/panel.class.php): по умолчанию как MAIN, выбор любого терминала — from=.
+// 3) Иначе страница закрыта. Адрес устройства, ?terminal= и сессия терминал не определяют.
 // Затем «Контроль доступа» (правила безопасности) своего терминала: не пускает — страница закрыта.
-$this->getConfig();
-$token_only = !empty($this->config['MESSAGES_TOKEN_ONLY']);
 $me = array();
 $by_key = false;
+$as_admin = false;
 $lock = '';
 $key = trim((string)gr('token'));
 $key_from_url = ($key != '');
@@ -83,48 +81,29 @@ if ($key != '') {
                 exit;
             }
         }
-    } elseif ($key_from_url) {
-        $lock = 'bad_key';
     } else {
-        // ключ в cookie больше не действует (отозван, пересоздан, терминал удалён)
-        terminalsTokenCookie('');
+        // ключ больше не действует (пересоздан, терминал удалён): из cookie — убрать
+        if (!$key_from_url) {
+            terminalsTokenCookie('');
+        }
+        $key_bad = true;
     }
 }
-if (!$by_key && $lock == '') {
-    // терминалы с адресом этого устройства
-    $by_host = !empty($_SERVER['REMOTE_ADDR']) ? getTerminalsByHost($_SERVER['REMOTE_ADDR']) : array();
-    $pick = function ($name) use ($by_host) {
-        foreach ((array)$by_host as $rec) {
-            if ($name != '' && (strcasecmp($rec['NAME'], $name) == 0 || $rec['TITLE'] == $name)) {
-                return $rec;
-            }
+if (!$by_key) {
+    if (is_object($session) && !empty($session->data['AUTHORIZED'])) {
+        $as_admin = true;
+        if (gr('from') != '') {
+            $me = terminalsFind(gr('from'));
         }
-        return array();
-    };
-    // явно названный терминал (from= страницы и API, ?terminal= ядра) — только если адрес его
-    $asked = gr('from') != '' ? gr('from') : (string)gr('terminal');
-    if ($asked != '') {
-        $me = $pick($asked);
         if (empty($me['ID'])) {
-            $lock = 'not_this_device';
+            $list = getTerminalsByName('MAIN', 1);
+            $me = !empty($list[0]['ID']) ? $list[0] : array();
+        }
+        if (empty($me['ID'])) {
+            $me = SQLSelectOne("SELECT * FROM terminals ORDER BY ID LIMIT 1");
         }
     } else {
-        // сессия (ядро пишет в неё ?terminal= прошлых запросов) — тоже только среди своих по адресу
-        if (is_object($session) && !empty($session->data['TERMINAL'])) {
-            $me = $pick($session->data['TERMINAL']);
-        }
-        if (empty($me['ID']) && !empty($by_host[0]['ID'])) {
-            $me = $by_host[0];
-        }
-        if (empty($me['ID'])) {
-            $lock = 'unknown';
-        }
-    }
-    if ($lock == '' && ($token_only || terminalsTokenRequired($me['ID']))) {
-        $lock = 'need_key';
-    }
-    if ($lock != '') {
-        $me = array();
+        $lock = !empty($key_bad) && $key_from_url ? 'bad_key' : 'need_key';
     }
 }
 // Правила безопасности ядра смотрят терминал в сессии: на время запроса в ней — этот терминал.
@@ -160,11 +139,10 @@ if ($lock != '') {
     $finish_session();
     if (gr('ajax')) {
         header('Content-Type: application/json; charset=utf-8');
-        echo json_encode(array('sent' => 0, 'ok' => 0, 'error' => ($lock == 'rules') ? 'rules' : (($lock == 'unknown' || $lock == 'not_this_device') ? 'device' : 'key')));
+        echo json_encode(array('sent' => 0, 'ok' => 0, 'error' => ($lock == 'rules') ? 'rules' : 'key'));
         exit;
     }
     $out['LOCK'] = $lock;
-    $out['LOCK_IP'] = isset($_SERVER['REMOTE_ADDR']) ? htmlspecialchars((string)$_SERVER['REMOTE_ADDR']) : '';
     $out['ME_NAME'] = '';
     $out['ME_TITLE'] = '';
     $out['ALL_TERMINALS'] = array();
@@ -236,8 +214,11 @@ $upload_name = function ($field) {
 
 // все терминалы: имя => запись
 $all_terminals = array();
+// администратор смотрит страницу от имени другого терминала (не MAIN): терминал не отмечается в сети,
+// его входящие не помечаются доставленными и прочитанными
+$peek = $as_admin && !empty($me['NAME']) && strcasecmp($me['NAME'], 'MAIN') != 0;
 // страница открыта — терминал в сети: отметить активность, как shoutbox и command.php (не чаще раза в минуту)
-if (!empty($me['ID']) && (empty($me['LATEST_ACTIVITY']) || strtotime($me['LATEST_ACTIVITY']) < time() - 60)) {
+if (!$peek && !empty($me['ID']) && (empty($me['LATEST_ACTIVITY']) || strtotime($me['LATEST_ACTIVITY']) < time() - 60)) {
     $activity = array('ID' => (int)$me['ID'], 'LATEST_ACTIVITY' => date('Y-m-d H:i:s'), 'IS_ONLINE' => 1);
     SQLUpdate('terminals', $activity);
 }
@@ -614,6 +595,9 @@ if (gr('mode') == 'forward' && $me_name != '') {
 }
 
 // прочитано: получатель открыл чат на своей странице — его входящие в этом чате прочитаны (и доставлены)
+if (gr('mode') == 'mark_read' && $me_name != '' && $peek) {
+    $json_out(array('ok' => 1, 'read' => 0));
+}
 if (gr('mode') == 'mark_read' && $me_name != '') {
     $key = (string)gr('chat');
     $cond = '';
@@ -642,7 +626,7 @@ if (gr('mode') == 'mark_read' && $me_name != '') {
 }
 
 // доставлено: страница получателя загрузила переписку
-if ($me_name != '') {
+if ($me_name != '' && !$peek) {
     $rows = SQLSelect("SELECT ID FROM terminals_messages WHERE TO_NAME='" . DBSafe($me_name) . "' AND DELIVERED=0");
     if (count($rows)) {
         $ids = array();
@@ -764,6 +748,7 @@ if (gr('ajax') && gr('list')) {
 
 $out['ME_NAME'] = $me_name;
 $out['ME_TITLE'] = !empty($me['ID']) ? $me['TITLE'] : '';
+$out['AS_ADMIN'] = $as_admin ? 1 : 0;
 $out['ALL_TERMINALS'] = array_values($all_terminals);
 $flags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
 $out['CONVERSATION_JSON'] = json_encode($conversation, $flags);
