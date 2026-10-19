@@ -799,6 +799,14 @@
 	tmSendBtn.addEventListener('click', function (e) {
 		if (tmMicMode()) { e.preventDefault(); tmRecStart(); }
 	});
+	// Кнопки у поля ввода не забирают фокус: иначе на телефоне клавиатура при отправке прячется
+	// и тут же появляется снова (фокус уходит на кнопку, потом возвращается в поле)
+	['tm_send', 'tm_voice', 'tm_rec_cancel'].forEach(function (id) {
+		var btn = document.getElementById(id);
+		var keep = function (e) { if (document.activeElement === tmInput) e.preventDefault(); };
+		btn.addEventListener('mousedown', keep);
+		btn.addEventListener('pointerdown', keep);
+	});
 	tmSendIcon();
 	tmInput.addEventListener('keydown', function (e) {
 		if (e.key == 'Enter' && !e.shiftKey && !e.isComposing) {
@@ -956,14 +964,18 @@
 		if (voice) data.set('audio', voice.blob, voice.name);
 		status.textContent = tmText.sending;
 		tmSendBtn.disabled = true;
+		// поле очищается сразу (как в мессенджерах); не отправилось — текст вернётся
+		var hadFocus = document.activeElement === tmInput;
+		var sentText = tmInput.value;
+		tmInput.value = '';
+		tmGrow();
 		fetch(location.pathname, {method: 'POST', body: data, credentials: 'same-origin'})
 			.then(function (r) { return r.json(); })
 			.then(function (res) {
 				var errors = {too_big: tmText.tooBig.replace('%s', tmMaxFile), type: tmText.badType, upload: tmText.uploadError};
 				status.textContent = res.sent ? '' : (errors[res.error] || tmText.notSent);
+				if (!res.sent && !tmInput.value) { tmInput.value = sentText; tmGrow(); }
 				if (res.sent) {
-					tmInput.value = '';
-					tmGrow();
 					tmInputs().forEach(function (input) { input.value = ''; });
 					tmFiles();
 					tmRefresh(function () { tmOpen(tmCurrent, true); });
@@ -977,8 +989,16 @@
 					status.textContent = tmText.login;
 				}
 			})
-			.catch(function () { status.textContent = tmText.sendError; })
-			.then(function () { tmSendBtn.disabled = false; tmSendIcon(); tmInput.focus(); });
+			.catch(function () {
+				status.textContent = tmText.sendError;
+				if (!tmInput.value) { tmInput.value = sentText; tmGrow(); }
+			})
+			.then(function () {
+				tmSendBtn.disabled = false;
+				tmSendIcon();
+				// фокус возвращаем, только если он был в поле, — не открывать клавиатуру зря
+				if (hadFocus && document.activeElement !== tmInput) tmInput.focus();
+			});
 	}
 
 	// своя группа: диалог создания и изменения
