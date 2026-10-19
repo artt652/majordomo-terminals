@@ -95,15 +95,18 @@ function terminalsQueueUsed($tts)
 
 // $kind: say, ask, cached (голос фразы), sound (звуковой файл — terminalsSend), call (метод дополнения —
 // terminalsQueueCall(), $message — массив method/args/busy); $sender — от кого (заголовок окна);
-// $message_ids — номера сообщений страницы «Сообщения» (через запятую): когда запись отдана устройству — «доставлено»
-function terminalsQueueAdd($terminal_rec, $kind, $message, $level, $file, $image = '', $sender = '', $message_ids = '')
+// $message_ids — номера сообщений страницы «Сообщения» (через запятую): когда запись отдана устройству — «доставлено»;
+// $duration — длительность звукового файла, если известна заранее (страница «Сообщения» присылает её для записей
+// из браузера, в которых её нет), иначе — из файла (terminals_media.inc.php)
+function terminalsQueueAdd($terminal_rec, $kind, $message, $level, $file, $image = '', $sender = '', $message_ids = '', $duration = 0)
 {
+    $duration = max(0, min(3600, (int)ceil((float)$duration)));
     $message_ids = implode(',', array_filter(array_map('intval', explode(',', (string)$message_ids))));
     $tid = isset($terminal_rec['ID']) ? (int)$terminal_rec['ID'] : 0;
     $urgent = ($kind == 'ask' || (int)$level >= terminals::QUEUE_URGENT_LEVEL);
     if (!$tid || !terminalsQueueLock($tid)) {
         // без ID или очередь занята другим процессом слишком долго — не теряем сообщение
-        $played = terminalsQueuePlay($terminal_rec, $kind, $message, $level, $file, $image, $sender);
+        $played = terminalsQueuePlay($terminal_rec, $kind, $message, $level, $file, $image, $sender, $duration);
         terminalsQueueDelivered($played[0], $message_ids);
         return $played[0];
     }
@@ -200,6 +203,7 @@ function terminalsQueueAdd($terminal_rec, $kind, $message, $level, $file, $image
         'IMAGE' => (string)$image,
         'SENDER' => (string)$sender,
         'MESSAGE_IDS' => $message_ids,
+        'DURATION' => $duration,
         'ADDED' => $now,
         'STARTED' => 0,
         'FINISH' => 0,
@@ -231,7 +235,7 @@ function terminalsQueueAdd($terminal_rec, $kind, $message, $level, $file, $image
             }
         }
         $rec['STARTED'] = $now;
-        $played = terminalsQueuePlay($terminal_rec, $kind, $message, $level, $file, $image, $sender);
+        $played = terminalsQueuePlay($terminal_rec, $kind, $message, $level, $file, $image, $sender, $duration);
         terminalsQueueDelivered($played[0], $message_ids);
         $rec['FINISH'] = $now + $played[1];
         SQLInsert('terminals_queue', $rec);
@@ -293,7 +297,8 @@ function terminalsQueueNext($tid, $check = 0)
         if ($next['KIND'] != 'call' && !is_string($message)) {
             $message = '';
         }
-        $played = terminalsQueuePlay($terminal_rec, $next['KIND'], $message, (int)$next['LEVEL'], $next['FILENAME'], (string)$next['IMAGE'], (string)$next['SENDER']);
+        $played = terminalsQueuePlay($terminal_rec, $next['KIND'], $message, (int)$next['LEVEL'], $next['FILENAME'], (string)$next['IMAGE'],
+            (string)$next['SENDER'], isset($next['DURATION']) ? (int)$next['DURATION'] : 0);
         terminalsQueueDelivered($played[0], isset($next['MESSAGE_IDS']) ? $next['MESSAGE_IDS'] : '');
         $next['STARTED'] = $now;
         $next['FINISH'] = $now + $played[1];
@@ -328,7 +333,7 @@ function terminalsQueueDelivered($played, $message_ids)
 
 // Отдать сообщение дополнению TTS. Возвращает [результат дополнения, сколько секунд терминал занят].
 // Сообщение с картинкой уходит в showMessage(), если дополнение его умеет (текст, картинка и голос вместе)
-function terminalsQueuePlay($terminal_rec, $kind, $message, $level, $file, $image = '', $sender = '')
+function terminalsQueuePlay($terminal_rec, $kind, $message, $level, $file, $image = '', $sender = '', $duration = 0)
 {
     $result = false;
     $busy = 0;
@@ -352,11 +357,12 @@ function terminalsQueuePlay($terminal_rec, $kind, $message, $level, $file, $imag
         // звуковой файл (terminalsSend): дополнению, которое умеет playFile()
         if (method_exists($tts, 'playFile')) {
             DebMes("Playing sound to " . $terminal_rec['TITLE'] . " (level $level): $file", 'terminals');
-            $result = $tts->playFile($file, $level, $sender);
+            // длительность — 4-м аргументом: pipup держит окно (и звук) не меньше; остальные дополнения его не берут
+            $result = $tts->playFile($file, $level, $sender, $duration);
             if ($result) {
-                $local = is_file($file) ? $file : (is_file(ROOT . ltrim($file, '/')) ? ROOT . ltrim($file, '/') : '');
-                $seconds = ($local != '' && function_exists('getMediaDurationSeconds')) ? (int)getMediaDurationSeconds($local) : 0;
-                $busy = ($seconds > 0) ? $seconds + 1 : 3;
+                $seconds = ($duration > 0) ? $duration : terminalsQueueFileSeconds($file);
+                // длительность не узнали — 15 с (короткий сигнал проще переждать, чем наложить на длинную запись)
+                $busy = ($seconds > 0) ? $seconds + 1 : 15;
             }
         }
         return array($result, $busy);
@@ -365,10 +371,7 @@ function terminalsQueuePlay($terminal_rec, $kind, $message, $level, $file, $imag
         DebMes("Showing to " . $terminal_rec['TITLE'] . ' (level ' . $level . '): ' . $message . ($sender != '' ? " (from: $sender)" : '') . ($image != '' ? " (image: $image)" : '') . ($file != '' ? " (file: $file)" : ''), 'terminals');
         $result = $tts->showMessage($message, ($kind == 'ask') ? 9999 : $level, $image, $file, $sender);
         if ($result) {
-            $seconds = 0;
-            if ($file != '' && is_file($file) && function_exists('getMediaDurationSeconds')) {
-                $seconds = (int)getMediaDurationSeconds($file);
-            }
+            $seconds = ($file != '') ? terminalsQueueFileSeconds($file) : 0;
             $busy = ($seconds > 0) ? $seconds + 1 : terminalsQueueSpeechSeconds($message);
         }
         return array($result, $busy);
@@ -388,10 +391,7 @@ function terminalsQueuePlay($terminal_rec, $kind, $message, $level, $file, $imag
         DebMes("Saying cached to " . $terminal_rec['TITLE'] . ' (level ' . $level . '): ' . $message . " (file: $file)", 'terminals');
         $cached = $tts->sayCached($message, $level, $file);
         if ($cached) {
-            $seconds = 0;
-            if (is_file($file) && function_exists('getMediaDurationSeconds')) {
-                $seconds = (int)getMediaDurationSeconds($file);
-            }
+            $seconds = terminalsQueueFileSeconds($file);
             $busy = max($busy, ($seconds > 0) ? $seconds + 1 : terminalsQueueSpeechSeconds($message));
         }
         if ($kind == 'cached') {
@@ -399,6 +399,14 @@ function terminalsQueuePlay($terminal_rec, $kind, $message, $level, $file, $imag
         }
     }
     return array($result, $busy);
+}
+
+// Длительность файла в целых секундах (вверх); путь — от корня диска или от веб-корня; 0 — не узнали
+function terminalsQueueFileSeconds($file)
+{
+    $file = (string)$file;
+    $local = is_file($file) ? $file : (($file != '' && is_file(ROOT . ltrim($file, '/'))) ? ROOT . ltrim($file, '/') : '');
+    return ($local != '') ? (int)ceil(terminalsMediaDuration($local)) : 0;
 }
 
 // Примерная длительность речи: ~12 символов в секунду + 1 с

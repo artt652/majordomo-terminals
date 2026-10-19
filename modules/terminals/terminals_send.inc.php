@@ -11,6 +11,8 @@
  *       'file_name' => 'Счёт.pdf',              // имя файла для показа и скачивания
  *       'video' => 'cms/cached/terminals/x.mp4', // видео: на странице «Сообщения» — плеер, на устройстве —
  *                                               // окно видео, если у дополнения есть sendVideo() (pipup), иначе «Видео»
+ *       'sound_duration' => 12.4,               // длительность звука / видео в секундах, если известна заранее
+ *       'video_duration' => 30,                 // (иначе — из файла: terminalsMediaDuration())
  *       'voice' => true,                        // озвучить текст генератором речи (по умолчанию да)
  *       'level' => 5,                           // уровень; по умолчанию — порог терминала-получателя
  *       'chat'  => 'room:3',                    // чат на странице «Сообщения»: all, room:ID, group:ID (пусто — личный)
@@ -132,8 +134,9 @@ function terminalsSend($to, $message, $options = array())
         // звук перед сообщением
         if ($sound != '' && is_object($tts) && method_exists($tts, 'playFile')) {
             if (terminalsQueueUsed($tts)) {
-                terminalsQueueAdd($terminal_rec, 'sound', '', $level, $sound, '', $sender_title, $message_id);
-            } elseif ($tts->playFile($sound, $level, $sender_title)) {
+                terminalsQueueAdd($terminal_rec, 'sound', '', $level, $sound, '', $sender_title, $message_id,
+                    isset($options['sound_duration']) ? (float)$options['sound_duration'] : 0);
+            } elseif ($tts->playFile($sound, $level, $sender_title, isset($options['sound_duration']) ? (float)$options['sound_duration'] : 0)) {
                 terminalsMessagesDelivered($message_id);
             }
         }
@@ -142,13 +145,9 @@ function terminalsSend($to, $message, $options = array())
         $video_shown = false;
         if ($speaks && $video != '' && is_object($tts) && method_exists($tts, 'sendVideo')) {
             $url = method_exists($tts, 'fileUrl') ? $tts->fileUrl($video) : $video;
-            $duration = 60;
-            if (function_exists('getMediaDurationSeconds') && file_exists(ROOT . ltrim($video, '/'))) {
-                $seconds = (int)getMediaDurationSeconds(ROOT . ltrim($video, '/'));
-                if ($seconds > 0) {
-                    $duration = min($seconds + 3, 600);
-                }
-            }
+            // длительность: от страницы «Сообщения» (браузер знает её при выборе файла), иначе из файла, иначе 60 с
+            $seconds = !empty($options['video_duration']) ? (int)ceil((float)$options['video_duration']) : terminalsQueueFileSeconds($video);
+            $duration = ($seconds > 0) ? min($seconds + 3, 600) : 60;
             $video_args = array($url, '', $sender_title, 'video', array('muted' => false, 'duration' => $duration));
             if ($url && terminalsQueueUsed($tts)) {
                 $video_shown = (bool)terminalsQueueCall($terminal_rec, 'sendVideo', $video_args,

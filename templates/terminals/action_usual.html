@@ -867,8 +867,28 @@
 			if (pair[input.name] && input.files.length) tmForm[pair[input.name]].value = '';
 			tmMenu.style.display = 'none';
 			tmFiles();
+			tmProbeDuration(input);
 		});
 	});
+	// длительность выбранного видео или звука — браузер читает её из файла; сервер держит по ней терминал
+	// и окно на устройстве (в записях из браузера её часто нет в самом файле, а ffmpeg есть не везде)
+	function tmProbeDuration(input) {
+		input.tmDuration = 0;
+		var f = input.files && input.files[0];
+		if (!f || !/^(video_camera|video|audio)$/.test(input.name) || !window.URL || !URL.createObjectURL) return;
+		var el = document.createElement(input.name == 'audio' ? 'audio' : 'video');
+		var url = URL.createObjectURL(f);
+		el.preload = 'metadata';
+		el.onloadedmetadata = function () {
+			if (input.files && input.files[0] === f && isFinite(el.duration) && el.duration > 0) input.tmDuration = el.duration;
+			URL.revokeObjectURL(url);
+		};
+		el.onerror = function () { URL.revokeObjectURL(url); };
+		el.src = url;
+	}
+	function tmFileDuration(input) {
+		return (input.files && input.files.length && input.tmDuration) ? input.tmDuration : 0;
+	}
 	function tmHasFiles() {
 		return tmInputs().some(function (input) { return input.files && input.files.length; });
 	}
@@ -945,7 +965,8 @@
 			var mime = (rec.recorder.mimeType || 'audio/webm').split(';')[0];
 			var ext = mime.indexOf('ogg') >= 0 ? 'ogg' : (mime.indexOf('mp4') >= 0 || mime.indexOf('aac') >= 0 ? 'm4a' : 'webm');
 			var blob = new Blob(rec.chunks, {type: mime});
-			done(blob.size ? {blob: blob, name: 'voice.' + ext} : null);
+			// длительность записи знает сама страница (в webm-записи браузера её нет)
+			done(blob.size ? {blob: blob, name: 'voice.' + ext, duration: (Date.now() - rec.started) / 1000} : null);
 		};
 		rec.recorder.stop();
 	}
@@ -1141,6 +1162,10 @@
 		var data = new FormData(tmForm);
 		data.append('from', tmMe());
 		if (voice) data.set('audio', voice.blob, voice.name);
+		var audioSec = voice ? voice.duration : tmFileDuration(tmForm.audio);
+		var videoSec = tmFileDuration(tmForm.video) || tmFileDuration(tmForm.video_camera);
+		if (audioSec) data.append('audio_duration', audioSec.toFixed(2));
+		if (videoSec) data.append('video_duration', videoSec.toFixed(2));
 		status.textContent = tmText.sending;
 		tmSendBtn.disabled = true;
 		// поле очищается сразу (как в мессенджерах); не отправилось — текст вернётся

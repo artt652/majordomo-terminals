@@ -502,7 +502,8 @@ $send_to_shouts = function ($chat, $text) use ($user_id, $me, $me_name, &$sessio
 // терминалам чата (или списку $to): текст и вложения ($media — image, sound, file, file_name, video),
 // $forwarded — от кого пересланное сообщение. Возвращает число получателей
 $send_to_terminals = function ($chat, $to, $text, $media, $voice, $forwarded = '') use ($me_name) {
-    $media = array_merge(array('image' => '', 'sound' => '', 'file' => '', 'file_name' => '', 'video' => ''), (array)$media);
+    $media = array_merge(array('image' => '', 'sound' => '', 'file' => '', 'file_name' => '', 'video' => '',
+        'sound_duration' => 0, 'video_duration' => 0), (array)$media);
     if ($me_name == '' || !count($to) || ($text == '' && $media['image'] == '' && $media['sound'] == '' && $media['file'] == '' && $media['video'] == '')) {
         return 0;
     }
@@ -513,6 +514,8 @@ $send_to_terminals = function ($chat, $to, $text, $media, $voice, $forwarded = '
         'file' => $media['file'],
         'video' => $media['video'],
         'file_name' => $media['file_name'],
+        'sound_duration' => $media['sound_duration'],
+        'video_duration' => $media['video_duration'],
         'voice' => $voice ? true : false,
         'forwarded' => $forwarded,
     );
@@ -553,8 +556,16 @@ if ($this->mode == 'send_message' || gr('mode') == 'send_message') {
     }
     $sent = 0;
     if ($upload_error == '') {
+        // длительность звука и видео — от браузера (знает её при выборе файла и при записи голосового;
+        // в записях из браузера её часто нет в самом файле), не больше 10 минут
+        $browser_seconds = function ($name) {
+            $value = (float)str_replace(',', '.', (string)gr($name));
+            return ($value > 0 && $value <= 600) ? round($value, 2) : 0;
+        };
         $sent = $send_to_terminals($chat, $to, $text, array('image' => $image, 'sound' => $sound, 'file' => $file,
-            'file_name' => ($file != '') ? $upload_name('file') : '', 'video' => $video), gr('voice', 'int'));
+            'file_name' => ($file != '') ? $upload_name('file') : '', 'video' => $video,
+            'sound_duration' => ($sound != '') ? $browser_seconds('audio_duration') : 0,
+            'video_duration' => ($video != '') ? $browser_seconds('video_duration') : 0), gr('voice', 'int'));
     }
     if (gr('ajax')) {
         $json_out(array('sent' => $sent, 'error' => $upload_error));

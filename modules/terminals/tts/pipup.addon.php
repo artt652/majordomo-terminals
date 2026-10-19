@@ -105,6 +105,13 @@ class pipup extends tts_addon
         return $out;
     }
 
+    // Длительность звука или видео в целых секундах (вверх), 0 — не узнали (terminals_media.inc.php)
+    function mediaSeconds($file)
+    {
+        include_once DIR_MODULES . 'terminals/terminals_media.inc.php';
+        return (int)ceil(terminalsMediaDuration($file));
+    }
+
     // Сообщения идут через очередь модуля terminals: окна не перебивают друг друга
     function useQueue()
     {
@@ -167,8 +174,8 @@ class pipup extends tts_addon
                     $data['soundVolume'] = $this->messageVolume();
                 }
                 $local = $this->localPath($cached_file);
-                if ($local !== false && function_exists('getMediaDurationSeconds')) {
-                    $data['duration'] = max($data['duration'], (int)getMediaDurationSeconds($local) + 2);
+                if ($local !== false && ($seconds = $this->mediaSeconds($local)) > 0) {
+                    $data['duration'] = max($data['duration'], $seconds + 2);
                 }
             }
         }
@@ -218,8 +225,9 @@ class pipup extends tts_addon
     }
 
     // Звуковой файл (terminalsSend: звук перед сообщением) — отдельным окном.
-    // Файл — путь в веб-корне MajorDoMo или http-ссылка; $title — заголовок окна (например, отправитель)
-    function playFile($file, $level = 0, $title = '')
+    // Файл — путь в веб-корне MajorDoMo или http-ссылка; $title — заголовок окна (например, отправитель);
+    // $known — длительность, если известна заранее (запись из браузера, в файле её нет): окно не закроется раньше
+    function playFile($file, $level = 0, $title = '', $known = 0)
     {
         $soundUrl = $this->fileUrl($file);
         if ($soundUrl === false) {
@@ -228,8 +236,10 @@ class pipup extends tts_addon
         }
         $duration = 5;
         $local = $this->localPath($file);
-        if ($local !== false && function_exists('getMediaDurationSeconds')) {
-            $duration = max(3, (int)getMediaDurationSeconds($local) + 2);
+        if ($known > 0) {
+            $duration = max(3, (int)ceil($known) + 2);
+        } elseif ($local !== false && ($seconds = $this->mediaSeconds($local)) > 0) {
+            $duration = max(3, $seconds + 2);
         }
         return $this->sendSound($soundUrl, '', ($title != '') ? '🔊 ' . $title : '🔊', $duration, $this->messageVolume());
     }
@@ -265,8 +275,8 @@ class pipup extends tts_addon
         // Окно висит не меньше, чем нужно на чтение текста, и не меньше длины звука + 2 с
         $duration = $this->autoDuration($phrase);
         $local = $this->localPath($cached_file);
-        if ($local !== false && function_exists('getMediaDurationSeconds')) {
-            $duration = max($duration, (int)getMediaDurationSeconds($local) + 2);
+        if ($local !== false && ($seconds = $this->mediaSeconds($local)) > 0) {
+            $duration = max($duration, $seconds + 2);
         }
         return $this->sendSound($soundUrl, $phrase, $title, $duration, $this->messageVolume(), $this->messageId($phrase));
     }

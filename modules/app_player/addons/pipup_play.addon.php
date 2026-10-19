@@ -61,8 +61,8 @@ class pipup_play extends app_player_addon
 
         $local = $pipup->localPath($input);
         $seconds = 0;
-        if ($local !== false && ($type == 'audio' || $type == 'video') && function_exists('getMediaDurationSeconds')) {
-            $seconds = (int)getMediaDurationSeconds($local);
+        if ($local !== false && ($type == 'audio' || $type == 'video')) {
+            $seconds = $pipup->mediaSeconds($local);
         }
 
         switch ($type) {

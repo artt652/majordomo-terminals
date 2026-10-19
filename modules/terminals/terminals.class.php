@@ -10,6 +10,7 @@
  */
 //
 //
+include_once(DIR_MODULES . 'terminals/terminals_media.inc.php');
 include_once(DIR_MODULES . 'terminals/terminals_queue.inc.php');
 include_once(DIR_MODULES . 'terminals/terminals_settings.inc.php');
 include_once(DIR_MODULES . 'terminals/terminals_send.inc.php');
@@ -494,6 +495,7 @@ class terminals extends module
  terminals_queue: IMAGE varchar(255) NOT NULL DEFAULT ''
  terminals_queue: SENDER varchar(255) NOT NULL DEFAULT ''
  terminals_queue: MESSAGE_IDS varchar(255) NOT NULL DEFAULT ''
+ terminals_queue: DURATION int(10) NOT NULL DEFAULT '0'
  terminals_queue: ADDED int(10) NOT NULL DEFAULT '0'
  terminals_queue: STARTED int(10) NOT NULL DEFAULT '0'
  terminals_queue: FINISH int(10) NOT NULL DEFAULT '0'
