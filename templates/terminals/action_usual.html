@@ -180,8 +180,10 @@
 	.tg-recording #tm_attach, .tg-recording #tm_text, .tg-recording #tm_voice { display: none; }
 	.tg-status { font-size: 12px; color: var(--tg-muted); padding: 2px 12px; background: var(--tg-panel); }
 	.tg-status:empty { display: none; }
-	.tg-placeholder { flex: 1; display: flex; }
+	.tg-placeholder { flex: 1; display: flex; align-items: center; justify-content: center; }
 	.tg-back { display: none; }
+	/* окно чата: стиль в CSS (не в разметке), иначе без выбранного чата оно не скрывается и делит страницу */
+	.tg-chat-view { display: flex; flex-direction: column; flex: 1; min-height: 0; margin: 0; }
 	.tg-app.tg-no-chat .tg-chat-view { display: none; }
 	.tg-app:not(.tg-no-chat) .tg-placeholder { display: none; }
 	/* диалог группы */
@@ -252,7 +254,7 @@
 	<!-- открытый чат -->
 	<div class="tg-main">
 		<div class="tg-placeholder"><div class="tg-empty"><#LANG_TERMINALS_SELECT_CHAT#></div></div>
-		<form id="tm_form" class="tg-chat-view" method="post" enctype="multipart/form-data" action="?" style="display:flex;flex-direction:column;flex:1;min-height:0;margin:0">
+		<form id="tm_form" class="tg-chat-view" method="post" enctype="multipart/form-data" action="?">
 			<div class="tg-head">
 				<button type="button" class="tg-icon tg-back" id="tm_back" title="<#LANG_TERMINALS_BACK#>"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
 				<div class="tg-avatar tg-clickable" id="tm_chat_avatar" title="<#LANG_TERMINALS_INFO#>"></div>
