@@ -440,7 +440,7 @@ if (gr('mode') == 'group_delete' && $me_name != '') {
 }
 
 // общий чат MajorDoMo и его комнаты: только текст, от пользователя, вошедшего на сайт. Возвращает 1 — записано
-$send_to_shouts = function ($chat, $text) use ($user_id, $me, $me_name, &$session) {
+$send_to_shouts = function ($chat, $text) use ($user_id, $me, $me_name, &$session, $peek, $by_key) {
     $text = trim((string)$text);
     if ($text == '' || !$user_id || $me_name == '') {
         return 0;
@@ -453,10 +453,16 @@ $send_to_shouts = function ($chat, $text) use ($user_id, $me, $me_name, &$sessio
         $now = date('Y-m-d H:i:s');
         $activity = array('ID' => (int)$me['ID'], 'LATEST_ACTIVITY' => $now, 'LATEST_REQUEST_TIME' => $now,
             'LATEST_REQUEST' => htmlspecialchars($text), 'IS_ONLINE' => 1);
+        if ($peek) {
+            // из панели от имени другого терминала: ответ дома — ему, но «в сети» он не отмечается
+            unset($activity['LATEST_ACTIVITY'], $activity['IS_ONLINE']);
+        }
         SQLUpdate('terminals', $activity);
         // правила шаблонов поведения смотрят терминал в сессии, а событие COMMAND получает эту сессию:
-        // в ней должен быть этот терминал, сохранённый до say()
-        if (is_object($session)) {
+        // в ней должен быть этот терминал, сохранённый до say(). Только при входе по ключу: сессия
+        // закрывается до say() и вернуть её уже нельзя — из панели управления терминал остался бы
+        // в сессии насовсем (ядро отмечало бы его «в сети»); команда из панели идёт с сессией панели
+        if ($by_key && is_object($session)) {
             $session->data['TERMINAL'] = $me['NAME'];
             unset($session->data['TERMINAL_ID']);
             if (method_exists($session, 'save')) {

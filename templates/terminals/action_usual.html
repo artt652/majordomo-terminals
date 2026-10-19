@@ -50,8 +50,9 @@
 	.tg-head .tg-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 	.tg-sub { font-size: 13px; color: var(--tg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 	.tg-sub select { background: var(--tg-input); color: var(--tg-text); border: 0; border-radius: 8px; padding: 2px 6px; max-width: 100%; }
-	.tg-admin-as { display: flex; align-items: center; gap: 6px; }
-	.tg-admin-as select { min-width: 0; flex: 1; }
+	.tg-as { position: relative; flex: none; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; margin: 0 0 0 -4px; border-radius: 50%; color: var(--tg-muted); cursor: pointer; }
+	.tg-as:hover { background: var(--tg-hover); color: var(--tg-text); }
+	.tg-as select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 16px; }
 	.tg-grow { flex: 1; min-width: 0; }
 	.tg-icon { background: none; border: 0; color: var(--tg-muted); font-size: 20px; line-height: 1; padding: 8px; border-radius: 50%; cursor: pointer; flex: none; }
 	.tg-icon:hover { background: rgba(127,127,127,.15); }
@@ -255,21 +256,25 @@
 			<div class="tg-grow">
 				[#if ME_NAME!=""#]
 				<!-- этот терминал: аватарка и имя, как в списке чатов; нажатие — его карточка -->
-				<div class="tg-me tg-clickable" id="tm_me_title" title="<#LANG_TERMINALS_INFO#>">
-					<div class="tg-avatar" id="tm_me_avatar"></div>
-					<div class="tg-title">[#ME_TITLE#]</div>
+				<div class="tg-me">
+					<div class="tg-me tg-clickable" id="tm_me_title" title="<#LANG_TERMINALS_INFO#>">
+						<div class="tg-avatar" id="tm_me_avatar"></div>
+						<div class="tg-title">[#ME_TITLE#]</div>
+					</div>
+					[#if AS_ADMIN="1"#]
+					<!-- вход из панели управления (без ключа): от имени какого терминала — список под стрелкой -->
+					<label class="tg-as" title="<#LANG_TERMINALS_ADMIN_AS_HINT#>">
+						<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+						<select id="tm_from" aria-label="<#LANG_TERMINALS_ADMIN_AS#>">
+							[#begin ALL_TERMINALS#]<option value="[#NAME#]"[#if NAME="<#ME_NAME#>"#] selected[#endif#]>[#TITLE#]</option>[#end ALL_TERMINALS#]
+						</select>
+					</label>
+					[#endif AS_ADMIN#]
 				</div>
 				[#else ME_NAME#]
 				<div class="tg-title" id="tm_me_title"><#LANG_TERMINALS_MESSAGES#></div>
 				[#endif ME_NAME#]
-				[#if AS_ADMIN="1"#]
-				<!-- вход из панели управления (без ключа): от имени какого терминала -->
-				<div class="tg-sub tg-admin-as" title="<#LANG_TERMINALS_ADMIN_AS_HINT#>"><#LANG_TERMINALS_ADMIN_AS#>:
-					<select id="tm_from">
-						[#begin ALL_TERMINALS#]<option value="[#NAME#]"[#if NAME="<#ME_NAME#>"#] selected[#endif#]>[#TITLE#]</option>[#end ALL_TERMINALS#]
-					</select>
-				</div>
-				[#else AS_ADMIN#]
+				[#if AS_ADMIN!="1"#]
 				<input type="hidden" id="tm_from" value="[#ME_NAME#]">
 				[#endif AS_ADMIN#]
 			</div>
