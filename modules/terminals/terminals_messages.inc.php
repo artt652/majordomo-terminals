@@ -4,8 +4,7 @@
  * Открывается на устройстве-терминале как приложение app_messages: /popup/app_messages.html
  * (или /module/terminals.html), на странице меню — [#module name="terminals" action="messages"#].
  *
- * Отправитель — терминал, с которого открыта страница: ядро определяет его по адресу устройства
- * или по ?terminal=ИМЯ (запоминается в сессии). Если не определился — выбирается на странице.
+ * Отправитель — терминал, с которого открыта страница: по ключу или по адресу устройства (ниже).
  * Чаты как в мессенджере: «Все терминалы», комнаты MajorDoMo (терминал, привязанный к комнате,
  * сам состоит в её чате), свои группы терминалов и личные чаты с каждым терминалом.
  * Можно отправить текст (с озвучкой на терминале-получателе или без), картинку или фото
@@ -53,8 +52,11 @@ $upload_error = '';
 
 // Терминал этого устройства.
 // 1) Ключ (terminals_auth.inc.php): ?token=… (ссылка из карточки терминала, API) или cookie tmmsg_key.
-// 2) Без ключа — выбранный на странице (from), из сессии или по адресу устройства, если у терминала
-//    не включено «Требовать ключ» и не включена общая настройка «Страница „Сообщения“ только по ключу».
+//    Ключ важнее адреса: с ключом страница открывается с любого адреса.
+// 2) Без ключа — только по адресу устройства (IP = «Хост» терминала). Имя из ?terminal=, from= или
+//    сессии выбирает терминал лишь среди терминалов с этим адресом; чужое имя в ?terminal=/from= —
+//    отказ. Устройство, не узнанное по адресу, не пускается. Без ключа нельзя и тогда, когда у
+//    терминала включено «Требовать ключ» или включена общая настройка «Страница „Сообщения“ только по ключу».
 // Затем «Контроль доступа» (правила безопасности) своего терминала: не пускает — страница закрыта.
 $this->getConfig();
 $token_only = !empty($this->config['MESSAGES_TOKEN_ONLY']);
@@ -89,19 +91,40 @@ if ($key != '') {
     }
 }
 if (!$by_key && $lock == '') {
-    if (gr('from') != '') {
-        $me = terminalsFind(gr('from'));
+    // терминалы с адресом этого устройства
+    $by_host = !empty($_SERVER['REMOTE_ADDR']) ? getTerminalsByHost($_SERVER['REMOTE_ADDR']) : array();
+    $pick = function ($name) use ($by_host) {
+        foreach ((array)$by_host as $rec) {
+            if ($name != '' && (strcasecmp($rec['NAME'], $name) == 0 || $rec['TITLE'] == $name)) {
+                return $rec;
+            }
+        }
+        return array();
+    };
+    // явно названный терминал (from= страницы и API, ?terminal= ядра) — только если адрес его
+    $asked = gr('from') != '' ? gr('from') : (string)gr('terminal');
+    if ($asked != '') {
+        $me = $pick($asked);
+        if (empty($me['ID'])) {
+            $lock = 'not_this_device';
+        }
+    } else {
+        // сессия (ядро пишет в неё ?terminal= прошлых запросов) — тоже только среди своих по адресу
+        if (is_object($session) && !empty($session->data['TERMINAL'])) {
+            $me = $pick($session->data['TERMINAL']);
+        }
+        if (empty($me['ID']) && !empty($by_host[0]['ID'])) {
+            $me = $by_host[0];
+        }
+        if (empty($me['ID'])) {
+            $lock = 'unknown';
+        }
     }
-    if (empty($me['ID']) && is_object($session) && !empty($session->data['TERMINAL'])) {
-        $me = terminalsFind($session->data['TERMINAL']);
-    }
-    if (empty($me['ID']) && !empty($_SERVER['REMOTE_ADDR'])) {
-        $list = getTerminalsByHost($_SERVER['REMOTE_ADDR'], 1);
-        $me = !empty($list[0]['ID']) ? $list[0] : array();
-    }
-    if ($token_only || (!empty($me['ID']) && terminalsTokenRequired($me['ID']))) {
-        $me = array();
+    if ($lock == '' && ($token_only || terminalsTokenRequired($me['ID']))) {
         $lock = 'need_key';
+    }
+    if ($lock != '') {
+        $me = array();
     }
 }
 // Правила безопасности ядра смотрят терминал в сессии: на время запроса в ней — этот терминал.
@@ -137,10 +160,11 @@ if ($lock != '') {
     $finish_session();
     if (gr('ajax')) {
         header('Content-Type: application/json; charset=utf-8');
-        echo json_encode(array('sent' => 0, 'ok' => 0, 'error' => ($lock == 'rules') ? 'rules' : 'key'));
+        echo json_encode(array('sent' => 0, 'ok' => 0, 'error' => ($lock == 'rules') ? 'rules' : (($lock == 'unknown' || $lock == 'not_this_device') ? 'device' : 'key')));
         exit;
     }
     $out['LOCK'] = $lock;
+    $out['LOCK_IP'] = isset($_SERVER['REMOTE_ADDR']) ? htmlspecialchars((string)$_SERVER['REMOTE_ADDR']) : '';
     $out['ME_NAME'] = '';
     $out['ME_TITLE'] = '';
     $out['ALL_TERMINALS'] = array();
