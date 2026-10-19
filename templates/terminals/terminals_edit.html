@@ -31,10 +31,10 @@
 <div class="tab-pane active" id="tab_settings">
 <form action="?" method="post" enctype="multipart/form-data" class="form-horizontal" name="frmEdit">
 [#if OK#]
-<div class="form-group"><div class="col-lg-offset-4 col-lg-8"><div class="alert alert-success"><#LANG_DATA_SAVED#></div></div></div>
+<div class="form-group"><label class="col-lg-4 control-label">&nbsp;</label><div class="col-lg-8"><div class="alert alert-success"><#LANG_DATA_SAVED#></div></div></div>
 [#endif OK#]
 [#if ERR#]
-<div class="form-group"><div class="col-lg-offset-4 col-lg-8"><div class="alert alert-danger"><#LANG_FILLOUT_REQURED#></div></div></div>
+<div class="form-group"><label class="col-lg-4 control-label">&nbsp;</label><div class="col-lg-8"><div class="alert alert-danger"><#LANG_FILLOUT_REQURED#></div></div></div>
 [#endif ERR#]
 
 
@@ -86,7 +86,7 @@
         </script>
 
     <div class="form-group">
-            <div class="col-lg-offset-4 col-lg-8">
+            <label class="col-lg-4 control-label">&nbsp;</label><div class="col-lg-8">
                     <div class="checkbox">
                             <label>
                                     <input type="checkbox" value="1" id='majordroid_api' onClick='majordroidChanged();' name="majordroid_api" [#if MAJORDROID_API="1"#] checked[#endif#]> MajorDroid API
@@ -402,7 +402,7 @@
 [#endif ID#]
 <!-- разграничение прав доступа к терминалам -->
 <div class="form-group">
-     <div class="col-lg-offset-4 col-lg-8">
+     <label class="col-lg-4 control-label">&nbsp;</label><div class="col-lg-8">
  [#if ID!=""#]
  <input class="btn btn-default btn-primary" type="submit" name="subm" value="<#LANG_SUBMIT#>">
  [#else ID#]
@@ -425,12 +425,12 @@
 <!-- ключ доступа к странице «Сообщения» -->
 <div class="tab-pane" id="tab_access">
 <form action="?" method="post" class="form-horizontal" name="frmToken">
-[#if TOKEN_REVOKED="1"#]<div class="form-group"><div class="col-lg-offset-4 col-lg-8"><div class="alert alert-info"><#LANG_TERMINALS_TOKEN_REVOKED#></div></div></div>[#endif TOKEN_REVOKED#]
-[#if TOKEN_SAVED="1"#]<div class="form-group"><div class="col-lg-offset-4 col-lg-8"><div class="alert alert-success"><#LANG_DATA_SAVED#></div></div></div>[#endif TOKEN_SAVED#]
+[#if TOKEN_REVOKED="1"#]<div class="form-group"><label class="col-lg-4 control-label">&nbsp;</label><div class="col-lg-8"><div class="alert alert-info"><#LANG_TERMINALS_TOKEN_REVOKED#></div></div></div>[#endif TOKEN_REVOKED#]
+[#if TOKEN_SAVED="1"#]<div class="form-group"><label class="col-lg-4 control-label">&nbsp;</label><div class="col-lg-8"><div class="alert alert-success"><#LANG_DATA_SAVED#></div></div></div>[#endif TOKEN_SAVED#]
 [#if TOKEN_NEW!=""#]
 <!-- новый ключ: показывается один раз -->
 <div class="form-group">
-	<div class="col-lg-offset-4 col-lg-8">
+	<label class="col-lg-4 control-label">&nbsp;</label><div class="col-lg-8">
 		<div class="alert alert-warning"><#LANG_TERMINALS_TOKEN_SHOW_ONCE#></div>
 		<div class="input-group">
 			<input type="text" class="form-control" id="token_link" readonly onclick="this.select()">
@@ -481,13 +481,13 @@
 	</p></div>
 </div>
 <div class="form-group">
-	<div class="col-lg-offset-4 col-lg-8">
+	<label class="col-lg-4 control-label">&nbsp;</label><div class="col-lg-8">
 		<div class="checkbox"><label><input type="checkbox" name="token_required" value="1"[#if TOKEN_REQUIRED="1"#] checked[#endif#] onchange="this.form.mode.value='token_required';this.form.submit();"> <#LANG_TERMINALS_TOKEN_REQUIRED#></label></div>
 		<p class="help-block"><#LANG_TERMINALS_TOKEN_HELP#></p>
 	</div>
 </div>
 <div class="form-group">
-	<div class="col-lg-offset-4 col-lg-8">
+	<label class="col-lg-4 control-label">&nbsp;</label><div class="col-lg-8">
 		<button class="btn btn-default" type="submit" onclick="this.form.mode.value='token_create';[#if TOKEN_EXISTS="1"#]return confirm('<#LANG_TERMINALS_TOKEN_RECREATE_CONFIRM#>');[#endif#]">[#if TOKEN_EXISTS="1"#]<#LANG_TERMINALS_TOKEN_RECREATE#>[#else#]<#LANG_TERMINALS_TOKEN_CREATE#>[#endif#]</button>
 		[#if TOKEN_EXISTS="1"#]<button class="btn btn-default" type="submit" onclick="this.form.mode.value='token_revoke';return confirm('<#LANG_TERMINALS_TOKEN_REVOKE_CONFIRM#>');"><#LANG_TERMINALS_TOKEN_REVOKE#></button>[#endif#]
 	</div>
@@ -502,14 +502,14 @@
 <!-- сообщение на этот терминал: текст (с озвучкой), картинка, звук, отправитель (terminals_send.inc.php) -->
 <div class="tab-pane" id="tab_send">
 <form action="?" method="post" class="form-horizontal" name="frmSend">
-[#if SENT="1"#]<div class="form-group"><div class="col-lg-offset-4 col-lg-8"><div class="alert alert-success"><#LANG_TERMINALS_MESSAGE_SENT#></div></div></div>[#endif SENT#]
-[#if SEND_FAILED="1"#]<div class="form-group"><div class="col-lg-offset-4 col-lg-8"><div class="alert alert-danger"><#LANG_TERMINALS_MESSAGE_NOT_SENT#></div></div></div>[#endif SEND_FAILED#]
+[#if SENT="1"#]<div class="form-group"><label class="col-lg-4 control-label">&nbsp;</label><div class="col-lg-8"><div class="alert alert-success"><#LANG_TERMINALS_MESSAGE_SENT#></div></div></div>[#endif SENT#]
+[#if SEND_FAILED="1"#]<div class="form-group"><label class="col-lg-4 control-label">&nbsp;</label><div class="col-lg-8"><div class="alert alert-danger"><#LANG_TERMINALS_MESSAGE_NOT_SENT#></div></div></div>[#endif SEND_FAILED#]
 <div class="form-group">
 	<label class="col-lg-4 control-label"><#LANG_TERMINALS_TEXT#>:</label>
 	<div class="col-lg-8"><textarea name="send_message" class="form-control" rows="2"></textarea></div>
 </div>
 <div class="form-group">
-	<div class="col-lg-offset-4 col-lg-8">
+	<label class="col-lg-4 control-label">&nbsp;</label><div class="col-lg-8">
 		<div class="checkbox"><label><input type="checkbox" name="send_voice" value="1" checked> <#LANG_TERMINALS_VOICE_TEXT#></label></div>
 	</div>
 </div>
@@ -540,7 +540,7 @@
 	<div class="col-lg-8"><input type="number" name="send_level" class="form-control" placeholder="<#LANG_TERMINALS_LEVEL_HINT#>"></div>
 </div>
 <div class="form-group">
-	<div class="col-lg-offset-4 col-lg-8"><input class="btn btn-default" type="submit" value="<#LANG_TERMINALS_SEND#>"></div>
+	<label class="col-lg-4 control-label">&nbsp;</label><div class="col-lg-8"><input class="btn btn-default" type="submit" value="<#LANG_TERMINALS_SEND#>"></div>
 </div>
 <input type="hidden" name="id" value="<#ID#>">
 <input type="hidden" name="view_mode" value="<#VIEW_MODE#>">
