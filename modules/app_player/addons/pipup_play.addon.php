@@ -68,10 +68,10 @@ class pipup_play extends app_player_addon
         switch ($type) {
             case 'image':
                 // Локальный файл уходит файлом, ссылка — ссылкой
-                $ok = $pipup->sendImage(($local !== false) ? $local : $url, '', '🖼', 480, 30);
+                $ok = $this->send($pipup, 'sendImage', array(($local !== false) ? $local : $url, '', '🖼', 480, 30));
                 break;
             case 'svg':
-                $ok = $pipup->sendWebImage(($local !== false) ? $local : $url, '', '🖼', 300, 30);
+                $ok = $this->send($pipup, 'sendWebImage', array(($local !== false) ? $local : $url, '', '🖼', 300, 30));
                 break;
             case 'video':
             case 'whep':
@@ -86,7 +86,7 @@ class pipup_play extends app_player_addon
                 $ok = $pipup->sendVideo($url, '', '▶', $type, $options);
                 break;
             default: // audio
-                $ok = $pipup->sendSound($url, '', '', ($seconds > 0) ? $seconds + 2 : 15);
+                $ok = $this->send($pipup, 'sendSound', array($url, '', '', ($seconds > 0) ? $seconds + 2 : 15));
         }
 
         if ($ok) {
@@ -106,6 +106,21 @@ class pipup_play extends app_player_addon
         $this->success = (bool)$this->pipup()->cancelAll();
         $this->message = $this->success ? 'OK' : 'PiPup did not accept cancel';
         return $this->success;
+    }
+
+    // Картинка и звук — через очередь сообщений терминала (terminalsQueueCall), если его озвучка —
+    // тоже pipup: не перебивают звучащее сообщение, показываются после него. Терминал не держат
+    // (музыка не задерживает сообщения). Видео — сразу: окно продлевается по тому же id
+    private function send($pipup, $method, $args)
+    {
+        if (is_array($this->terminal) && !empty($this->terminal['ID']) && isset($this->terminal['TTS_TYPE'])
+            && $this->terminal['TTS_TYPE'] == 'pipup') {
+            include_once(DIR_MODULES . 'terminals/terminals.class.php');
+            if (function_exists('terminalsQueueCall')) {
+                return terminalsQueueCall($this->terminal, $method, $args, array('busy' => 0));
+            }
+        }
+        return call_user_func_array(array($pipup, $method), $args);
     }
 
     private function pipup()
