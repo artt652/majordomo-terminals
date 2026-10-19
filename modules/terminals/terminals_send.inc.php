@@ -15,6 +15,7 @@
  *       'level' => 5,                           // уровень; по умолчанию — порог терминала-получателя
  *       'chat'  => 'room:3',                    // чат на странице «Сообщения»: all, room:ID, group:ID (пусто — личный)
  *       'chat_title' => 'Кухня',                // название чата — добавляется к отправителю в заголовке окна
+ *       'forwarded' => 'Кухня',                 // пересланное сообщение: от кого оно было (на странице — «Переслано от …»)
  *       'shout' => true,                        // записать копию в общий чат MajorDoMo (для chat => 'all' — всегда)
  *   ));
  *
@@ -112,6 +113,7 @@ function terminalsSend($to, $message, $options = array())
             'FILE' => $file,
             'VIDEO' => $video,
             'FILE_NAME' => $file_name,
+            'FORWARDED' => isset($options['forwarded']) ? mb_substr(trim((string)$options['forwarded']), 0, 255, 'UTF-8') : '',
             'ADDED' => time(),
             'CHAT' => $chat,
             'SEND_ID' => $send_id,

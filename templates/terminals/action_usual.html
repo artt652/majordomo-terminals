@@ -147,6 +147,20 @@
 	.tg-msg.tg-inline-time { position: relative; }
 	.tg-msg.tg-inline-time .tg-time { position: absolute; right: 9px; bottom: 10px; float: none; margin: 0; }
 	.tg-msg.tg-inline-time .tg-audio-time, .tg-msg.tg-inline-time .tg-file-ext { padding-right: 62px; }
+	/* переслать: кнопка рядом с сообщением — при наведении, на телефоне — по касанию сообщения */
+	.tg-fwd-btn { position: absolute; top: 50%; transform: translateY(-50%); width: 32px; height: 32px; border-radius: 50%; border: 0;
+		background: rgba(0,0,0,.28); color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0;
+		opacity: 0; pointer-events: none; transition: opacity .15s; }
+	.tg-in .tg-fwd-btn { right: -40px; }
+	.tg-out .tg-fwd-btn { left: -40px; }
+	.tg-msg:hover .tg-fwd-btn, .tg-msg.tg-actions .tg-fwd-btn { opacity: 1; pointer-events: auto; }
+	.tg-fwd-from { font-size: 13px; color: var(--tg-accent); margin-bottom: 2px; white-space: normal; }
+	.tg-fwd-from b { font-weight: 600; }
+	.tg-fwd-list { overflow-y: auto; flex: 1; min-height: 120px; padding: 0 8px; }
+	.tg-fwd-list .tg-chat.tg-disabled { opacity: .45; cursor: default; }
+	.tg-fwd-list .tg-chat.tg-disabled:hover { background: none; }
+	.tg-fwd-status { font-size: 13px; color: var(--tg-muted); padding: 4px 18px 0; min-height: 18px; }
+	.tg-msg { position: relative; }
 	.tg-msg { max-width: 78%; padding: 6px 9px 4px; border-radius: 12px; box-shadow: var(--tg-shadow); word-wrap: break-word; white-space: pre-wrap; }
 	.tg-msg.tg-in { align-self: flex-start; background: var(--tg-in); border-bottom-left-radius: 4px; }
 	.tg-msg.tg-out { align-self: flex-end; background: var(--tg-out); color: var(--tg-out-text); border-bottom-right-radius: 4px; }
@@ -329,6 +343,20 @@
 		</div>
 	</div>
 
+	<!-- переслать сообщение: выбор чата -->
+	<div class="tg-modal" id="tm_fwd_modal">
+		<div class="tg-dialog">
+			<h3><#LANG_TERMINALS_FORWARD#></h3>
+			<div class="tg-field"><input type="text" id="tm_fwd_search" placeholder="<#LANG_TERMINALS_SEARCH#>" autocomplete="off"></div>
+			<div class="tg-fwd-list" id="tm_fwd_list"></div>
+			<div class="tg-fwd-status" id="tm_fwd_status"></div>
+			<div class="tg-buttons">
+				<div class="tg-grow"></div>
+				<button type="button" class="tg-btn" id="tm_fwd_cancel"><#LANG_TERMINALS_CANCEL#></button>
+			</div>
+		</div>
+	</div>
+
 	<!-- создание и изменение своей группы -->
 	<div class="tg-modal" id="tm_modal">
 		<div class="tg-dialog">
@@ -371,7 +399,8 @@
 		chooseThis: '<#LANG_TERMINALS_CHOOSE_THIS#>', sending: '<#LANG_TERMINALS_SENDING#>', notSent: '<#LANG_TERMINALS_NOT_SENT#>',
 		sendError: '<#LANG_TERMINALS_SEND_ERROR#>', file: '<#LANG_TERMINALS_FILE#>', video: '<#LANG_TERMINALS_VIDEO#>', send: '<#LANG_TERMINALS_SEND#>',
 		record: '<#LANG_TERMINALS_RECORD_VOICE#>', tooBig: '<#LANG_TERMINALS_FILE_TOO_BIG#>', badType: '<#LANG_TERMINALS_FILE_TYPE#>',
-		uploadError: '<#LANG_TERMINALS_UPLOAD_ERROR#>', houseSub: '<#LANG_TERMINALS_HOUSE_CHAT#>', emoji: '<#LANG_TERMINALS_AVATAR_EMOJI#>',
+		uploadError: '<#LANG_TERMINALS_UPLOAD_ERROR#>', houseSub: '<#LANG_TERMINALS_HOUSE_CHAT#>', forward: '<#LANG_TERMINALS_FORWARD#>', forwardedFrom: '<#LANG_TERMINALS_FORWARDED_FROM#>',
+		fwdTextOnly: '<#LANG_TERMINALS_FORWARD_TEXT_ONLY#>', fwdNotFound: '<#LANG_TERMINALS_FORWARD_NOT_FOUND#>', emoji: '<#LANG_TERMINALS_AVATAR_EMOJI#>',
 		emojiReset: '<#LANG_TERMINALS_EMOJI_DEFAULT#>', wall_pattern: '<#LANG_TERMINALS_WALL_PATTERN#>', wall_mint: '<#LANG_TERMINALS_WALL_MINT#>',
 		wall_sunset: '<#LANG_TERMINALS_WALL_SUNSET#>', wall_ocean: '<#LANG_TERMINALS_WALL_OCEAN#>', wall_plain: '<#LANG_TERMINALS_WALL_PLAIN#>',
 		play: '<#LANG_TERMINALS_PLAY#>', pause: '<#LANG_TERMINALS_PAUSE#>', online: '<#LANG_TERMINALS_ONLINE#>',
@@ -727,6 +756,7 @@
 		tmHistory = false;
 		tmInfoClose();
 		tmGroupClose();
+		tmForwardClose();
 		tmCloseChat();
 	});
 	document.getElementById('tm_back').addEventListener('click', function () {
@@ -908,6 +938,16 @@
 				who.addEventListener('click', function () { if (m.other && tmChat('term:' + m.other)) tmOpen('term:' + m.other); });
 				div.appendChild(who);
 			}
+			if (m.forwarded) {
+				// пересланное: «Переслано от …»
+				var fw = document.createElement('div');
+				fw.className = 'tg-fwd-from';
+				fw.appendChild(document.createTextNode(tmText.forwardedFrom + ' '));
+				var fwName = document.createElement('b');
+				fwName.textContent = m.forwarded;
+				fw.appendChild(fwName);
+				div.appendChild(fw);
+			}
 			if (m.image) {
 				var img = document.createElement('img');
 				img.src = m.image;
@@ -956,6 +996,21 @@
 			if (m.text) {
 				div.appendChild(document.createTextNode(m.text));
 			}
+			// переслать
+			var fb = document.createElement('button');
+			fb.type = 'button';
+			fb.className = 'tg-fwd-btn';
+			fb.title = tmText.forward;
+			fb.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5l7 7-7 7M21 12H9a6 6 0 0 0-6 6v1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+			fb.addEventListener('click', function (e) { e.stopPropagation(); tmForwardOpen(m); });
+			div.appendChild(fb);
+			// касание сообщения (не плеера, не картинки, не ссылки) показывает кнопку «Переслать»
+			div.addEventListener('click', function (e) {
+				if (e.target.closest('a, img, video, audio, button, .tg-audio, .tg-from')) return;
+				var on = !div.classList.contains('tg-actions');
+				Array.prototype.forEach.call(box.querySelectorAll('.tg-msg.tg-actions'), function (x) { x.classList.remove('tg-actions'); });
+				div.classList.toggle('tg-actions', on);
+			});
 			box.appendChild(div);
 		});
 		if (toBottom || nearBottom) box.scrollTop = box.scrollHeight;
@@ -1127,7 +1182,60 @@
 			tmRefresh(function () { tmOpen(''); });
 		});
 	});
-	document.addEventListener('keydown', function (e) { if (e.key == 'Escape') tmGroupClose(); });
+	document.addEventListener('keydown', function (e) { if (e.key == 'Escape') { tmGroupClose(); tmForwardClose(); } });
+
+	// Переслать: окно выбора чата. Сюда нельзя: чаты только для чтения; в общий чат и его комнаты — только текст
+	var tmFwdModal = document.getElementById('tm_fwd_modal'), tmFwdMsg = null;
+	function tmForwardClose() { tmFwdModal.classList.remove('tg-show'); tmFwdMsg = null; }
+	function tmForwardList() {
+		var box = document.getElementById('tm_fwd_list');
+		var q = document.getElementById('tm_fwd_search').value.trim().toLowerCase();
+		var m = tmFwdMsg;
+		if (!m) return;
+		var media = !!(m.image || m.sound || m.video || m.file);
+		box.innerHTML = '';
+		tmChats.forEach(function (c) {
+			if (c.readonly) return;
+			if (q && (c.title || '').toLowerCase().indexOf(q) < 0) return;
+			var blocked = !!(c.text_only && (media || !m.text));
+			var row = tmEl('div', 'tg-chat' + (blocked ? ' tg-disabled' : ''));
+			var av = tmEl('div', 'tg-avatar');
+			tmAvatar(av, c);
+			var body = tmEl('div', 'tg-chat-body');
+			body.appendChild(tmEl('div', 'tg-title', c.title));
+			body.appendChild(tmEl('div', 'tg-sub', blocked ? tmText.fwdTextOnly : tmMembersText(c)));
+			row.appendChild(av);
+			row.appendChild(body);
+			if (!blocked) row.addEventListener('click', function () { tmForwardTo(c.key); });
+			box.appendChild(row);
+		});
+	}
+	function tmForwardOpen(m) {
+		if (!tmMe()) { alert(tmText.chooseThis); return; }
+		tmFwdMsg = m;
+		document.getElementById('tm_fwd_search').value = '';
+		document.getElementById('tm_fwd_status').textContent = '';
+		tmForwardList();
+		tmFwdModal.classList.add('tg-show');
+	}
+	function tmForwardTo(key) {
+		var m = tmFwdMsg, status = document.getElementById('tm_fwd_status');
+		if (!m) return;
+		status.textContent = tmText.sending;
+		tmGroupPost({mode: 'forward', kind: m.kind || 'msg', id: m.id, chat: key, voice: document.getElementById('tm_voice_value').value}, function (res) {
+			if (!res.sent) {
+				var errors = {text_only: tmText.fwdTextOnly, login: tmText.login, not_found: tmText.fwdNotFound};
+				status.textContent = errors[res.error] || tmText.notSent;
+				return;
+			}
+			tmForwardClose();
+			// открыть чат, куда переслали
+			tmRefresh(function () { tmOpen(res.chat || key); });
+		});
+	}
+	document.getElementById('tm_fwd_search').addEventListener('input', tmForwardList);
+	document.getElementById('tm_fwd_cancel').addEventListener('click', tmForwardClose);
+	tmFwdModal.addEventListener('click', function (e) { if (e.target == tmFwdModal) tmForwardClose(); });
 
 
 	// Карточка чата (нажатие на аватар или заголовок): терминал — статус, возможности и настройки

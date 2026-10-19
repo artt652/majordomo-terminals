@@ -333,6 +333,55 @@ if (gr('mode') == 'group_delete' && $me_name != '') {
     $json_out(array('ok' => $ok));
 }
 
+// общий чат MajorDoMo и его комнаты: только текст, от пользователя, вошедшего на сайт. Возвращает 1 — записано
+$send_to_shouts = function ($chat, $text) use ($user_id, $me, $me_name) {
+    $text = trim((string)$text);
+    if ($text == '' || !$user_id || $me_name == '') {
+        return 0;
+    }
+    // shouts в utf8: 4-байтовые символы (эмодзи) таблица не принимает
+    $text = preg_replace('/[\x{10000}-\x{10FFFF}]/u', '?', $text);
+    if ($chat['type'] == 'house') {
+        // как shoutbox и command.php: отметить запрос терминала — по нему sayReply() находит,
+        // куда отвечать, — и отдать команду дому от пользователя (source terminalID)
+        $now = date('Y-m-d H:i:s');
+        $activity = array('ID' => (int)$me['ID'], 'LATEST_ACTIVITY' => $now, 'LATEST_REQUEST_TIME' => $now,
+            'LATEST_REQUEST' => htmlspecialchars($text), 'IS_ONLINE' => 1);
+        SQLUpdate('terminals', $activity);
+        say(htmlspecialchars($text), 0, $user_id, 'terminal' . $me['ID']);
+    } else {
+        $shout = array('MESSAGE' => htmlspecialchars($text), 'IMAGE' => '', 'ADDED' => date('Y-m-d H:i:s'),
+            'ROOM_ID' => (int)substr($chat['key'], 6), 'MEMBER_ID' => $user_id, 'SOURCE' => 'terminal' . $me['ID']);
+        SQLInsert('shouts', $shout);
+    }
+    return 1;
+};
+
+// терминалам чата (или списку $to): текст и вложения ($media — image, sound, file, file_name, video),
+// $forwarded — от кого пересланное сообщение. Возвращает число получателей
+$send_to_terminals = function ($chat, $to, $text, $media, $voice, $forwarded = '') use ($me_name) {
+    $media = array_merge(array('image' => '', 'sound' => '', 'file' => '', 'file_name' => '', 'video' => ''), (array)$media);
+    if ($me_name == '' || !count($to) || ($text == '' && $media['image'] == '' && $media['sound'] == '' && $media['file'] == '' && $media['video'] == '')) {
+        return 0;
+    }
+    $options = array(
+        'from' => $me_name,
+        'image' => $media['image'],
+        'sound' => $media['sound'],
+        'file' => $media['file'],
+        'video' => $media['video'],
+        'file_name' => $media['file_name'],
+        'voice' => $voice ? true : false,
+        'forwarded' => $forwarded,
+    );
+    // групповой чат: на странице сообщение попадёт в этот чат, на устройстве — «Отправитель · Чат»
+    if (!empty($chat['key']) && $chat['type'] != 'term') {
+        $options['chat'] = $chat['key'];
+        $options['chat_title'] = $chat['title'];
+    }
+    return terminalsSend($to, $text, $options);
+};
+
 // отправка: в чат (chat=all|room:ID|group:ID|term:ИМЯ — получатели все участники, кроме себя)
 // или по списку to[] (как раньше)
 if ($this->mode == 'send_message' || gr('mode') == 'send_message') {
@@ -345,29 +394,8 @@ if ($this->mode == 'send_message' || gr('mode') == 'send_message') {
         $to = is_array($to) ? $to : (($to != '') ? array($to) : array());
     }
     $text = gr('message');
-    // общий чат и его комнаты: только текст, от пользователя, вошедшего на сайт
     if (!empty($chat['key']) && ($chat['type'] == 'house' || $chat['type'] == 'shoutroom')) {
-        $sent = 0;
-        $text = trim((string)$text);
-        if ($text != '' && $user_id && $me_name != '') {
-            // shouts в utf8: 4-байтовые символы (эмодзи) таблица не принимает
-            $text = preg_replace('/[\x{10000}-\x{10FFFF}]/u', '?', $text);
-            if ($chat['type'] == 'house') {
-                // как shoutbox и command.php: отметить запрос терминала — по нему sayReply() находит,
-                // куда отвечать, — и отдать команду дому от пользователя (source terminalID)
-                $now = date('Y-m-d H:i:s');
-                $activity = array('ID' => (int)$me['ID'], 'LATEST_ACTIVITY' => $now, 'LATEST_REQUEST_TIME' => $now,
-                    'LATEST_REQUEST' => htmlspecialchars($text), 'IS_ONLINE' => 1);
-                SQLUpdate('terminals', $activity);
-                say(htmlspecialchars($text), 0, $user_id, 'terminal' . $me['ID']);
-            } else {
-                $shout = array('MESSAGE' => htmlspecialchars($text), 'IMAGE' => '', 'ADDED' => date('Y-m-d H:i:s'),
-                    'ROOM_ID' => (int)substr($chat['key'], 6), 'MEMBER_ID' => $user_id, 'SOURCE' => 'terminal' . $me['ID']);
-                SQLInsert('shouts', $shout);
-            }
-            $sent = 1;
-        }
-        $json_out(array('sent' => $sent, 'error' => $user_id ? '' : 'login'));
+        $json_out(array('sent' => $send_to_shouts($chat, $text), 'error' => $user_id ? '' : 'login'));
     }
     $image = $save_upload('image', $image_ext, $max_media);
     if ($image == '') {
@@ -382,28 +410,70 @@ if ($this->mode == 'send_message' || gr('mode') == 'send_message') {
         $video = $save_upload('video_camera', $video_ext, $max_file);
     }
     $sent = 0;
-    if ($upload_error == '' && $me_name != '' && count($to) && ($text != '' || $image != '' || $sound != '' || $file != '' || $video != '')) {
-        $options = array(
-            'from' => $me_name,
-            'image' => $image,
-            'sound' => $sound,
-            'file' => $file,
-            'video' => $video,
-            'file_name' => ($file != '') ? $upload_name('file') : '',
-            'voice' => gr('voice', 'int') ? true : false,
-        );
-        // групповой чат: на странице сообщение попадёт в этот чат, на устройстве — «Отправитель · Чат»
-        if (!empty($chat['key']) && $chat['type'] != 'term') {
-            $options['chat'] = $chat['key'];
-            $options['chat_title'] = $chat['title'];
-        }
-        $sent = terminalsSend($to, $text, $options);
+    if ($upload_error == '') {
+        $sent = $send_to_terminals($chat, $to, $text, array('image' => $image, 'sound' => $sound, 'file' => $file,
+            'file_name' => ($file != '') ? $upload_name('file') : '', 'video' => $video), gr('voice', 'int'));
     }
     if (gr('ajax')) {
         $json_out(array('sent' => $sent, 'error' => $upload_error));
     }
     $out['SENT'] = $sent ? 1 : 0;
     $out['SEND_FAILED'] = $sent ? 0 : 1;
+}
+
+// переслать сообщение в другой чат: kind=msg (переписка терминалов, только своя) или shout (общий чат
+// и публичные комнаты); те же текст и вложения, «Переслано от …». В общий чат — только текст
+if (gr('mode') == 'forward' && $me_name != '') {
+    $chat = $find_chat((string)gr('chat'));
+    $id = gr('id', 'int');
+    $src = array();
+    if (gr('kind') == 'shout') {
+        $row = SQLSelectOne("SELECT shouts.*, users.NAME AS USER_NAME FROM shouts LEFT JOIN users ON shouts.MEMBER_ID=users.ID WHERE shouts.ID=$id");
+        $public = !empty($row['ID']) && ((int)$row['ROOM_ID'] == 0 || SQLSelectOne("SELECT ID FROM shoutrooms WHERE IS_PUBLIC=1 AND ID=" . (int)$row['ROOM_ID']));
+        if ($public) {
+            $text = html_entity_decode((string)$row['MESSAGE'], ENT_QUOTES, 'UTF-8');
+            $author = ((int)$row['MEMBER_ID'] && $row['USER_NAME'] != '') ? $row['USER_NAME'] : $computer_name;
+            if (preg_match('/^terminal: (.+)$/u', (string)$row['SOURCE'], $m)) {
+                $author = $m[1];
+                if (strpos($text, $author . ': ') === 0) {
+                    $text = substr($text, strlen($author . ': '));
+                }
+            }
+            $image = (string)$row['IMAGE'];
+            if ($image != '' && strpos($image, ROOT) === 0) {
+                $image = substr($image, strlen(ROOT));
+            }
+            $src = array('text' => $text, 'media' => array('image' => ($image != '' && file_exists(ROOT . ltrim($image, '/'))) ? $image : ''), 'from' => $author);
+        }
+    } else {
+        $row = SQLSelectOne("SELECT * FROM terminals_messages WHERE ID=$id AND (TO_NAME='" . DBSafe($me_name) . "' OR FROM_NAME='" . DBSafe($me_name) . "')");
+        if (!empty($row['ID'])) {
+            $text = json_decode($row['MESSAGE'], true);
+            $from = (isset($row['FORWARDED']) && $row['FORWARDED'] != '') ? $row['FORWARDED']
+                : (isset($all_terminals[$row['FROM_NAME']]) ? $all_terminals[$row['FROM_NAME']]['TITLE'] : $row['FROM_NAME']);
+            $src = array('text' => is_string($text) ? $text : '', 'from' => $from, 'media' => array('image' => $row['IMAGE'], 'sound' => $row['SOUND'],
+                'file' => isset($row['FILE']) ? $row['FILE'] : '', 'file_name' => isset($row['FILE_NAME']) ? $row['FILE_NAME'] : '',
+                'video' => isset($row['VIDEO']) ? $row['VIDEO'] : ''));
+        }
+    }
+    $sent = 0;
+    $error = '';
+    if (empty($src) || empty($chat['key'])) {
+        $error = 'not_found';
+    } elseif ($chat['type'] == 'house' || $chat['type'] == 'shoutroom') {
+        $has_media = count(array_filter($src['media'])) > 0;
+        if ($has_media || trim($src['text']) == '') {
+            $error = 'text_only';
+        } elseif (!$user_id) {
+            $error = 'login';
+        } else {
+            $sent = $send_to_shouts($chat, $src['text']);
+        }
+    } else {
+        $sent = $send_to_terminals($chat, array_values(array_diff($chat['members'], array($me_name))), $src['text'], $src['media'],
+            gr('voice', 'int'), $src['from']);
+    }
+    $json_out(array('sent' => $sent, 'error' => $error, 'chat' => !empty($chat['key']) ? $chat['key'] : ''));
 }
 
 // прочитано: получатель открыл чат на своей странице — его входящие в этом чате прочитаны (и доставлены)
@@ -485,6 +555,8 @@ if ($me_name != '') {
             'time' => date('d.m H:i', (int)$row['ADDED']),
             'ts' => (int)$row['ADDED'],
             'status' => $incoming ? 0 : $state,
+            'forwarded' => isset($row['FORWARDED']) ? (string)$row['FORWARDED'] : '',
+            'kind' => 'msg',
             'read' => ($incoming && !empty($row['READ_AT'])) ? 1 : 0,
         );
     }
@@ -541,7 +613,7 @@ foreach ($shout_chats as $room_id => $chat_key) {
             'color' => $color,
             'text' => $text,
             'image' => $image,
-            'sound' => '', 'video' => '', 'file' => '', 'file_name' => '',
+            'sound' => '', 'video' => '', 'file' => '', 'file_name' => '', 'forwarded' => '', 'kind' => 'shout',
             'time' => date('d.m H:i', $ts),
             'ts' => $ts,
         );

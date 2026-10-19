@@ -512,6 +512,7 @@ class terminals extends module
  terminals_messages: VIDEO varchar(255) NOT NULL DEFAULT ''
  terminals_messages: FILE varchar(255) NOT NULL DEFAULT ''
  terminals_messages: FILE_NAME varchar(255) NOT NULL DEFAULT ''
+ terminals_messages: FORWARDED varchar(255) NOT NULL DEFAULT ''
  terminals_messages: CHAT varchar(50) NOT NULL DEFAULT ''
  terminals_messages: SEND_ID varchar(32) NOT NULL DEFAULT ''
  terminals_messages: DELIVERED int(10) NOT NULL DEFAULT '0'
