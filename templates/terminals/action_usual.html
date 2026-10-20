@@ -97,6 +97,13 @@
 	.tg-audio-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 2px; background: var(--tg-accent); }
 	.tg-audio-time { font-size: 12px; color: var(--tg-time); }
 	/* меню вида: тема и фон */
+	.tg-chat-view > .tg-head { position: relative; }
+	.tg-pop { position: absolute; top: 50px; right: 8px; z-index: 15; background: var(--tg-panel); border: 1px solid var(--tg-border); border-radius: 12px;
+		box-shadow: 0 6px 24px rgba(0,0,0,.25); padding: 6px 0; min-width: 220px; display: none; }
+	.tg-pop.tg-show { display: block; }
+	.tg-pop button { display: block; width: 100%; text-align: left; background: none; border: 0; color: var(--tg-text); padding: 10px 16px; font-size: 14px; cursor: pointer; }
+	.tg-pop button:hover { background: var(--tg-hover); }
+	.tg-pop button.tg-danger { color: #e53935; }
 	.tg-look { position: absolute; top: 52px; right: 8px; z-index: 15; background: var(--tg-panel); border: 1px solid var(--tg-border); border-radius: 12px;
 		box-shadow: 0 6px 24px rgba(0,0,0,.25); padding: 10px 12px; width: 250px; display: none; }
 	.tg-look.tg-show { display: block; }
@@ -332,6 +339,12 @@
 					<div class="tg-sub" id="tm_chat_sub"></div>
 				</div>
 				<button type="button" class="tg-icon" id="tm_edit_group" title="<#LANG_TERMINALS_EDIT_GROUP#>" style="display:none"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z M13.5 6.5l4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></button>
+				<button type="button" class="tg-icon" id="tm_chat_menu_btn" title="<#LANG_TERMINALS_MENU#>"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="19" r="2" fill="currentColor"/></svg></button>
+				<!-- меню чата (⋮): очистить историю — у себя; из панели управления — ещё у всех участников -->
+				<div class="tg-pop" id="tm_chat_menu">
+					<button type="button" id="tm_clear_history"><#LANG_TERMINALS_CLEAR_HISTORY#></button>
+					[#if AS_ADMIN="1"#]<button type="button" class="tg-danger" id="tm_clear_history_all"><#LANG_TERMINALS_CLEAR_HISTORY_ALL#></button>[#endif AS_ADMIN#]
+				</div>
 			</div>
 
 			<div class="tg-list" id="tm_list"></div>
@@ -458,7 +471,8 @@
 		play: '<#LANG_TERMINALS_PLAY#>', pause: '<#LANG_TERMINALS_PAUSE#>', online: '<#LANG_TERMINALS_ONLINE#>',
 		lastSeen: '<#LANG_TERMINALS_LAST_SEEN#>', activity: '<#LANG_TERMINALS_ACTIVITY#>', reachable: '<#LANG_TERMINALS_REACHABLE#>', offline: '<#LANG_TERMINALS_OFFLINE#>',
 		name: '<#LANG_TERMINALS_SYSTEM_NAME#>', host: '<#LANG_TERMINALS_HOST#>', room: '<#LANG_TERMINALS_ROOM#>',
-		minLevel: '<#LANG_TERMINALS_MIN_LEVEL#>', screen: '<#LANG_TERMINALS_SCREEN#>', showEarlier: '<#LANG_TERMINALS_SHOW_EARLIER#>',
+		minLevel: '<#LANG_TERMINALS_MIN_LEVEL#>', screen: '<#LANG_TERMINALS_SCREEN#>',
+		clearConfirm: '<#LANG_TERMINALS_CLEAR_HISTORY_CONFIRM#>', clearAllConfirm: '<#LANG_TERMINALS_CLEAR_HISTORY_ALL_CONFIRM#>', showEarlier: '<#LANG_TERMINALS_SHOW_EARLIER#>',
 		logout: '<#LANG_TERMINALS_LOGOUT#>', logoutConfirm: '<#LANG_TERMINALS_LOGOUT_CONFIRM#>', logoutNote: '<#LANG_TERMINALS_LOGOUT_NOTE#>', byDefault: '<#LANG_TERMINALS_BY_DEFAULT#>', tts: '<#LANG_TERMINALS_TTS#>',
 		player: '<#LANG_TERMINALS_PLAYER#>', noTts: '<#LANG_TERMINALS_NO_TTS#>', noPlayer: '<#LANG_TERMINALS_NO_PLAYER#>',
 		color: '<#LANG_TERMINALS_AVATAR_COLOR#>', resetColor: '<#LANG_TERMINALS_COLOR_DEFAULT#>',
@@ -854,6 +868,9 @@
 		if (chat.text_only && tmRec) tmRecStop(null);
 		tmSendIcon();
 		document.getElementById('tm_edit_group').style.display = (chat.type == 'group' && tmMe()) ? '' : 'none';
+		// меню ⋮ — у чатов терминалов (общий чат MajorDoMo и его комнаты ведёт ядро)
+		document.getElementById('tm_chat_menu_btn').style.display = (!tmShoutChat(key) && tmMe()) ? '' : 'none';
+		document.getElementById('tm_chat_menu').classList.remove('tg-show');
 		document.getElementById('tm_status').textContent = '';
 		tmRender(true);
 		tmRenderChats();
@@ -1321,6 +1338,29 @@
 	}
 	document.getElementById('tm_new_group').addEventListener('click', function () { tmGroupDialog(null); });
 	document.getElementById('tm_edit_group').addEventListener('click', function () { tmGroupDialog(tmChat(tmCurrent)); });
+	// меню чата ⋮: «Очистить историю» — у этого терминала (у собеседников остаётся); из панели — и «у всех»
+	var tmChatMenu = document.getElementById('tm_chat_menu');
+	document.getElementById('tm_chat_menu_btn').addEventListener('click', function (e) {
+		e.stopPropagation();
+		tmChatMenu.classList.toggle('tg-show');
+	});
+	document.addEventListener('click', function (e) { if (!tmChatMenu.contains(e.target)) tmChatMenu.classList.remove('tg-show'); });
+	function tmClearHistory(all) {
+		var key = tmCurrent;
+		tmChatMenu.classList.remove('tg-show');
+		if (!key || !confirm(all ? tmText.clearAllConfirm : tmText.clearConfirm)) return;
+		tmGroupPost({mode: 'clear_history', ajax: 1, chat: key, all: all ? 1 : 0}, function (res) {
+			if (!res || !res.ok) { alert(tmText.notSent); return; }
+			delete tmOlderChats[key];
+			tmMoreDone[key] = 1;
+			tmConversation = tmConversation.filter(function (m) { return m.chat != key; });
+			tmRefresh(function () { tmOpen(key, true); tmRenderChats(); });
+		});
+	}
+	document.getElementById('tm_clear_history').addEventListener('click', function () { tmClearHistory(false); });
+	if (document.getElementById('tm_clear_history_all')) {
+		document.getElementById('tm_clear_history_all').addEventListener('click', function () { tmClearHistory(true); });
+	}
 	document.getElementById('tm_group_cancel').addEventListener('click', tmGroupClose);
 	tmModal.addEventListener('click', function (e) { if (e.target == tmModal) tmGroupClose(); });
 	document.getElementById('tm_group_save').addEventListener('click', function () {

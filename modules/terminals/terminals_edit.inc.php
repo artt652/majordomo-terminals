@@ -20,6 +20,7 @@ if ($location_id = $rec['LOCATION_ID']) {
 
 if ($this->mode == 'update') {
     $ok = 1;
+    $old_name = isset($rec['NAME']) ? (string)$rec['NAME'] : '';
 
     //updating 'NAME' (varchar, required)
     $rec['NAME'] = gr('name', 'trim');
@@ -73,6 +74,9 @@ if ($this->mode == 'update') {
     if ($ok) {
         if ($rec['ID']) {
             SQLUpdate($table_name, $rec); // update
+            if ($old_name != '' && $old_name != $rec['NAME']) {
+                terminalsRenamed($old_name, $rec['NAME'], (int)$rec['ID']);
+            }
         } else {
             $new_rec = 1;
             $rec['ID'] = SQLInsert($table_name, $rec); // adding new record

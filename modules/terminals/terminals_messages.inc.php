@@ -244,6 +244,17 @@ foreach (SQLSelect("SELECT ID, NAME, TITLE, LOCATION_ID, LATEST_ACTIVITY, IS_ONL
     $all_terminals[$t['NAME']] = $t;
 }
 $me_name = !empty($me['ID']) ? $me['NAME'] : '';
+// переписка хранит ID терминалов (FROM_ID, TO_ID): после переименования история остаётся; имена — текущие.
+// HIDE_TO / HIDE_FROM — получатель / отправитель очистил историю у себя
+$me_id = !empty($me['ID']) ? (int)$me['ID'] : 0;
+$id_names = array();
+foreach (SQLSelect("SELECT ID, NAME FROM terminals") as $t) {
+    $id_names[(int)$t['ID']] = $t['NAME'];
+}
+$mine_sql = "((TO_ID=$me_id AND HIDE_TO=0) OR (FROM_ID=$me_id AND HIDE_FROM=0))";
+$term_id = function ($name) use ($all_terminals) {
+    return isset($all_terminals[$name]) ? (int)$all_terminals[$name]['ID'] : 0;
+};
 
 // своя группа: участники — список имён терминалов (JSON); удалённые терминалы пропускаем
 $group_members = function ($group) use ($all_terminals) {
@@ -583,11 +594,12 @@ if (gr('mode') == 'forward' && $me_name != '') {
             $src = array('text' => $text, 'media' => array('image' => ($image != '' && file_exists(ROOT . ltrim($image, '/'))) ? $image : ''), 'from' => $author);
         }
     } else {
-        $row = SQLSelectOne("SELECT * FROM terminals_messages WHERE ID=$id AND (TO_NAME='" . DBSafe($me_name) . "' OR FROM_NAME='" . DBSafe($me_name) . "')");
+        $row = SQLSelectOne("SELECT * FROM terminals_messages WHERE ID=$id AND $mine_sql");
         if (!empty($row['ID'])) {
             $text = json_decode($row['MESSAGE'], true);
+            $from_name = isset($id_names[(int)$row['FROM_ID']]) ? $id_names[(int)$row['FROM_ID']] : $row['FROM_NAME'];
             $from = (isset($row['FORWARDED']) && $row['FORWARDED'] != '') ? $row['FORWARDED']
-                : (isset($all_terminals[$row['FROM_NAME']]) ? $all_terminals[$row['FROM_NAME']]['TITLE'] : $row['FROM_NAME']);
+                : (isset($all_terminals[$from_name]) ? $all_terminals[$from_name]['TITLE'] : $from_name);
             $src = array('text' => is_string($text) ? $text : '', 'from' => $from, 'media' => array('image' => $row['IMAGE'], 'sound' => $row['SOUND'],
                 'file' => isset($row['FILE']) ? $row['FILE'] : '', 'file_name' => isset($row['FILE_NAME']) ? $row['FILE_NAME'] : '',
                 'video' => isset($row['VIDEO']) ? $row['VIDEO'] : ''));
@@ -621,19 +633,19 @@ if (gr('mode') == 'mark_read' && $me_name != '') {
     $key = (string)gr('chat');
     $cond = '';
     if (strpos($key, 'term:') === 0) {
-        $cond = "CHAT='' AND FROM_NAME='" . DBSafe(substr($key, 5)) . "'";
+        $cond = "CHAT='' AND FROM_ID=" . $term_id(substr($key, 5));
     } elseif (preg_match('/^(all|room:\d+|group:\d+)$/', $key)) {
         $cond = "CHAT='" . DBSafe($key) . "'";
     }
     $count = 0;
     if ($cond != '') {
-        $rows = SQLSelect("SELECT ID, FROM_NAME FROM terminals_messages WHERE TO_NAME='" . DBSafe($me_name) . "' AND READ_AT=0 AND $cond");
+        $rows = SQLSelect("SELECT ID, FROM_ID, FROM_NAME FROM terminals_messages WHERE TO_ID=$me_id AND READ_AT=0 AND $cond");
         if (count($rows)) {
             $ids = array();
             $senders = array();
             foreach ($rows as $row) {
                 $ids[] = (int)$row['ID'];
-                $senders[] = $row['FROM_NAME'];
+                $senders[] = isset($id_names[(int)$row['FROM_ID']]) ? $id_names[(int)$row['FROM_ID']] : $row['FROM_NAME'];
             }
             $now = time();
             SQLExec("UPDATE terminals_messages SET READ_AT=$now, DELIVERED=IF(DELIVERED=0, $now, DELIVERED) WHERE ID IN (" . implode(',', $ids) . ")");
@@ -646,7 +658,7 @@ if (gr('mode') == 'mark_read' && $me_name != '') {
 
 // доставлено: страница получателя загрузила переписку
 if ($me_name != '' && !$peek) {
-    $rows = SQLSelect("SELECT ID FROM terminals_messages WHERE TO_NAME='" . DBSafe($me_name) . "' AND DELIVERED=0");
+    $rows = SQLSelect("SELECT ID FROM terminals_messages WHERE TO_ID=$me_id AND DELIVERED=0");
     if (count($rows)) {
         $ids = array();
         foreach ($rows as $row) {
@@ -662,12 +674,13 @@ if ($me_name != '' && !$peek) {
 // ещё по $page_older сообщений одного чата. min_id — самый ранний номер строки сообщения (для before)
 $page_first = 500;
 $page_older = 100;
-$build_messages = function ($rows, $limit) use ($me_name, $all_terminals) {
+$build_messages = function ($rows, $limit) use ($me_id, $id_names, $all_terminals) {
     $conversation = array();
     $seen = array();
     foreach ($rows as $row) {
-        $incoming = ($row['TO_NAME'] == $me_name);
-        $other = $incoming ? $row['FROM_NAME'] : $row['TO_NAME'];
+        $incoming = ((int)$row['TO_ID'] == $me_id);
+        $other_id = (int)($incoming ? $row['FROM_ID'] : $row['TO_ID']);
+        $other = isset($id_names[$other_id]) ? $id_names[$other_id] : ($incoming ? $row['FROM_NAME'] : $row['TO_NAME']);
         $chat_key = (isset($row['CHAT']) && $row['CHAT'] != '') ? $row['CHAT'] : 'term:' . $other;
         $send_id = (isset($row['SEND_ID']) && $row['SEND_ID'] != '') ? $row['SEND_ID'] : 'id' . $row['ID'];
         $uniq = $chat_key . '|' . $send_id . '|' . ($incoming ? 'in' : 'out');
@@ -774,6 +787,48 @@ $shout_select = function ($room_id, $before, $limit) {
         . ($before > 0 ? " AND shouts.ID<" . (int)$before : '') . " ORDER BY shouts.ID DESC LIMIT " . (int)$limit);
 };
 
+// строки переписки чата, видимые этому терминалу (личный: между ним и собеседником; групповой: CHAT)
+$chat_sql = function ($chat) use ($me_id, $mine_sql, $term_id) {
+    if ($chat['type'] == 'term') {
+        $other = $term_id(substr($chat['key'], 5));
+        return "CHAT='' AND ((TO_ID=$me_id AND FROM_ID=$other AND HIDE_TO=0) OR (FROM_ID=$me_id AND TO_ID=$other AND HIDE_FROM=0))";
+    }
+    return "CHAT='" . DBSafe($chat['key']) . "' AND $mine_sql";
+};
+
+// «Очистить историю» чата (меню ⋮ в заголовке): у себя — сообщения скрываются для этого терминала
+// (у собеседников остаются); all=1 — из панели управления: удалить переписку чата у всех участников.
+// Общий чат MajorDoMo и его комнаты — не очищаются (их ведёт ядро)
+if (gr('ajax') && gr('mode') == 'clear_history' && $me_name != '') {
+    $chat = $find_chat((string)gr('chat'));
+    if (empty($chat['key']) || $chat['type'] == 'house' || $chat['type'] == 'shoutroom') {
+        $json_out(array('ok' => 0, 'error' => 'not_found'));
+    }
+    $members = array_values(array_diff($chat['members'], array($me_name)));
+    if (gr('all') && $as_admin) {
+        if ($chat['type'] == 'term') {
+            $other = $term_id(substr($chat['key'], 5));
+            SQLExec("DELETE FROM terminals_messages WHERE CHAT='' AND ((TO_ID=$me_id AND FROM_ID=$other) OR (FROM_ID=$me_id AND TO_ID=$other))");
+        } else {
+            SQLExec("DELETE FROM terminals_messages WHERE CHAT='" . DBSafe($chat['key']) . "'");
+        }
+    } else {
+        if ($chat['type'] == 'term') {
+            $other = $term_id(substr($chat['key'], 5));
+            SQLExec("UPDATE terminals_messages SET HIDE_TO=1 WHERE CHAT='' AND TO_ID=$me_id AND FROM_ID=$other");
+            SQLExec("UPDATE terminals_messages SET HIDE_FROM=1 WHERE CHAT='' AND FROM_ID=$me_id AND TO_ID=$other");
+        } else {
+            $key = DBSafe($chat['key']);
+            SQLExec("UPDATE terminals_messages SET HIDE_TO=1 WHERE CHAT='$key' AND TO_ID=$me_id");
+            SQLExec("UPDATE terminals_messages SET HIDE_FROM=1 WHERE CHAT='$key' AND FROM_ID=$me_id");
+        }
+        // скрытые обеими сторонами больше никому не видны
+        SQLExec("DELETE FROM terminals_messages WHERE HIDE_TO=1 AND (HIDE_FROM=1 OR FROM_ID=0)");
+    }
+    terminalsMessagesNotify($me_name, $members);
+    $json_out(array('ok' => 1));
+}
+
 // «Показать раньше»: ещё сообщения одного чата до номера before
 if (gr('ajax') && gr('older') && $me_name != '') {
     $key = (string)gr('chat');
@@ -785,13 +840,7 @@ if (gr('ajax') && gr('older') && $me_name != '') {
             $room_id = array_search($chat['key'], $shout_chats, true);
             $messages = ($room_id !== false) ? $build_shouts($shout_select($room_id, $before, $page_older), $chat['key']) : array();
         } else {
-            $name = DBSafe($me_name);
-            if ($chat['type'] == 'term') {
-                $other = DBSafe(substr($chat['key'], 5));
-                $cond = "CHAT='' AND ((TO_NAME='$name' AND FROM_NAME='$other') OR (FROM_NAME='$name' AND TO_NAME='$other'))";
-            } else {
-                $cond = "CHAT='" . DBSafe($chat['key']) . "' AND (TO_NAME='$name' OR FROM_NAME='$name')";
-            }
+            $cond = $chat_sql($chat);
             $rows = SQLSelect("SELECT * FROM terminals_messages WHERE $cond AND ID<$before ORDER BY ID DESC LIMIT " . ($page_older * 20));
             $messages = $build_messages($rows, $page_older);
         }
@@ -803,9 +852,8 @@ if (gr('ajax') && gr('older') && $me_name != '') {
 $conversation = array();
 $more = array();
 if ($me_name != '') {
-    $name = DBSafe($me_name);
     $row_limit = $page_first * 5;
-    $rows = SQLSelect("SELECT * FROM terminals_messages WHERE TO_NAME='$name' OR FROM_NAME='$name' ORDER BY ID DESC LIMIT $row_limit");
+    $rows = SQLSelect("SELECT * FROM terminals_messages WHERE $mine_sql ORDER BY ID DESC LIMIT $row_limit");
     $conversation = $build_messages($rows, $page_first);
     if (count($conversation) >= $page_first || count($rows) >= $row_limit) {
         $more['*'] = 1;

@@ -528,7 +528,13 @@ class terminals extends module
  terminals_messages: SEND_ID varchar(32) NOT NULL DEFAULT ''
  terminals_messages: DELIVERED int(10) NOT NULL DEFAULT '0'
  terminals_messages: READ_AT int(10) NOT NULL DEFAULT '0'
+ terminals_messages: FROM_ID int(10) NOT NULL DEFAULT '0'
+ terminals_messages: TO_ID int(10) NOT NULL DEFAULT '0'
+ terminals_messages: HIDE_FROM int(3) NOT NULL DEFAULT '0'
+ terminals_messages: HIDE_TO int(3) NOT NULL DEFAULT '0'
  terminals_messages: INDEX (TO_NAME)
+ terminals_messages: INDEX (TO_ID)
+ terminals_messages: INDEX (FROM_ID)
 
  terminals_tokens: ID int(10) unsigned NOT NULL auto_increment
  terminals_tokens: TERMINAL_ID int(10) NOT NULL DEFAULT '0'
@@ -564,6 +570,10 @@ EOD;
 
         // ключ доступа к странице «Сообщения» — каждому терминалу (terminals_auth.inc.php)
         terminalsTokenEnsureAll();
+        // переписка «Сообщений» узнаёт терминалы по ID (переименование не теряет историю): прежним записям —
+        // ID по имени терминала
+        SQLExec("UPDATE terminals_messages m JOIN terminals t ON t.NAME=m.TO_NAME SET m.TO_ID=t.ID WHERE m.TO_ID=0");
+        SQLExec("UPDATE terminals_messages m JOIN terminals t ON t.NAME=m.FROM_NAME SET m.FROM_ID=t.ID WHERE m.FROM_ID=0");
     }
 // --------------------------------------------------------------------
 }

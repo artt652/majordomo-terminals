@@ -109,6 +109,8 @@ function terminalsSend($to, $message, $options = array())
         $rec = array(
             'FROM_NAME' => $from_name,
             'TO_NAME' => $terminal_rec['NAME'],
+            'FROM_ID' => !empty($from['ID']) ? (int)$from['ID'] : 0,
+            'TO_ID' => (int)$terminal_rec['ID'],
             'MESSAGE' => json_encode($message),
             'IMAGE' => $image,
             'SOUND' => $sound,
@@ -196,6 +198,28 @@ function terminalsMessagesNotify($from, $to)
     }
 }
 
+// Терминал переименован: «Сообщения» хранят его имя в составе своих групп, в ключах аватарок
+// (term:ИМЯ) и в переписке (для показа; узнаётся она по ID) — переносим на новое имя
+function terminalsRenamed($old, $new, $id)
+{
+    foreach (SQLSelect("SELECT * FROM terminals_groups") as $group) {
+        $members = json_decode((string)$group['MEMBERS'], true);
+        if (is_array($members) && in_array($old, $members, true)) {
+            foreach ($members as $i => $name) {
+                if ($name === $old) {
+                    $members[$i] = $new;
+                }
+            }
+            $group['MEMBERS'] = json_encode(array_values(array_unique($members)));
+            SQLUpdate('terminals_groups', $group);
+        }
+    }
+    SQLExec("DELETE FROM terminals_colors WHERE CHAT_KEY='" . DBSafe('term:' . $new) . "'");
+    SQLExec("UPDATE terminals_colors SET CHAT_KEY='" . DBSafe('term:' . $new) . "' WHERE CHAT_KEY='" . DBSafe('term:' . $old) . "'");
+    SQLExec("UPDATE terminals_messages SET TO_NAME='" . DBSafe($new) . "' WHERE TO_ID=" . (int)$id);
+    SQLExec("UPDATE terminals_messages SET FROM_NAME='" . DBSafe($new) . "' WHERE FROM_ID=" . (int)$id);
+}
+
 // Срок хранения переписки страницы «Сообщения», дней (настройка приложения «Сообщения»): по умолчанию 30, 0 — без срока
 function terminalsHistoryDays($config)
 {
@@ -215,7 +239,9 @@ function terminalsMessagesCleanup($days)
         $where[] = "ADDED<" . (time() - (int)$days * 86400);
     }
     $where[] = "(CHAT LIKE 'group:%' AND CAST(SUBSTRING(CHAT, 7) AS UNSIGNED) NOT IN (SELECT ID FROM terminals_groups))";
-    $where[] = "TO_NAME NOT IN (SELECT NAME FROM terminals)";
+    $where[] = "TO_ID NOT IN (SELECT ID FROM terminals)";
+    // скрытые обеими сторонами («Очистить историю»); отправитель-не терминал (сценарий) скрыть не может
+    $where[] = "(HIDE_TO=1 AND (HIDE_FROM=1 OR FROM_ID=0))";
     $old = SQLSelectOne("SELECT COUNT(*) AS TOTAL FROM terminals_messages WHERE " . implode(' OR ', $where));
     if (!empty($old['TOTAL'])) {
         SQLExec("DELETE FROM terminals_messages WHERE " . implode(' OR ', $where));
@@ -257,16 +283,17 @@ function terminalsMessagesDelivered($ids)
     if ($ids == '') {
         return;
     }
-    $rows = SQLSelect("SELECT DISTINCT FROM_NAME, TO_NAME FROM terminals_messages WHERE ID IN ($ids) AND DELIVERED=0");
+    $rows = SQLSelect("SELECT DISTINCT m.FROM_NAME, m.TO_NAME, f.NAME AS FROM_NOW, t.NAME AS TO_NOW FROM terminals_messages m"
+        . " LEFT JOIN terminals f ON f.ID=m.FROM_ID LEFT JOIN terminals t ON t.ID=m.TO_ID WHERE m.ID IN ($ids) AND m.DELIVERED=0");
     if (!count($rows)) {
         return;
     }
     SQLExec("UPDATE terminals_messages SET DELIVERED=" . time() . " WHERE ID IN ($ids) AND DELIVERED=0");
     $senders = array();
     foreach ($rows as $row) {
-        $senders[] = $row['FROM_NAME'];
+        $senders[] = ($row['FROM_NOW'] != '') ? $row['FROM_NOW'] : $row['FROM_NAME'];
     }
-    terminalsMessagesNotify($rows[0]['TO_NAME'], $senders);
+    terminalsMessagesNotify(($rows[0]['TO_NOW'] != '') ? $rows[0]['TO_NOW'] : $rows[0]['TO_NAME'], $senders);
 }
 
 // Терминал по имени, названию или адресу
