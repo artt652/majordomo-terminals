@@ -345,7 +345,7 @@ class pipup extends tts_addon
         return $this->soundMessage($phrase, $cached_file, '🔊 ' . terminalsLang('TERMINALS_NOTIFICATION'));
     }
 
-    // Звуковой файл (terminalsSend: звук перед сообщением) — отдельным окном.
+    // Звуковой файл (голосовое, музыка или звук перед сообщением из terminalsSend, сигнал очереди) — отдельным окном.
     // Файл — путь в веб-корне MajorDoMo или http-ссылка; $title — заголовок окна (например, отправитель);
     // $known — длительность, если известна заранее (запись из браузера, в файле её нет): окно не закроется раньше
     function playFile($file, $level = 0, $title = '', $known = 0)
@@ -652,7 +652,7 @@ class pipup extends tts_addon
 
     /**
      * Окно со звуком по ссылке (поле sound, только форк PiPup >= 0.18).
-     * Используется плеером app_player «pipup_play». $volume — 0..1 или null.
+     * Используется плеером app_player «pipup_play» и сценариями. $volume — 0..1 или null.
      */
     function sendSound($soundUrl, $text = '', $title = '', $duration = 15, $volume = null, $id = '')
     {
@@ -832,8 +832,7 @@ class pipup extends tts_addon
         return 'http://' . $ip . ($port ? ':' . $port : '') . rtrim(ROOTHTML, '/') . '/' . $rel;
     }
 
-    // ip:порт PiPup. «Адрес» терминала — только IP или имя устройства (порт, если вписан, отбрасывается),
-    // порт PiPup — поле «Порт» плеера, пусто — 7979
+    // ip:порт PiPup. «Адрес» терминала — только IP или имя устройства (порт, если вписан, отбрасывается)
     private function hostPort()
     {
         $host = preg_replace('/:\d*$/', '', trim($this->terminal['HOST']));

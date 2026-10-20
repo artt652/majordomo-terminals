@@ -4,12 +4,11 @@
  * Открывается на устройстве-терминале как приложение app_messages: /popup/app_messages.html
  * (или /module/terminals.html), на странице меню — [#module name="terminals" action="messages"#].
  *
- * Отправитель — терминал, с которого открыта страница: по ключу или по адресу устройства (ниже).
+ * Отправитель — терминал, с которого открыта страница: по ключу, из панели управления или как прежде (ниже).
  * Чаты как в мессенджере: «Все терминалы», комнаты MajorDoMo (терминал, привязанный к комнате,
  * сам состоит в её чате), свои группы терминалов и личные чаты с каждым терминалом.
- * Можно отправить текст (с озвучкой на терминале-получателе или без), картинку или фото
- * и голосовое сообщение. Работает по HTTP: фото и запись голоса — через выбор файла
- * (на телефонах и планшетах он предлагает камеру и диктофон), без доступа браузера к микрофону.
+ * Можно отправить текст (с озвучкой на терминале-получателе или без), фото, видео, музыку, файл
+ * и голосовое сообщение (запись в браузере по HTTPS или на localhost, иначе — выбор файла записи).
  * Доставка — terminalsSend() и очередь получателя.
  *
  * Выполняется внутри terminals::usual(&$out).
@@ -177,7 +176,6 @@ if ($lock != '') {
     $out['WS_PORT'] = '';
     $out['MAX_MEDIA_MB'] = 15;
     $out['MAX_FILE_MB'] = 50;
-    $out['MESSAGES_PAGE'] = 1;
     return;
 }
 
@@ -364,7 +362,6 @@ $json_out = function ($data) use ($finish_session) {
     exit;
 };
 
-// цвет аватарки чата (терминала, комнаты, группы…) — общий для всех устройств; пусто — по умолчанию
 // аватарка чата: цвет и/или эмодзи — меняется то, что передано (пусто — по умолчанию)
 if (gr('mode') == 'set_color') {
     $key = (string)gr('chat');
@@ -530,16 +527,10 @@ $send_to_terminals = function ($chat, $to, $text, $media, $voice, $forwarded = '
 };
 
 // отправка: в чат (chat=all|room:ID|group:ID|term:ИМЯ — получатели все участники, кроме себя)
-// или по списку to[] (как раньше)
 if ($this->mode == 'send_message' || gr('mode') == 'send_message') {
     $chat_key = (string)gr('chat');
     $chat = ($chat_key != '') ? $find_chat($chat_key) : array();
-    if (!empty($chat['key'])) {
-        $to = array_values(array_diff($chat['members'], array($me_name)));
-    } else {
-        $to = gr('to');
-        $to = is_array($to) ? $to : (($to != '') ? array($to) : array());
-    }
+    $to = !empty($chat['key']) ? array_values(array_diff($chat['members'], array($me_name))) : array();
     $text = gr('message');
     if (!empty($chat['key']) && ($chat['type'] == 'house' || $chat['type'] == 'shoutroom')) {
         $json_out(array('sent' => $send_to_shouts($chat, $text), 'error' => $user_id ? '' : 'login'));
@@ -569,11 +560,7 @@ if ($this->mode == 'send_message' || gr('mode') == 'send_message') {
             'sound_duration' => ($sound != '') ? $browser_seconds('audio_duration') : 0,
             'video_duration' => ($video != '') ? $browser_seconds('video_duration') : 0), gr('voice', 'int'));
     }
-    if (gr('ajax')) {
-        $json_out(array('sent' => $sent, 'error' => $upload_error));
-    }
-    $out['SENT'] = $sent ? 1 : 0;
-    $out['SEND_FAILED'] = $sent ? 0 : 1;
+    $json_out(array('sent' => $sent, 'error' => $upload_error));
 }
 
 // переслать сообщение в другой чат: kind=msg (переписка терминалов, только своя) или shout (общий чат
@@ -816,7 +803,6 @@ if ($user_id) {
     $user_name = !empty($user['NAME']) ? $user['NAME'] : (isset($user['USERNAME']) ? $user['USERNAME'] : '');
 }
 $out['USER_NAME_JSON'] = json_encode($user_name, $flags);
-$out['MESSAGES_PAGE'] = 1;
 // пределы размера для проверки в браузере до отправки (МБ)
 $out['MAX_MEDIA_MB'] = round($max_media / 1048576, 1);
 $out['MAX_FILE_MB'] = round($max_file / 1048576, 1);

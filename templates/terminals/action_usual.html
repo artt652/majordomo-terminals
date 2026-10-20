@@ -2,8 +2,9 @@
  Страница «Сообщения»: обмен сообщениями между терминалами (modules/terminals/terminals_messages.inc.php)
  Вид как у мессенджера: слева список чатов (все терминалы, комнаты, свои группы, личные чаты),
  справа — переписка пузырями и поле ввода снизу. На узком экране список и чат — отдельные экраны.
- Тема светлая/тёмная, открытый чат, озвучка и прочитанные сообщения запоминаются в браузере (localStorage).
- Голосовое записывается в браузере (по HTTPS или на localhost), иначе выбирается файл записи; файлы — через 📎.
+ Тема, фон, масштаб, открытый чат и озвучка запоминаются в браузере (cookie tmmsg_*).
+ Голосовое записывается в браузере (по HTTPS или на localhost), иначе выбирается файл записи; фото, видео,
+ музыка и файлы — через 📎. Терминал — по ключу, из панели управления или как прежде (terminals_messages.inc.php).
 #-->
 <style type="text/css">
 	.tg-app { --tg-bg: #e6ebee; --tg-panel: #ffffff; --tg-text: #000000; --tg-muted: #707579; --tg-in: #ffffff; --tg-out: #e3fee0;
@@ -276,7 +277,7 @@
 				[#endif ME_NAME#]
 				[#if AS_ADMIN!="1"#]
 				[#if ME_NAME=""#]
-				<!-- прежний режим (без ключей): терминал не узнан — выбрать на странице -->
+				<!-- терминал не узнан (без ключа, не из панели): выбрать на странице -->
 				<div class="tg-sub"><#LANG_TERMINALS_THIS_TERMINAL#>:
 					<select id="tm_from">
 						<option value=""><#LANG_TERMINALS_CHOOSE#></option>
@@ -454,7 +455,7 @@
 		minLevel: '<#LANG_TERMINALS_MIN_LEVEL#>', screen: '<#LANG_TERMINALS_SCREEN#>',
 		logout: '<#LANG_TERMINALS_LOGOUT#>', logoutConfirm: '<#LANG_TERMINALS_LOGOUT_CONFIRM#>', logoutNote: '<#LANG_TERMINALS_LOGOUT_NOTE#>', byDefault: '<#LANG_TERMINALS_BY_DEFAULT#>', tts: '<#LANG_TERMINALS_TTS#>',
 		player: '<#LANG_TERMINALS_PLAYER#>', noTts: '<#LANG_TERMINALS_NO_TTS#>', noPlayer: '<#LANG_TERMINALS_NO_PLAYER#>',
-		settings: '<#LANG_TERMINALS_SETTINGS#>', color: '<#LANG_TERMINALS_AVATAR_COLOR#>', resetColor: '<#LANG_TERMINALS_COLOR_DEFAULT#>',
+		color: '<#LANG_TERMINALS_AVATAR_COLOR#>', resetColor: '<#LANG_TERMINALS_COLOR_DEFAULT#>',
 		loggedAs: '<#LANG_TERMINALS_LOGGED_AS#>', notLogged: '<#LANG_TERMINALS_NOT_LOGGED#>', loading: '<#LANG_TERMINALS_LOADING#>',
 		thisTerminal: '<#LANG_TERMINALS_THIS_TERMINAL#>', wsOn: '<#LANG_TERMINALS_WS_ON#>', wsOff: '<#LANG_TERMINALS_WS_OFF#>',
 		wsWait: '<#LANG_TERMINALS_WS_WAIT#>', stSent: '<#LANG_TERMINALS_ST_SENT#>', stDelivered: '<#LANG_TERMINALS_ST_DELIVERED#>',
@@ -780,7 +781,6 @@
 		return (!others && chat.type == 'room') ? tmText.noTerminals : others;
 	}
 
-	// открыть чат
 	// Открыть чат. keep — только перерисовать (обновление переписки): не менять экран и историю
 	function tmOpen(key, keep) {
 		var chat = tmChat(key);
@@ -1162,7 +1162,7 @@
 		tmSend(null);
 	});
 
-	// отправка: текст, вложения и записанное голосовое (voice = {blob, name})
+	// отправка: текст, вложения и записанное голосовое (voice = {blob, name, duration})
 	function tmSend(voice) {
 		var status = document.getElementById('tm_status');
 		// размер проверяем до отправки: иначе сервер отбросит запрос целиком
@@ -1663,8 +1663,7 @@
 		};
 	}
 
-	// терминал выбран на странице — загрузить его чаты
-	// другой терминал (панель управления; прежний режим — неузнанное устройство): страница заново от его имени
+	// выбран другой терминал (панель управления или неузнанное устройство): страница заново от его имени
 	document.getElementById('tm_from').addEventListener('change', function () {
 		var q = new URLSearchParams(location.search);
 		q.set('from', tmMe());

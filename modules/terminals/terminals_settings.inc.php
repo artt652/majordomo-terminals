@@ -211,7 +211,6 @@ function terminalsSettingsForView($fields, $values)
     return $result;
 }
 
-// Возможности и текущие настройки терминала (только для просмотра) — карточка на странице «Сообщения»
 // Состояние экрана словами (pipup: screenState()): «включён», «заставка», «выключен», «нет связи»
 function terminalsScreenText($screen)
 {
@@ -224,6 +223,7 @@ function terminalsScreenText($screen)
     return terminalsLang($screen['dreaming'] ? 'TERMINALS_SCREEN_DREAM' : 'TERMINALS_SCREEN_OFF');
 }
 
+// Возможности и текущие настройки терминала (только для просмотра) — карточка на странице «Сообщения»
 function terminalsInfo($terminal_rec)
 {
     $info = array(

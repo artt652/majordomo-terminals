@@ -28,7 +28,7 @@ class mediaplayer extends tts_addon
         return true;
     }
 
-    // Звуковой файл (terminalsSend: звук перед сообщением): путь в веб-корне MajorDoMo или http-ссылка.
+    // Звуковой файл (голосовое, музыка или звук перед сообщением из terminalsSend, сигнал очереди): путь в веб-корне MajorDoMo или http-ссылка.
     // Играет так же, как файл голоса, — у наследников (mpd_tts и др.) их способом
     public function playFile($file, $level = 0, $title = '')
     {
@@ -75,7 +75,6 @@ class mediaplayer extends tts_addon
             }
             return $cached_file_url;
         }
-        //DebMes("Unknown file path format: " . $cached_filename, 'terminals');
         return '';
     }
 
