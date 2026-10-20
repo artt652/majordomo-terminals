@@ -50,26 +50,22 @@ $max_media = $limit(15 * 1024 * 1024);
 $max_file = $limit(50 * 1024 * 1024);
 $upload_error = '';
 
-// Терминал этого устройства. Два режима — настройка приложения «Сообщения» «Использовать ключи доступа»
-// (MESSAGES_USE_TOKENS в настройках модуля «Терминалы»):
-// — выключена (по умолчанию, как было): выбранный на странице (from), из сессии или по адресу устройства;
-//   не узнан — выбирается на странице; сессия и правила безопасности не трогаются;
-// — включена:
+// Терминал этого устройства.
 // 1) Ключ (terminals_auth.inc.php): ?token=… (ссылка из карточки терминала, API) или cookie tmmsg_key —
-//    страница открывается как терминал ключа. Ключ важнее всего остального.
-// 2) Без ключа — только тот, кто вошёл в панель управления в этом браузере (в общей сессии ядра
-//    AUTHORIZED, modules/panel.class.php): по умолчанию как MAIN, выбор любого терминала — from=.
-// 3) Иначе страница закрыта. Адрес устройства, ?terminal= и сессия терминал не определяют.
+//    страница открывается как терминал ключа, с любого адреса; адрес, сессия, ?terminal= и from= не смотрятся.
+// 2) Вход в панель управления в этом браузере (AUTHORIZED в общей сессии ядра, modules/panel.class.php) —
+//    любой терминал (выбор под стрелкой у имени): по умолчанию узнанный, как ниже, иначе MAIN.
+// 3) Как прежде: выбранный на странице (from), из сессии (ядро пишет в неё ?terminal=) или по адресу
+//    устройства; не узнан — выбирается на странице. Терминал с галочкой «Только по ключу» так не открывается
+//    и в выборе его нет — это закрывает подмену по адресу (обратный прокси), сессии и ?terminal=.
 // Затем «Контроль доступа» (правила безопасности) своего терминала: не пускает — страница закрыта.
-$this->getConfig();
-$use_tokens = !empty($this->config['MESSAGES_USE_TOKENS']);
 $me = array();
 $by_key = false;
 $as_admin = false;
 $lock = '';
-$key = $use_tokens ? trim((string)gr('token')) : '';
+$key = trim((string)gr('token'));
 $key_from_url = ($key != '');
-if ($use_tokens && !$key_from_url && !empty($_COOKIE['tmmsg_key'])) {
+if (!$key_from_url && !empty($_COOKIE['tmmsg_key'])) {
     $key = (string)$_COOKIE['tmmsg_key'];
 }
 if ($key != '') {
@@ -87,49 +83,46 @@ if ($key != '') {
                 exit;
             }
         }
+    } elseif ($key_from_url) {
+        $lock = 'bad_key';
     } else {
-        // ключ больше не действует (пересоздан, терминал удалён): из cookie — убрать
-        if (!$key_from_url) {
-            terminalsTokenCookie('');
-        }
-        $key_bad = true;
+        // ключ в cookie больше не действует (пересоздан, терминал удалён): убрать, дальше — как без ключа
+        terminalsTokenCookie('');
     }
 }
-if (!$use_tokens) {
-    // прежний режим: выбранный на странице (from), из сессии или по адресу устройства
+if (!$by_key && $lock == '') {
+    // как прежде: from, сессия, адрес устройства
+    $found = array();
     if (gr('from') != '') {
-        $me = terminalsFind(gr('from'));
+        $found = terminalsFind(gr('from'));
     }
-    if (empty($me['ID']) && is_object($session) && !empty($session->data['TERMINAL'])) {
-        $me = terminalsFind($session->data['TERMINAL']);
+    if (empty($found['ID']) && is_object($session) && !empty($session->data['TERMINAL'])) {
+        $found = terminalsFind($session->data['TERMINAL']);
     }
-    if (empty($me['ID']) && !empty($_SERVER['REMOTE_ADDR'])) {
+    if (empty($found['ID']) && !empty($_SERVER['REMOTE_ADDR'])) {
         $list = getTerminalsByHost($_SERVER['REMOTE_ADDR'], 1);
-        $me = !empty($list[0]['ID']) ? $list[0] : array();
+        $found = !empty($list[0]['ID']) ? $list[0] : array();
     }
-} elseif (!$by_key) {
     if (is_object($session) && !empty($session->data['AUTHORIZED'])) {
+        // панель управления: любой терминал, по умолчанию узнанный, иначе MAIN
         $as_admin = true;
-        if (gr('from') != '') {
-            $me = terminalsFind(gr('from'));
-        }
+        $me = $found;
         if (empty($me['ID'])) {
             $list = getTerminalsByName('MAIN', 1);
-            $me = !empty($list[0]['ID']) ? $list[0] : array();
+            $me = !empty($list[0]['ID']) ? $list[0] : SQLSelectOne("SELECT * FROM terminals ORDER BY ID LIMIT 1");
         }
-        if (empty($me['ID'])) {
-            $me = SQLSelectOne("SELECT * FROM terminals ORDER BY ID LIMIT 1");
-        }
+    } elseif (!empty($found['ID']) && terminalsTokenRequired($found['ID'])) {
+        $lock = 'need_key';
     } else {
-        $lock = !empty($key_bad) && $key_from_url ? 'bad_key' : 'need_key';
+        $me = $found;
     }
 }
 // Правила безопасности ядра смотрят терминал в сессии: на время запроса в ней — этот терминал.
 // Вход по ключу записывается в сессию насовсем (правила ядра на этом устройстве видят проверенный
 // терминал); иначе сессия в конце запроса возвращается как была
 $session_terminal = (is_object($session) && isset($session->data['TERMINAL'])) ? $session->data['TERMINAL'] : null;
-$finish_session = function () use (&$session, &$by_key, $session_terminal, $use_tokens) {
-    if (!is_object($session) || !$use_tokens) {
+$finish_session = function () use (&$session, &$by_key, $session_terminal) {
+    if (!is_object($session)) {
         return;
     }
     if (!$by_key) {
@@ -143,7 +136,7 @@ $finish_session = function () use (&$session, &$by_key, $session_terminal, $use_
         $session->save();
     }
 };
-if ($use_tokens && !empty($me['ID']) && is_object($session)) {
+if (!empty($me['ID']) && is_object($session)) {
     $session->data['TERMINAL'] = $me['NAME'];
     unset($session->data['TERMINAL_ID']);
     if (function_exists('checkAccess') && !checkAccess('terminal', $me['ID'])) {
@@ -151,6 +144,15 @@ if ($use_tokens && !empty($me['ID']) && is_object($session)) {
         $by_key = false;
         $lock = 'rules';
     }
+}
+// выход с устройства: ключ из cookie — убрать; дальше страница узнаёт терминал как без ключа
+if (gr('mode') == 'logout') {
+    terminalsTokenCookie('');
+    $by_key = false;
+    $finish_session();
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(array('ok' => 1));
+    exit;
 }
 // страница закрыта: API получает ошибку, страница — только пояснение, без чатов и переписки
 if ($lock != '') {
@@ -243,7 +245,7 @@ if (!$peek && !empty($me['ID']) && (empty($me['LATEST_ACTIVITY']) || strtotime($
 foreach (SQLSelect("SELECT ID, NAME, TITLE, LOCATION_ID, LATEST_ACTIVITY, IS_ONLINE FROM terminals ORDER BY TITLE") as $t) {
     // «Контроль доступа» терминала-получателя: не пускает этот терминал (пользователя, время) — его не видно,
     // ни в личных чатах, ни в составе комнат и групп, и сообщения от этого терминала ему не уходят
-    if ($use_tokens && !empty($me['ID']) && $t['NAME'] != $me['NAME'] && function_exists('checkAccess') && !checkAccess('terminal', $t['ID'])) {
+    if (!empty($me['ID']) && $t['NAME'] != $me['NAME'] && function_exists('checkAccess') && !checkAccess('terminal', $t['ID'])) {
         continue;
     }
     $all_terminals[$t['NAME']] = $t;
@@ -784,7 +786,18 @@ if (gr('ajax') && gr('list')) {
 $out['ME_NAME'] = $me_name;
 $out['ME_TITLE'] = !empty($me['ID']) ? $me['TITLE'] : '';
 $out['AS_ADMIN'] = $as_admin ? 1 : 0;
+$out['BY_KEY'] = $by_key ? 1 : 0;
 $out['ALL_TERMINALS'] = array_values($all_terminals);
+if (!$as_admin && $me_name == '') {
+    // выбор терминала на неузнанном устройстве: терминалов «Только по ключу» в нём нет
+    $required = array();
+    foreach (SQLSelect("SELECT TERMINAL_ID FROM terminals_tokens WHERE REQUIRED=1") as $row) {
+        $required[(int)$row['TERMINAL_ID']] = true;
+    }
+    $out['ALL_TERMINALS'] = array_values(array_filter($out['ALL_TERMINALS'], function ($t) use ($required) {
+        return empty($required[(int)$t['ID']]);
+    }));
+}
 $flags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
 $out['CONVERSATION_JSON'] = json_encode($conversation, $flags);
 $out['CHATS_JSON'] = json_encode($chats, $flags);

@@ -423,6 +423,7 @@
 <script type="text/javascript">
 	var tmConversation = [#CONVERSATION_JSON#];
 	var tmChats = [#CHATS_JSON#];
+	var tmByKey = [#if BY_KEY="1"#]true[#else BY_KEY#]false[#endif BY_KEY#];
 	var tmTitles = [#TITLES_JSON#];
 	var tmStatus = [#STATUS_JSON#];
 	var tmColorsMap = [#COLORS_JSON#];
@@ -450,7 +451,8 @@
 		play: '<#LANG_TERMINALS_PLAY#>', pause: '<#LANG_TERMINALS_PAUSE#>', online: '<#LANG_TERMINALS_ONLINE#>',
 		lastSeen: '<#LANG_TERMINALS_LAST_SEEN#>', activity: '<#LANG_TERMINALS_ACTIVITY#>', reachable: '<#LANG_TERMINALS_REACHABLE#>', offline: '<#LANG_TERMINALS_OFFLINE#>',
 		name: '<#LANG_TERMINALS_SYSTEM_NAME#>', host: '<#LANG_TERMINALS_HOST#>', room: '<#LANG_TERMINALS_ROOM#>',
-		minLevel: '<#LANG_TERMINALS_MIN_LEVEL#>', screen: '<#LANG_TERMINALS_SCREEN#>', byDefault: '<#LANG_TERMINALS_BY_DEFAULT#>', tts: '<#LANG_TERMINALS_TTS#>',
+		minLevel: '<#LANG_TERMINALS_MIN_LEVEL#>', screen: '<#LANG_TERMINALS_SCREEN#>',
+		logout: '<#LANG_TERMINALS_LOGOUT#>', logoutConfirm: '<#LANG_TERMINALS_LOGOUT_CONFIRM#>', logoutNote: '<#LANG_TERMINALS_LOGOUT_NOTE#>', byDefault: '<#LANG_TERMINALS_BY_DEFAULT#>', tts: '<#LANG_TERMINALS_TTS#>',
 		player: '<#LANG_TERMINALS_PLAYER#>', noTts: '<#LANG_TERMINALS_NO_TTS#>', noPlayer: '<#LANG_TERMINALS_NO_PLAYER#>',
 		settings: '<#LANG_TERMINALS_SETTINGS#>', color: '<#LANG_TERMINALS_AVATAR_COLOR#>', resetColor: '<#LANG_TERMINALS_COLOR_DEFAULT#>',
 		loggedAs: '<#LANG_TERMINALS_LOGGED_AS#>', notLogged: '<#LANG_TERMINALS_NOT_LOGGED#>', loading: '<#LANG_TERMINALS_LOADING#>',
@@ -1555,6 +1557,20 @@
 						pl.appendChild(tmEl('div', 'tg-note', tmText.noPlayer));
 					}
 					tmInfoPalette(key);
+					// своя карточка при входе по ключу: «Выйти с этого устройства» — ключ из cookie убирается
+					if (tmByKey && name == tmMe()) {
+						var out = tmInfoSection('');
+						var btn = tmEl('button', 'tg-btn tg-danger', tmText.logout);
+						btn.type = 'button';
+						btn.addEventListener('click', function () {
+							if (!confirm(tmText.logoutConfirm)) return;
+							fetch(location.pathname + '?ajax=1&mode=logout', {method: 'POST', credentials: 'same-origin'})
+								.then(function () { location.reload(); })
+								.catch(function () { location.reload(); });
+						});
+						out.appendChild(btn);
+						out.appendChild(tmEl('div', 'tg-note', tmText.logoutNote));
+					}
 				})
 				.catch(function () {});
 		} else if (chat.type == 'house' || chat.type == 'shoutroom') {

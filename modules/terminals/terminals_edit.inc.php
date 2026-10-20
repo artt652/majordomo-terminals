@@ -102,15 +102,16 @@ if (is_array($rec) && !empty($rec['ID'])) {
     if ($this->mode == 'token_create') {
         terminalsTokenCreate($rec['ID']);
         $out['TOKEN_RECREATED'] = 1;
+    } elseif ($this->mode == 'token_required') {
+        terminalsTokenSetRequired($rec['ID'], gr('token_required', 'int'));
+        $out['TOKEN_SAVED'] = 1;
     }
     $out['TOKEN'] = terminalsTokenGet($rec['ID']);
     $token_row = terminalsTokenRow($rec['ID']);
     $out['TOKEN_CREATED'] = !empty($token_row['CREATED']) ? date('d.m.Y H:i', (int)$token_row['CREATED']) : '';
     $out['TOKEN_LAST_USED'] = !empty($token_row['LAST_USED']) ? date('d.m.Y H:i', (int)$token_row['LAST_USED']) : '';
     $out['TOKEN_PAGE'] = ROOTHTML . 'popup/app_messages.html';
-    // ключи действуют, только если в настройках «Сообщений» включено «Использовать ключи доступа»
-    $this->getConfig();
-    $out['USE_TOKENS'] = !empty($this->config['MESSAGES_USE_TOKENS']) ? 1 : 0;
+    $out['TOKEN_REQUIRED'] = !empty($token_row['REQUIRED']) ? 1 : 0;
 }
 
 // экран устройства PiPup (форк >= 0.28): состояние и кнопки на вкладке «Отправить сообщение»

@@ -37,8 +37,8 @@ class app_messages extends module
             $saved = false;
             if (gr('ws_save')) {
                 $terminals->config['MESSAGES_WS_EXTERNAL'] = terminalsWsUrl(gr('ws_external'));
-                $terminals->config['MESSAGES_USE_TOKENS'] = gr('use_tokens', 'int') ? 1 : 0;
-                unset($terminals->config['MESSAGES_TOKEN_ONLY']); // прежняя настройка «только по ключу» больше не используется
+                // прежние общие настройки ключей больше не используются: «Только по ключу» — у каждого терминала
+                unset($terminals->config['MESSAGES_TOKEN_ONLY'], $terminals->config['MESSAGES_USE_TOKENS']);
                 $terminals->saveConfig();
                 $saved = true;
             }
@@ -54,10 +54,6 @@ class app_messages extends module
                 . '<div class="col-sm-8"><input type="text" name="ws_external" class="form-control" value="' . $h($value) . '"'
                 . ' placeholder="wss://home.example.com/majordomo">'
                 . '<span class="help-block">' . terminalsLang('TERMINALS_WS_EXTERNAL_HELP') . '</span></div></div>'
-                . '<div class="form-group"><div class="col-sm-offset-4 col-sm-8"><div class="checkbox"><label>'
-                . '<input type="checkbox" name="use_tokens" value="1"' . (!empty($terminals->config['MESSAGES_USE_TOKENS']) ? ' checked' : '') . '> '
-                . $h(terminalsLang('TERMINALS_USE_TOKENS')) . '</label></div>'
-                . '<span class="help-block">' . terminalsLang('TERMINALS_USE_TOKENS_HELP') . '</span></div></div>'
                 . '<div class="form-group"><div class="col-sm-offset-4 col-sm-8"><button type="submit" class="btn btn-primary">'
                 . $h(terminalsLang('TERMINALS_SAVE')) . '</button>'
                 . ($saved ? ' <span class="text-success">&#10003;</span>' : '') . '</div></div></form>';

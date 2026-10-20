@@ -6,7 +6,9 @@
  * терминала и при установке/обновлении модуля — и всегда виден в карточке (ссылка и QR-код): хранится
  * как есть, карточку видит только тот, кто вошёл в панель управления. На устройстве ключ открывают
  * ссылкой …/popup/app_messages.html?token=КЛЮЧ: страница запоминает его в cookie и дальше узнаёт
- * терминал по нему. Без ключа страница пускает только того, кто вошёл в панель управления в этом браузере.
+ * терминал по нему. Ключ важнее всего: с ним адрес устройства, сессия и ?terminal= не смотрятся.
+ * «Только по ключу» у терминала (REQUIRED, по умолчанию выключено): без ключа (по адресу, сессии,
+ * ?terminal=, выбору на странице) этот терминал не открывается — кроме входа из панели управления.
  */
 
 // Запись ключа терминала (или пустой массив)
@@ -48,6 +50,19 @@ function terminalsTokenGet($terminal_id)
         return $row['TOKEN'];
     }
     return terminalsTokenCreate($terminal_id);
+}
+
+// «Только по ключу»
+function terminalsTokenSetRequired($terminal_id, $required)
+{
+    terminalsTokenGet($terminal_id); // запись с ключом есть всегда
+    SQLExec("UPDATE terminals_tokens SET REQUIRED=" . ($required ? 1 : 0) . " WHERE TERMINAL_ID=" . (int)$terminal_id);
+}
+
+function terminalsTokenRequired($terminal_id)
+{
+    $row = terminalsTokenRow($terminal_id);
+    return !empty($row['REQUIRED']);
 }
 
 // Ключи всем терминалам, у которых их нет (установка и обновление модуля)
