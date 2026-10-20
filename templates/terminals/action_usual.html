@@ -186,6 +186,9 @@
 	.tg-dialog textarea { width: 100%; border: 1px solid var(--tg-border); border-radius: 8px; background: transparent; color: var(--tg-text);
 		padding: 6px 8px; font-size: 14px; resize: vertical; min-height: 54px; outline: none; }
 	.tg-time { float: right; font-size: 11px; color: var(--tg-time); margin: 6px 0 0 10px; white-space: nowrap; }
+	.tg-more { align-self: center; background: var(--tg-glass); color: var(--tg-accent); border: 0; border-radius: 14px; padding: 5px 14px;
+		font-size: 13px; margin: 4px 0 8px; cursor: pointer; box-shadow: var(--tg-shadow); }
+	.tg-more:disabled { color: var(--tg-muted); cursor: default; }
 	.tg-day { align-self: center; font-size: 12px; color: #fff; background: rgba(0,0,0,.25); padding: 2px 10px; border-radius: 10px; margin: 6px 0; }
 	.tg-files { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px; background: var(--tg-panel); }
 	.tg-files:empty { display: none; }
@@ -423,6 +426,9 @@
 
 <script type="text/javascript">
 	var tmConversation = [#CONVERSATION_JSON#];
+	// «Показать раньше»: у каких чатов могут быть более ранние сообщения ('*' — у всех чатов терминалов),
+	// в каких уже догружали (их ранние сообщения сохраняются при обновлении) и какие дочитаны до начала
+	var tmMore = [#MORE_JSON#], tmOlderChats = {}, tmMoreDone = {};
 	var tmChats = [#CHATS_JSON#];
 	var tmByKey = [#if BY_KEY="1"#]true[#else BY_KEY#]false[#endif BY_KEY#];
 	var tmTitles = [#TITLES_JSON#];
@@ -452,7 +458,7 @@
 		play: '<#LANG_TERMINALS_PLAY#>', pause: '<#LANG_TERMINALS_PAUSE#>', online: '<#LANG_TERMINALS_ONLINE#>',
 		lastSeen: '<#LANG_TERMINALS_LAST_SEEN#>', activity: '<#LANG_TERMINALS_ACTIVITY#>', reachable: '<#LANG_TERMINALS_REACHABLE#>', offline: '<#LANG_TERMINALS_OFFLINE#>',
 		name: '<#LANG_TERMINALS_SYSTEM_NAME#>', host: '<#LANG_TERMINALS_HOST#>', room: '<#LANG_TERMINALS_ROOM#>',
-		minLevel: '<#LANG_TERMINALS_MIN_LEVEL#>', screen: '<#LANG_TERMINALS_SCREEN#>',
+		minLevel: '<#LANG_TERMINALS_MIN_LEVEL#>', screen: '<#LANG_TERMINALS_SCREEN#>', showEarlier: '<#LANG_TERMINALS_SHOW_EARLIER#>',
 		logout: '<#LANG_TERMINALS_LOGOUT#>', logoutConfirm: '<#LANG_TERMINALS_LOGOUT_CONFIRM#>', logoutNote: '<#LANG_TERMINALS_LOGOUT_NOTE#>', byDefault: '<#LANG_TERMINALS_BY_DEFAULT#>', tts: '<#LANG_TERMINALS_TTS#>',
 		player: '<#LANG_TERMINALS_PLAYER#>', noTts: '<#LANG_TERMINALS_NO_TTS#>', noPlayer: '<#LANG_TERMINALS_NO_PLAYER#>',
 		color: '<#LANG_TERMINALS_AVATAR_COLOR#>', resetColor: '<#LANG_TERMINALS_COLOR_DEFAULT#>',
@@ -636,6 +642,42 @@
 	function tmTitle(name) { return tmTitles[name] || name; }
 
 	// сообщения чата: старые сверху
+	// обновление переписки: в чатах, где догружали ранние сообщения, они остаются (свежий список — только последние)
+	function tmMergeOlder(fresh) {
+		var keys = Object.keys(tmOlderChats);
+		if (!keys.length) return fresh;
+		var have = {};
+		fresh.forEach(function (m) { have[m.kind + ':' + m.id] = 1; });
+		return fresh.concat(tmConversation.filter(function (m) { return tmOlderChats[m.chat] && !have[m.kind + ':' + m.id]; }));
+	}
+	function tmHasMore(key) {
+		return !tmMoreDone[key] && !!(tmMore[key] || (tmMore['*'] && !tmShoutChat(key)));
+	}
+	function tmLoadOlder(key, btn) {
+		var ids = tmConversation.filter(function (m) { return m.chat == key; }).map(function (m) { return m.min_id || m.id; });
+		if (!ids.length && !tmShoutChat(key)) {
+			// в загруженном нет ни одного сообщения чата — раньше самого раннего загруженного
+			ids = tmConversation.filter(function (m) { return m.kind == 'msg'; }).map(function (m) { return m.min_id || m.id; });
+		}
+		if (!ids.length) { tmMoreDone[key] = 1; tmRender(); return; }
+		btn.disabled = true;
+		btn.textContent = tmText.loading;
+		fetch(tmUrl('ajax=1&older=1&chat=' + encodeURIComponent(key) + '&before=' + Math.min.apply(null, ids)), {credentials: 'same-origin'})
+			.then(function (r) { return r.json(); })
+			.then(function (res) {
+				var box = document.getElementById('tm_list');
+				var fromBottom = box.scrollHeight - box.scrollTop;
+				var have = {};
+				tmConversation.forEach(function (m) { have[m.kind + ':' + m.id] = 1; });
+				(res.messages || []).forEach(function (m) { if (!have[m.kind + ':' + m.id]) tmConversation.push(m); });
+				tmOlderChats[key] = 1;
+				if (!res.more) tmMoreDone[key] = 1;
+				if (tmCurrent != key) return;
+				tmRender();
+				box.scrollTop = box.scrollHeight - fromBottom; // на месте: ранние — сверху
+			})
+			.catch(function () { btn.disabled = false; btn.textContent = tmText.showEarlier; });
+	}
 	function tmMessages(key) {
 		return tmConversation.filter(function (m) { return m.chat == key; }).slice().reverse();
 	}
@@ -1013,6 +1055,16 @@
 		if (!chat) return;
 		var items = tmMessages(tmCurrent);
 		box.innerHTML = '';
+		if (tmHasMore(tmCurrent)) {
+			// длинный чат: загружены последние сообщения — кнопка догружает более ранние
+			var moreBtn = document.createElement('button');
+			moreBtn.type = 'button';
+			moreBtn.className = 'tg-more';
+			moreBtn.textContent = tmText.showEarlier;
+			var moreKey = tmCurrent;
+			moreBtn.addEventListener('click', function () { tmLoadOlder(moreKey, moreBtn); });
+			box.appendChild(moreBtn);
+		}
 		if (!items.length) {
 			var empty = document.createElement('div');
 			empty.className = 'tg-empty';
@@ -1133,8 +1185,9 @@
 			.then(function (r) { return r.json(); })
 			.then(function (res) {
 				if (!res || !res.messages) return;
-				var changed = JSON.stringify(res.messages) != JSON.stringify(tmConversation) || JSON.stringify(res.chats) != JSON.stringify(tmChats);
-				tmConversation = res.messages;
+				var changed = JSON.stringify(tmMergeOlder(res.messages)) != JSON.stringify(tmConversation) || JSON.stringify(res.chats) != JSON.stringify(tmChats);
+				tmConversation = tmMergeOlder(res.messages);
+				if (res.more) tmMore = Array.isArray(res.more) ? {} : res.more;
 				tmChats = res.chats;
 				if (res.status) tmStatus = res.status;
 				if (res.colors) tmColorsMap = Array.isArray(res.colors) ? {} : res.colors;

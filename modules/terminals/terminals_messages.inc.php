@@ -168,7 +168,7 @@ if ($lock != '') {
     foreach (array('CONVERSATION_JSON', 'CHATS_JSON') as $k) {
         $out[$k] = '[]';
     }
-    foreach (array('TITLES_JSON', 'STATUS_JSON', 'COLORS_JSON', 'EMOJIS_JSON') as $k) {
+    foreach (array('TITLES_JSON', 'STATUS_JSON', 'COLORS_JSON', 'EMOJIS_JSON', 'MORE_JSON') as $k) {
         $out[$k] = '{}';
     }
     $out['USER_NAME_JSON'] = '""';
@@ -207,12 +207,7 @@ $save_upload = function ($field, $allowed, $max_size) use ($messages_dir, &$uplo
     if (!is_dir($dir)) {
         @mkdir($dir, 0777, true);
     }
-    // старые файлы сообщений (больше недели) удаляем
-    foreach ((array)@scandir($dir) as $old) {
-        if ($old != '.' && $old != '..' && is_file($dir . '/' . $old) && filemtime($dir . '/' . $old) < time() - 7 * 24 * 3600) {
-            @unlink($dir . '/' . $old);
-        }
-    }
+    // старые файлы удаляются вместе с сообщениями (terminalsMessagesCleanup, раз в сутки)
     $name = md5(uniqid('', true) . mt_rand()) . '.' . $ext;
     if (!move_uploaded_file($_FILES[$field]['tmp_name'], $dir . '/' . $name)) {
         $upload_error = 'upload';
@@ -662,11 +657,13 @@ if ($me_name != '' && !$peek) {
 }
 
 // переписка этого терминала: входящие и отправленные. Чат сообщения — групповой (all, room:, group:)
-// или личный (term:собеседник). Отправка в группу — по строке на получателя: показываем одну (SEND_ID)
-$conversation = array();
-if ($me_name != '') {
-    $name = DBSafe($me_name);
-    $rows = SQLSelect("SELECT * FROM terminals_messages WHERE TO_NAME='$name' OR FROM_NAME='$name' ORDER BY ID DESC LIMIT 300");
+// или личный (term:собеседник). Отправка в группу — по строке на получателя: показываем одну (SEND_ID).
+// Сначала — последние $page_first сообщений всех чатов; «Показать раньше» (older=1, chat, before) —
+// ещё по $page_older сообщений одного чата. min_id — самый ранний номер строки сообщения (для before)
+$page_first = 500;
+$page_older = 100;
+$build_messages = function ($rows, $limit) use ($me_name, $all_terminals) {
+    $conversation = array();
     $seen = array();
     foreach ($rows as $row) {
         $incoming = ($row['TO_NAME'] == $me_name);
@@ -678,15 +675,21 @@ if ($me_name != '') {
         // в группе — лучшее по всем получателям (как в мессенджерах: прочитал хотя бы один)
         $state = !empty($row['READ_AT']) ? 3 : (!empty($row['DELIVERED']) ? 2 : 1);
         if (isset($seen[$uniq])) {
-            if (!$incoming && $state > $conversation[$seen[$uniq]]['status']) {
-                $conversation[$seen[$uniq]]['status'] = $state;
+            $k = $seen[$uniq];
+            if (!$incoming && $state > $conversation[$k]['status']) {
+                $conversation[$k]['status'] = $state;
             }
+            $conversation[$k]['min_id'] = min($conversation[$k]['min_id'], (int)$row['ID']);
             continue;
+        }
+        if (count($conversation) >= $limit) {
+            break;
         }
         $seen[$uniq] = count($conversation);
         $text = json_decode($row['MESSAGE'], true);
         $conversation[] = array(
             'id' => (int)$row['ID'],
+            'min_id' => (int)$row['ID'],
             'chat' => $chat_key,
             'incoming' => $incoming,
             'other' => $other,
@@ -705,17 +708,12 @@ if ($me_name != '') {
             'read' => ($incoming && !empty($row['READ_AT'])) ? 1 : 0,
         );
     }
-}
-// общий чат MajorDoMo и публичные комнаты: последние записи shouts.
+    return $conversation;
+};
+// общий чат MajorDoMo и публичные комнаты (shouts).
 // Свои — записанные с этого терминала (source terminalID) или его копии «всем» (source «terminal: Название»)
-$shout_rows = array();
-$shout_chats = array(0 => 'house');
-foreach ($shout_rooms as $room) {
-    $shout_chats[(int)$room['ID']] = 'shout:' . $room['ID'];
-}
-foreach ($shout_chats as $room_id => $chat_key) {
-    $rows = SQLSelect("SELECT shouts.*, users.NAME AS USER_NAME, users.COLOR AS USER_COLOR FROM shouts"
-        . " LEFT JOIN users ON shouts.MEMBER_ID=users.ID WHERE shouts.ROOM_ID=" . (int)$room_id . " ORDER BY shouts.ID DESC LIMIT 50");
+$build_shouts = function ($rows, $chat_key) use ($me, $all_terminals, $computer_name) {
+    $out_rows = array();
     foreach ($rows as $row) {
         $source = (string)$row['SOURCE'];
         $text = html_entity_decode((string)$row['MESSAGE'], ENT_QUOTES, 'UTF-8');
@@ -749,8 +747,9 @@ foreach ($shout_chats as $room_id => $chat_key) {
             }
         }
         $ts = strtotime($row['ADDED']);
-        $shout_rows[] = array(
+        $out_rows[] = array(
             'id' => (int)$row['ID'],
+            'min_id' => (int)$row['ID'],
             'chat' => $chat_key,
             'incoming' => !$mine,
             'other' => '',
@@ -763,11 +762,65 @@ foreach ($shout_chats as $room_id => $chat_key) {
             'ts' => $ts,
         );
     }
+    return $out_rows;
+};
+$shout_chats = array(0 => 'house');
+foreach ($shout_rooms as $room) {
+    $shout_chats[(int)$room['ID']] = 'shout:' . $room['ID'];
 }
-$conversation = array_merge($conversation, $shout_rows);
+$shout_select = function ($room_id, $before, $limit) {
+    return SQLSelect("SELECT shouts.*, users.NAME AS USER_NAME, users.COLOR AS USER_COLOR FROM shouts"
+        . " LEFT JOIN users ON shouts.MEMBER_ID=users.ID WHERE shouts.ROOM_ID=" . (int)$room_id
+        . ($before > 0 ? " AND shouts.ID<" . (int)$before : '') . " ORDER BY shouts.ID DESC LIMIT " . (int)$limit);
+};
+
+// «Показать раньше»: ещё сообщения одного чата до номера before
+if (gr('ajax') && gr('older') && $me_name != '') {
+    $key = (string)gr('chat');
+    $before = (int)gr('before');
+    $chat = $find_chat($key);
+    $messages = array();
+    if (!empty($chat['key']) && $before > 0) {
+        if ($chat['type'] == 'house' || $chat['type'] == 'shoutroom') {
+            $room_id = array_search($chat['key'], $shout_chats, true);
+            $messages = ($room_id !== false) ? $build_shouts($shout_select($room_id, $before, $page_older), $chat['key']) : array();
+        } else {
+            $name = DBSafe($me_name);
+            if ($chat['type'] == 'term') {
+                $other = DBSafe(substr($chat['key'], 5));
+                $cond = "CHAT='' AND ((TO_NAME='$name' AND FROM_NAME='$other') OR (FROM_NAME='$name' AND TO_NAME='$other'))";
+            } else {
+                $cond = "CHAT='" . DBSafe($chat['key']) . "' AND (TO_NAME='$name' OR FROM_NAME='$name')";
+            }
+            $rows = SQLSelect("SELECT * FROM terminals_messages WHERE $cond AND ID<$before ORDER BY ID DESC LIMIT " . ($page_older * 20));
+            $messages = $build_messages($rows, $page_older);
+        }
+    }
+    $json_out(array('messages' => $messages, 'more' => count($messages) >= $page_older ? 1 : 0));
+}
+
+// последние сообщения всех чатов; more — у каких чатов могут быть более ранние ('*' — у всех чатов терминалов)
+$conversation = array();
+$more = array();
+if ($me_name != '') {
+    $name = DBSafe($me_name);
+    $row_limit = $page_first * 5;
+    $rows = SQLSelect("SELECT * FROM terminals_messages WHERE TO_NAME='$name' OR FROM_NAME='$name' ORDER BY ID DESC LIMIT $row_limit");
+    $conversation = $build_messages($rows, $page_first);
+    if (count($conversation) >= $page_first || count($rows) >= $row_limit) {
+        $more['*'] = 1;
+    }
+}
+foreach ($shout_chats as $room_id => $chat_key) {
+    $rows = $shout_select($room_id, 0, 50);
+    if (count($rows) >= 50) {
+        $more[$chat_key] = 1;
+    }
+    $conversation = array_merge($conversation, $build_shouts($rows, $chat_key));
+}
 
 if (gr('ajax') && gr('list')) {
-    $json_out(array('messages' => $conversation, 'chats' => $chats, 'status' => $statuses, 'colors' => $colors, 'emojis' => $emojis));
+    $json_out(array('messages' => $conversation, 'more' => (object)$more, 'chats' => $chats, 'status' => $statuses, 'colors' => $colors, 'emojis' => $emojis));
 }
 
 $out['ME_NAME'] = $me_name;
@@ -787,6 +840,7 @@ if (!$as_admin && $me_name == '') {
 }
 $flags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
 $out['CONVERSATION_JSON'] = json_encode($conversation, $flags);
+$out['MORE_JSON'] = json_encode((object)$more, $flags);
 $out['CHATS_JSON'] = json_encode($chats, $flags);
 $titles = array();
 foreach ($all_terminals as $name => $t) {

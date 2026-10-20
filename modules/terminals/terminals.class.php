@@ -361,6 +361,12 @@ class terminals extends module
             SQLExec('UPDATE terminals SET IS_ONLINE=0 WHERE LATEST_ACTIVITY < (NOW() - INTERVAL 90 MINUTE)'); //
         } elseif ($event == 'MINUTELY') {
             terminalsQueueWatchdog();
+            // переписка страницы «Сообщения»: чистка раз в сутки
+            if (!isset($this->config['MESSAGES_CLEANUP_DAY']) || $this->config['MESSAGES_CLEANUP_DAY'] != date('Y-m-d')) {
+                $this->config['MESSAGES_CLEANUP_DAY'] = date('Y-m-d');
+                $this->saveConfig();
+                terminalsMessagesCleanup(terminalsHistoryDays($this->config));
+            }
         } elseif ($event == 'startup') {
             terminalsQueueReset();
         } elseif ($event == 'SAYREPLY') {

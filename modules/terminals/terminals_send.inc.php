@@ -196,6 +196,59 @@ function terminalsMessagesNotify($from, $to)
     }
 }
 
+// Срок хранения переписки страницы «Сообщения», дней (настройка приложения «Сообщения»): по умолчанию 30, 0 — без срока
+function terminalsHistoryDays($config)
+{
+    if (!isset($config['MESSAGES_HISTORY_DAYS']) || $config['MESSAGES_HISTORY_DAYS'] === '') {
+        return 30;
+    }
+    return max(0, (int)$config['MESSAGES_HISTORY_DAYS']);
+}
+
+// Чистка переписки (раз в сутки, MINUTELY): сообщения старше срока хранения, сообщения удалённых групп
+// и терминалов-получателей; файлы вложений (cms/cached/terminals) — когда на них не осталось сообщений
+// (пересланное ссылается на тот же файл), и загруженные, но не отправленные — старше суток
+function terminalsMessagesCleanup($days)
+{
+    $where = array();
+    if ($days > 0) {
+        $where[] = "ADDED<" . (time() - (int)$days * 86400);
+    }
+    $where[] = "(CHAT LIKE 'group:%' AND CAST(SUBSTRING(CHAT, 7) AS UNSIGNED) NOT IN (SELECT ID FROM terminals_groups))";
+    $where[] = "TO_NAME NOT IN (SELECT NAME FROM terminals)";
+    $old = SQLSelectOne("SELECT COUNT(*) AS TOTAL FROM terminals_messages WHERE " . implode(' OR ', $where));
+    if (!empty($old['TOTAL'])) {
+        SQLExec("DELETE FROM terminals_messages WHERE " . implode(' OR ', $where));
+        DebMes('Messages cleanup: removed ' . (int)$old['TOTAL'] . ' message(s)', 'terminals');
+    }
+    $dir = ROOT . 'cms/cached/terminals';
+    if (!is_dir($dir)) {
+        return;
+    }
+    $used = array();
+    foreach (SQLSelect("SELECT IMAGE, SOUND, FILE, VIDEO FROM terminals_messages WHERE IMAGE LIKE 'cms/cached/terminals/%'"
+        . " OR SOUND LIKE 'cms/cached/terminals/%' OR FILE LIKE 'cms/cached/terminals/%' OR VIDEO LIKE 'cms/cached/terminals/%'") as $row) {
+        foreach ($row as $path) {
+            if ($path != '') {
+                $used[basename((string)$path)] = true;
+            }
+        }
+    }
+    $removed = 0;
+    foreach ((array)@scandir($dir) as $file) {
+        $path = $dir . '/' . $file;
+        if ($file == '.' || $file == '..' || !is_file($path) || isset($used[$file]) || filemtime($path) > time() - 86400) {
+            continue;
+        }
+        if (@unlink($path)) {
+            $removed++;
+        }
+    }
+    if ($removed) {
+        DebMes("Messages cleanup: removed $removed file(s)", 'terminals');
+    }
+}
+
 // Сообщения доставлены (дополнение устройства приняло их или страница получателя загрузила):
 // $ids — номер или список через запятую. Отправители узнают об этом через вебсокет
 function terminalsMessagesDelivered($ids)
