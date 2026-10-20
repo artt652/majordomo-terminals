@@ -326,6 +326,15 @@ foreach ($all_terminals as $name => $t) {
         $chats[] = array('key' => 'term:' . $name, 'type' => 'term', 'title' => $t['TITLE'], 'members' => array($name));
     }
 }
+// «Система»: личные сообщения не от терминала (сценарий, карточка терминала без отправителя или с текстом
+// вместо терминала) — только чтение; есть, только если такие сообщения есть
+if ($me_id) {
+    $system = SQLSelectOne("SELECT ID FROM terminals_messages WHERE CHAT='' AND TO_ID=$me_id AND FROM_ID=0 AND HIDE_TO=0 LIMIT 1");
+    if (!empty($system['ID'])) {
+        $chats[] = array('key' => 'system', 'type' => 'system', 'title' => terminalsLang('TERMINALS_SYSTEM_CHAT'), 'members' => array(),
+            'readonly' => 1, 'text_only' => 1);
+    }
+}
 // свои аватарки (общие для всех устройств): ключ чата => цвет #rrggbb и эмодзи.
 // Эмодзи хранится в JSON (\uXXXX): таблицы в utf8 4-байтовые символы не принимают
 $colors = array();
@@ -634,6 +643,8 @@ if (gr('mode') == 'mark_read' && $me_name != '') {
     $cond = '';
     if (strpos($key, 'term:') === 0) {
         $cond = "CHAT='' AND FROM_ID=" . $term_id(substr($key, 5));
+    } elseif ($key == 'system') {
+        $cond = "CHAT='' AND FROM_ID=0";
     } elseif (preg_match('/^(all|room:\d+|group:\d+)$/', $key)) {
         $cond = "CHAT='" . DBSafe($key) . "'";
     }
@@ -674,7 +685,7 @@ if ($me_name != '' && !$peek) {
 // ещё по $page_older сообщений одного чата. min_id — самый ранний номер строки сообщения (для before)
 $page_first = 500;
 $page_older = 100;
-$build_messages = function ($rows, $limit) use ($me_id, $id_names, $all_terminals) {
+$build_messages = function ($rows, $limit) use ($me_id, $id_names, $all_terminals, $computer_name) {
     $conversation = array();
     $seen = array();
     foreach ($rows as $row) {
@@ -682,6 +693,13 @@ $build_messages = function ($rows, $limit) use ($me_id, $id_names, $all_terminal
         $other_id = (int)($incoming ? $row['FROM_ID'] : $row['TO_ID']);
         $other = isset($id_names[$other_id]) ? $id_names[$other_id] : ($incoming ? $row['FROM_NAME'] : $row['TO_NAME']);
         $chat_key = (isset($row['CHAT']) && $row['CHAT'] != '') ? $row['CHAT'] : 'term:' . $other;
+        if ($incoming && !(int)$row['FROM_ID']) {
+            // отправитель — не терминал: в группе — его подпись, личное — в чат «Система»
+            $other = '';
+            if ($chat_key == 'term:' . $row['FROM_NAME']) {
+                $chat_key = 'system';
+            }
+        }
         $send_id = (isset($row['SEND_ID']) && $row['SEND_ID'] != '') ? $row['SEND_ID'] : 'id' . $row['ID'];
         $uniq = $chat_key . '|' . $send_id . '|' . ($incoming ? 'in' : 'out');
         // состояние отправленного: 1 — отправлено, 2 — доставлено, 3 — прочитано;
@@ -706,7 +724,8 @@ $build_messages = function ($rows, $limit) use ($me_id, $id_names, $all_terminal
             'chat' => $chat_key,
             'incoming' => $incoming,
             'other' => $other,
-            'other_title' => isset($all_terminals[$other]) ? $all_terminals[$other]['TITLE'] : $other,
+            'other_title' => isset($all_terminals[$other]) ? $all_terminals[$other]['TITLE']
+                : ($other != '' ? $other : ($row['FROM_NAME'] != '' ? $row['FROM_NAME'] : $computer_name)),
             'text' => is_string($text) ? $text : '',
             'image' => ($row['IMAGE'] != '' && !preg_match('/^https?:/i', $row['IMAGE'])) ? ROOTHTML . ltrim($row['IMAGE'], '/') : $row['IMAGE'],
             'sound' => ($row['SOUND'] != '' && !preg_match('/^https?:/i', $row['SOUND'])) ? ROOTHTML . ltrim($row['SOUND'], '/') : $row['SOUND'],
@@ -793,6 +812,9 @@ $chat_sql = function ($chat) use ($me_id, $mine_sql, $term_id) {
         $other = $term_id(substr($chat['key'], 5));
         return "CHAT='' AND ((TO_ID=$me_id AND FROM_ID=$other AND HIDE_TO=0) OR (FROM_ID=$me_id AND TO_ID=$other AND HIDE_FROM=0))";
     }
+    if ($chat['type'] == 'system') {
+        return "CHAT='' AND TO_ID=$me_id AND FROM_ID=0 AND HIDE_TO=0";
+    }
     return "CHAT='" . DBSafe($chat['key']) . "' AND $mine_sql";
 };
 
@@ -805,7 +827,10 @@ if (gr('ajax') && gr('mode') == 'clear_history' && $me_name != '') {
         $json_out(array('ok' => 0, 'error' => 'not_found'));
     }
     $members = array_values(array_diff($chat['members'], array($me_name)));
-    if (gr('all') && $as_admin) {
+    if ($chat['type'] == 'system') {
+        // «Система»: отправитель не терминал — сообщения удаляются сразу
+        SQLExec("DELETE FROM terminals_messages WHERE CHAT='' AND TO_ID=$me_id AND FROM_ID=0");
+    } elseif (gr('all') && $as_admin) {
         if ($chat['type'] == 'term') {
             $other = $term_id(substr($chat['key'], 5));
             SQLExec("DELETE FROM terminals_messages WHERE CHAT='' AND ((TO_ID=$me_id AND FROM_ID=$other) OR (FROM_ID=$me_id AND TO_ID=$other))");
@@ -877,13 +902,13 @@ $out['AS_ADMIN'] = $as_admin ? 1 : 0;
 $out['BY_KEY'] = $by_key ? 1 : 0;
 $out['ALL_TERMINALS'] = array_values($all_terminals);
 if (!$as_admin && $me_name == '') {
-    // выбор терминала на неузнанном устройстве: терминалов «Только по ключу» в нём нет
-    $required = array();
-    foreach (SQLSelect("SELECT TERMINAL_ID FROM terminals_tokens WHERE REQUIRED=1") as $row) {
-        $required[(int)$row['TERMINAL_ID']] = true;
+    // выбор терминала на неузнанном устройстве: терминалов «Только по ключу» (и новых, без ключа) в нём нет
+    $open = array();
+    foreach (SQLSelect("SELECT TERMINAL_ID FROM terminals_tokens WHERE REQUIRED=0") as $row) {
+        $open[(int)$row['TERMINAL_ID']] = true;
     }
-    $out['ALL_TERMINALS'] = array_values(array_filter($out['ALL_TERMINALS'], function ($t) use ($required) {
-        return empty($required[(int)$t['ID']]);
+    $out['ALL_TERMINALS'] = array_values(array_filter($out['ALL_TERMINALS'], function ($t) use ($open) {
+        return !empty($open[(int)$t['ID']]);
     }));
 }
 $flags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;

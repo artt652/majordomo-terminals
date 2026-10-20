@@ -7,8 +7,9 @@
  * как есть, карточку видит только тот, кто вошёл в панель управления. На устройстве ключ открывают
  * ссылкой …/popup/app_messages.html?token=КЛЮЧ: страница запоминает его в cookie и дальше узнаёт
  * терминал по нему. Ключ важнее всего: с ним адрес устройства, сессия и ?terminal= не смотрятся.
- * «Только по ключу» у терминала (REQUIRED, по умолчанию выключено): без ключа (по адресу, сессии,
- * ?terminal=, выбору на странице) этот терминал не открывается — кроме входа из панели управления.
+ * «Только по ключу» у терминала (REQUIRED): без ключа (по адресу, сессии, ?terminal=, выбору на странице)
+ * этот терминал не открывается — кроме входа из панели управления. У новых терминалов включено (в том
+ * числе у созданных ядром по ?terminal=), у терминалов, которые были до появления ключей, — выключено.
  */
 
 // Запись ключа терминала (или пустой массив)
@@ -24,12 +25,13 @@ function terminalsTokenNew()
     return function_exists('random_bytes') ? bin2hex(random_bytes(20)) : sha1(uniqid('', true) . mt_rand() . microtime());
 }
 
-// Создать ключ заново (прежний сразу перестаёт работать). Возвращает новый ключ
-function terminalsTokenCreate($terminal_id)
+// Создать ключ заново (прежний сразу перестаёт работать). Возвращает новый ключ.
+// $required — «Только по ключу» для терминала, у которого ключа ещё не было (новый терминал — да)
+function terminalsTokenCreate($terminal_id, $required = 1)
 {
     $row = terminalsTokenRow($terminal_id);
     if (empty($row['ID'])) {
-        $row = array('TERMINAL_ID' => (int)$terminal_id);
+        $row = array('TERMINAL_ID' => (int)$terminal_id, 'REQUIRED' => $required ? 1 : 0);
     }
     $row['TOKEN'] = terminalsTokenNew();
     $row['CREATED'] = time();
@@ -59,18 +61,23 @@ function terminalsTokenSetRequired($terminal_id, $required)
     SQLExec("UPDATE terminals_tokens SET REQUIRED=" . ($required ? 1 : 0) . " WHERE TERMINAL_ID=" . (int)$terminal_id);
 }
 
+// Терминал без записи ключа — новый (создан после установки модуля, например ядром по ?terminal=): только по ключу
 function terminalsTokenRequired($terminal_id)
 {
     $row = terminalsTokenRow($terminal_id);
-    return !empty($row['REQUIRED']);
+    return empty($row['ID']) || !empty($row['REQUIRED']);
 }
 
 // Ключи всем терминалам, у которых их нет (установка и обновление модуля)
+// Первая установка (ключей ещё нет ни у кого): у прежних терминалов «Только по ключу» выключено, как было;
+// при обновлении терминалы без ключа — появившиеся после установки — получают его включённым
 function terminalsTokenEnsureAll()
 {
+    $any = SQLSelectOne("SELECT ID FROM terminals_tokens LIMIT 1");
+    $required = !empty($any['ID']) ? 1 : 0;
     $list = SQLSelect("SELECT t.ID FROM terminals t LEFT JOIN terminals_tokens k ON k.TERMINAL_ID=t.ID WHERE k.TOKEN IS NULL OR k.TOKEN=''");
     foreach ((array)$list as $rec) {
-        terminalsTokenCreate($rec['ID']);
+        terminalsTokenCreate($rec['ID'], $required);
     }
 }
 

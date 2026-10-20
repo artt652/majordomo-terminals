@@ -471,7 +471,7 @@
 		play: '<#LANG_TERMINALS_PLAY#>', pause: '<#LANG_TERMINALS_PAUSE#>', online: '<#LANG_TERMINALS_ONLINE#>',
 		lastSeen: '<#LANG_TERMINALS_LAST_SEEN#>', activity: '<#LANG_TERMINALS_ACTIVITY#>', reachable: '<#LANG_TERMINALS_REACHABLE#>', offline: '<#LANG_TERMINALS_OFFLINE#>',
 		name: '<#LANG_TERMINALS_SYSTEM_NAME#>', host: '<#LANG_TERMINALS_HOST#>', room: '<#LANG_TERMINALS_ROOM#>',
-		minLevel: '<#LANG_TERMINALS_MIN_LEVEL#>', screen: '<#LANG_TERMINALS_SCREEN#>',
+		minLevel: '<#LANG_TERMINALS_MIN_LEVEL#>', screen: '<#LANG_TERMINALS_SCREEN#>', systemSub: '<#LANG_TERMINALS_SYSTEM_SUB#>',
 		clearConfirm: '<#LANG_TERMINALS_CLEAR_HISTORY_CONFIRM#>', clearAllConfirm: '<#LANG_TERMINALS_CLEAR_HISTORY_ALL_CONFIRM#>', showEarlier: '<#LANG_TERMINALS_SHOW_EARLIER#>',
 		logout: '<#LANG_TERMINALS_LOGOUT#>', logoutConfirm: '<#LANG_TERMINALS_LOGOUT_CONFIRM#>', logoutNote: '<#LANG_TERMINALS_LOGOUT_NOTE#>', byDefault: '<#LANG_TERMINALS_BY_DEFAULT#>', tts: '<#LANG_TERMINALS_TTS#>',
 		player: '<#LANG_TERMINALS_PLAYER#>', noTts: '<#LANG_TERMINALS_NO_TTS#>', noPlayer: '<#LANG_TERMINALS_NO_PLAYER#>',
@@ -632,7 +632,7 @@
 		return tmColors[h % tmColors.length];
 	}
 	function tmAvatar(el, chat) {
-		var icons = {all: '📢', room: '🏠', group: '👥', house: '💬', shoutroom: '🗨️'};
+		var icons = {all: '📢', room: '🏠', group: '👥', house: '💬', shoutroom: '🗨️', system: '⚙️'};
 		var emoji = tmEmojiMap[chat.key] || '';
 		el.textContent = emoji || icons[chat.type] || (chat.title || '?').trim().charAt(0).toUpperCase();
 		el.classList.toggle('tg-emoji', !!emoji);
@@ -832,9 +832,11 @@
 		if (chat.type == 'term') return chat.members[0] == chat.title ? '' : chat.members[0];
 		if (chat.type == 'house') return tmText.houseSub;
 		if (chat.type == 'shoutroom') return tmText.shoutroomSub;
+		if (chat.type == 'system') return tmText.systemSub;
+		// участники — со своим терминалом (первым)
 		var me = tmMe();
-		var others = chat.members.filter(function (n) { return n != me; }).map(tmTitle).join(', ');
-		return (!others && chat.type == 'room') ? tmText.noTerminals : others;
+		var names = chat.members.filter(function (n) { return n == me; }).concat(chat.members.filter(function (n) { return n != me; }));
+		return names.length ? names.map(tmTitle).join(', ') : (chat.type == 'room' ? tmText.noTerminals : '');
 	}
 
 	// Открыть чат. keep — только перерисовать (обновление переписки): не менять экран и историю
@@ -850,7 +852,7 @@
 		tmAvatar(document.getElementById('tm_chat_avatar'), chat);
 		document.getElementById('tm_chat_title').textContent = chat.title;
 		var sub = tmMembersText(chat);
-		var plain = (chat.type == 'term' || chat.type == 'house' || chat.type == 'shoutroom' || chat.empty || !sub);
+		var plain = (chat.type == 'term' || chat.type == 'house' || chat.type == 'shoutroom' || chat.type == 'system' || chat.empty || !sub);
 		var subEl = document.getElementById('tm_chat_sub');
 		subEl.textContent = plain ? sub : tmText.members + ': ' + sub;
 		subEl.classList.remove('tg-online-text');
@@ -1302,8 +1304,10 @@
 		document.getElementById('tm_group_delete').style.display = chat ? '' : 'none';
 		var box = document.getElementById('tm_group_members');
 		box.innerHTML = '';
-		Object.keys(tmTitles).sort(function (a, b) { return tmTitle(a).localeCompare(tmTitle(b)); }).forEach(function (name) {
-			if (name == me) return;
+		// свой терминал — тоже в списке: всегда в группе (отметка не снимается)
+		var names = Object.keys(tmTitles).filter(function (n) { return n != me; }).sort(function (a, b) { return tmTitle(a).localeCompare(tmTitle(b)); });
+		names.unshift(me);
+		names.forEach(function (name) {
 			var label = document.createElement('label');
 			label.className = 'tg-member';
 			var av = document.createElement('div');
@@ -1311,11 +1315,12 @@
 			tmAvatar(av, {key: 'term:' + name, type: 'term', title: tmTitle(name)});
 			var title = document.createElement('div');
 			title.className = 'tg-grow';
-			title.textContent = tmTitle(name);
+			title.textContent = tmTitle(name) + (name == me ? ' (' + tmText.thisTerminal.toLowerCase() + ')' : '');
 			var cb = document.createElement('input');
 			cb.type = 'checkbox';
 			cb.value = name;
-			cb.checked = !!(chat && chat.members.indexOf(name) >= 0);
+			cb.checked = name == me || !!(chat && chat.members.indexOf(name) >= 0);
+			cb.disabled = name == me;
 			label.appendChild(av);
 			label.appendChild(title);
 			label.appendChild(cb);
