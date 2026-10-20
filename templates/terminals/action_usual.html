@@ -753,8 +753,21 @@
 			row.addEventListener('click', function () { tmOpen(c.key); });
 			box.appendChild(row);
 		});
+		tmUpdateTitle();
 	}
 	document.getElementById('tm_search').addEventListener('input', tmRenderChats);
+
+	// заголовок страницы (вкладки браузера): «(3) Сообщения» — сколько всего непрочитанных.
+	// Открытый чат не считается, пока страница на экране; во вкладке в фоне — считается
+	var tmBaseTitle = null;
+	function tmUpdateTitle() {
+		if (tmBaseTitle === null) tmBaseTitle = document.title.replace(/^\(\d+\+?\) /, '');
+		var hidden = document.visibilityState && document.visibilityState != 'visible', n = 0;
+		tmChats.forEach(function (c) { if (hidden || c.key != tmCurrent) n += tmUnread(c.key); });
+		var title = (n ? '(' + (n > 99 ? '99+' : n) + ') ' : '') + tmBaseTitle;
+		if (document.title != title) document.title = title;
+	}
+	document.addEventListener('visibilitychange', tmUpdateTitle);
 
 	function tmMembersText(chat) {
 		if (chat.type == 'term') return chat.members[0] == chat.title ? '' : chat.members[0];
