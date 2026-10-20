@@ -12,6 +12,12 @@ class pipup extends tts_addon
 
     // Порт встроенного веб-сервера PiPup по умолчанию
     const DEFAULT_PORT = 7979;
+    // Экран, разбуженный перед сообщением, выключается после серии, только если с пробуждения прошло
+    // не больше этого (иначе экраном, скорее всего, уже пользуются)
+    const SCREEN_SLEEP_WITHIN = 900;
+
+    // Ответ GET /state за время этого объекта (запрос к устройству — один раз)
+    private $deviceStateCache = null;
 
     function __construct($terminal)
     {
@@ -37,7 +43,119 @@ class pipup extends tts_addon
                 'DEFAULT' => isset($this->terminal['PLAYER_USERNAME']) ? (string)$this->terminal['PLAYER_USERNAME'] : '',
                 'HINT' => terminalsLang('TERMINALS_VOICE_HINT')),
             terminalsSignalField(),
+            // экран (форк PiPup >= 0.28: POST /power, GET /state)
+            array('NAME' => 'WAKE_LEVEL', 'TITLE' => terminalsLang('TERMINALS_PIPUP_WAKE_LEVEL'), 'TYPE' => 'number',
+                'HINT' => terminalsLang('TERMINALS_PIPUP_WAKE_LEVEL_HINT')),
+            array('NAME' => 'SLEEP_AFTER', 'TITLE' => terminalsLang('TERMINALS_PIPUP_SLEEP_AFTER'), 'TYPE' => 'checkbox'),
         );
+    }
+
+    // --- Экран устройства (форк PiPup >= 0.28) ---
+
+    // Состояние устройства (GET /state) или null — нет связи или старый PiPup
+    function deviceState($fresh = false)
+    {
+        if ($this->deviceStateCache !== null && !$fresh) {
+            return $this->deviceStateCache ?: null;
+        }
+        $this->deviceStateCache = false;
+        $url = $this->notifyUrl('/state');
+        if ($url === false) {
+            return null;
+        }
+        $ch = curl_init($url);
+        $body = '';
+        $httpCode = $this->doRequest($ch, $error, 3, $body);
+        $data = ($httpCode === 200) ? json_decode($body, true) : null;
+        if (!is_array($data) || !array_key_exists('screenOn', $data)) {
+            return null;
+        }
+        $this->deviceStateCache = $data;
+        return $data;
+    }
+
+    // Экран: null — неизвестно; иначе visible (включён и не заставка), on, dreaming, can_wake, can_sleep
+    function screenState($fresh = false)
+    {
+        $state = $this->deviceState($fresh);
+        if ($state === null) {
+            return null;
+        }
+        $power = (isset($state['power']) && is_array($state['power'])) ? $state['power'] : array();
+        $on = !empty($state['screenOn']);
+        $dreaming = !empty($state['dreaming']);
+        return array(
+            'visible' => $on && !$dreaming,
+            'on' => $on,
+            'dreaming' => $dreaming,
+            'can_wake' => !isset($power['canWake']) || !empty($power['canWake']),
+            'can_sleep' => !empty($power['canSleep']),
+        );
+    }
+
+    // Включить ('on'), выключить ('off') или переключить ('toggle') экран: POST /power?state=…
+    // Выключение работает, если PiPup выданы права администратора устройства или спец. возможностей
+    function screen($state = 'on')
+    {
+        if (!in_array($state, array('on', 'off', 'toggle'), true)) {
+            return 0;
+        }
+        $url = $this->notifyUrl('/power?state=' . $state);
+        if ($url === false) {
+            return 0;
+        }
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, '');
+        $httpCode = $this->doRequest($ch, $error, 4);
+        $this->deviceStateCache = null;
+        if ($httpCode !== 200) {
+            DebMes("PiPup: screen $state at $url failed (HTTP $httpCode) $error", 'terminals');
+            return 0;
+        }
+        DebMes("PiPup: screen $state at $url", 'terminals');
+        return 1;
+    }
+
+    // Разбудить экран перед сообщением, если уровень не ниже «Будить экран с уровня» и экран не виден
+    private function wakeFor($level)
+    {
+        $settings = function_exists('terminalsAddonSettings') ? terminalsAddonSettings($this->terminal, 'tts', 'pipup') : array();
+        $wake = isset($settings['WAKE_LEVEL']) ? trim((string)$settings['WAKE_LEVEL']) : '';
+        if ($wake === '' || !is_numeric($wake) || (int)$level < (int)$wake) {
+            return;
+        }
+        $screen = $this->screenState();
+        if ($screen === null || $screen['visible'] || !$screen['can_wake']) {
+            return;
+        }
+        if ($this->screen('on') && !empty($this->terminal['ID']) && function_exists('terminalsQueueStateMark')) {
+            // для «Выключать экран после сообщений»: экран будил модуль
+            terminalsQueueStateMark((int)$this->terminal['ID'], 'screen_woke', time());
+        }
+    }
+
+    // Очередь: перед первым сообщением серии — был ли экран выключен (только с «Выключать экран после»)
+    function saveState()
+    {
+        $settings = function_exists('terminalsAddonSettings') ? terminalsAddonSettings($this->terminal, 'tts', 'pipup') : array();
+        if (empty($settings['SLEEP_AFTER'])) {
+            return array();
+        }
+        $screen = $this->screenState();
+        return ($screen !== null && !$screen['visible']) ? array('screen_off' => 1) : array();
+    }
+
+    // Очередь: после последнего сообщения серии — выключить экран, если его будил модуль
+    function restoreState($state)
+    {
+        if (empty($state['screen_off']) || empty($state['screen_woke']) || time() - (int)$state['screen_woke'] > self::SCREEN_SLEEP_WITHIN) {
+            return;
+        }
+        $screen = $this->screenState(true);
+        if ($screen !== null && $screen['visible'] && $screen['can_sleep']) {
+            $this->screen('off');
+        }
     }
 
     // Значение поля «Голос сообщений». Пока поля TTS не сохраняли — прежнее место, «Имя пользователя» плеера
@@ -120,6 +238,7 @@ class pipup extends tts_addon
 
     function say($phrase, $level = 0)
     {
+        $this->wakeFor($level);
         return $this->sendCommand($phrase, terminalsLang('TERMINALS_NOTIFICATION'), $this->messageId($phrase), $this->deviceVoice());
     }
 
@@ -129,6 +248,7 @@ class pipup extends tts_addon
     // $sender — от кого, пишется в заголовке окна
     function showMessage($phrase, $level = 0, $image = '', $cached_file = '', $sender = '')
     {
+        $this->wakeFor($level);
         $title = ($sender != '') ? terminalsLang('TERMINALS_FROM_PREFIX') . ': ' . $sender : terminalsLang('TERMINALS_NOTIFICATION');
         $imgUrl = ($image != '') ? $this->fileUrl($image) : false;
         if ($image != '' && $imgUrl === false) {
@@ -193,6 +313,7 @@ class pipup extends tts_addon
 
     function ask($phrase, $level = 0)
     {
+        $this->wakeFor(max((int)$level, 9999));
         return $this->sendCommand($phrase, 'Вопрос', $this->messageId($phrase), $this->deviceVoice());
     }
 
@@ -229,6 +350,7 @@ class pipup extends tts_addon
     // $known — длительность, если известна заранее (запись из браузера, в файле её нет): окно не закроется раньше
     function playFile($file, $level = 0, $title = '', $known = 0)
     {
+        $this->wakeFor($level);
         $soundUrl = $this->fileUrl($file);
         if ($soundUrl === false) {
             DebMes("PiPup: sound not found: $file", 'terminals');
@@ -778,13 +900,14 @@ class pipup extends tts_addon
         return $this->doRequest($ch, $error, 4);
     }
 
-    private function doRequest($ch, &$error, $timeout)
+    private function doRequest($ch, &$error, $timeout, &$body = null)
     {
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 2);
         curl_setopt($ch, CURLOPT_TIMEOUT, (int)$timeout);
 
         $result = curl_exec($ch);
+        $body = is_string($result) ? $result : '';
         $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
         if ($result === false) {
             $error = curl_error($ch);

@@ -500,6 +500,20 @@ function terminalsQueueSaveState($terminal_rec)
     DebMes('Player state saved for ' . $terminal_rec['TITLE'] . ': ' . $rec['PLAYER_STATE'], 'terminals');
 }
 
+// Дописать значение в сохранённое состояние серии (pipup: «экран будил модуль»); нет состояния — ничего
+function terminalsQueueStateMark($tid, $key, $value)
+{
+    $saved = SQLSelectOne("SELECT * FROM terminals_state WHERE TERMINAL_ID=" . (int)$tid . " LIMIT 1");
+    if (empty($saved['ID'])) {
+        return;
+    }
+    $state = json_decode($saved['PLAYER_STATE'], true);
+    $state = is_array($state) ? $state : array();
+    $state[$key] = $value;
+    $saved['PLAYER_STATE'] = json_encode($state);
+    SQLUpdate('terminals_state', $saved);
+}
+
 // Вернуть состояние плеера после последнего сообщения серии
 function terminalsQueueRestoreState($terminal_rec)
 {

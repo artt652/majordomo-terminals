@@ -212,6 +212,18 @@ function terminalsSettingsForView($fields, $values)
 }
 
 // Возможности и текущие настройки терминала (только для просмотра) — карточка на странице «Сообщения»
+// Состояние экрана словами (pipup: screenState()): «включён», «заставка», «выключен», «нет связи»
+function terminalsScreenText($screen)
+{
+    if (!is_array($screen)) {
+        return terminalsLang('TERMINALS_SCREEN_UNKNOWN');
+    }
+    if ($screen['visible']) {
+        return terminalsLang('TERMINALS_SCREEN_ON');
+    }
+    return terminalsLang($screen['dreaming'] ? 'TERMINALS_SCREEN_DREAM' : 'TERMINALS_SCREEN_OFF');
+}
+
 function terminalsInfo($terminal_rec)
 {
     $info = array(
@@ -244,11 +256,19 @@ function terminalsInfo($terminal_rec)
                 }
                 $caps = array('say' => 'TERMINALS_CAP_SAY', 'showMessage' => 'TERMINALS_CAP_IMAGE', 'playFile' => 'TERMINALS_CAP_SOUND',
                     'sendVideo' => 'TERMINALS_CAP_VIDEO', 'ask' => 'TERMINALS_CAP_ASK', 'useQueue' => 'TERMINALS_CAP_QUEUE',
-                    'restoreState' => 'TERMINALS_CAP_RESTORE');
+                    'restoreState' => 'TERMINALS_CAP_RESTORE', 'screenState' => 'TERMINALS_CAP_SCREEN');
                 foreach ($caps as $method => $key) {
+                    // pipup: saveState/restoreState — экран после серии, а не плеер
+                    if ($method == 'restoreState' && method_exists($addon, 'screenState')) {
+                        continue;
+                    }
                     if (method_exists($addon, $method) && ($method != 'useQueue' || $addon->useQueue())) {
                         $tts['capabilities'][] = terminalsLang($key);
                     }
+                }
+                // экран устройства (pipup): включён, заставка, выключен
+                if (method_exists($addon, 'screenState')) {
+                    $info['screen'] = terminalsScreenText($addon->screenState());
                 }
                 $tts['settings'] = terminalsSettingsForView(terminalsAddonFields($addon, 'tts'), terminalsAddonSettings($terminal_rec, 'tts', $type));
             }

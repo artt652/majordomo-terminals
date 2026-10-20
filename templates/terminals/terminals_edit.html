@@ -494,6 +494,28 @@
 
 <!-- сообщение на этот терминал: текст (с озвучкой), картинка, звук, отправитель (terminals_send.inc.php) -->
 <div class="tab-pane" id="tab_send">
+[#if SCREEN_SHOW="1"#]
+<!-- экран устройства PiPup: состояние, включить/выключить (POST /power) -->
+<form action="?" method="post" class="form-horizontal" name="frmScreen">
+[#if SCREEN_FAILED="1"#]<div class="alert alert-danger"><#LANG_TERMINALS_SCREEN_FAILED#></div>[#endif SCREEN_FAILED#]
+<div class="form-group">
+	<label class="col-lg-4 control-label"><#LANG_TERMINALS_SCREEN#>:</label>
+	<div class="col-lg-5">
+		<p class="form-control-static">[#SCREEN_TEXT#]</p>
+		[#if SCREEN_KNOWN="1"#]
+		<button class="btn btn-default" type="submit" onclick="this.form.screen_state.value='on';"><#LANG_TERMINALS_SCREEN_TURN_ON#></button>
+		<button class="btn btn-default" type="submit" onclick="this.form.screen_state.value='off';"[#if SCREEN_CAN_SLEEP!="1"#] disabled[#endif#]><#LANG_TERMINALS_SCREEN_TURN_OFF#></button>
+		[#if SCREEN_CAN_SLEEP!="1"#]<p class="help-block"><#LANG_TERMINALS_SCREEN_NO_SLEEP#> <code>adb shell dpm set-active-admin nl.rogro82.pipup/.AdminReceiver</code></p>[#endif#]
+		[#endif SCREEN_KNOWN#]
+	</div>
+</div>
+<input type="hidden" name="screen_state" value="">
+<input type="hidden" name="id" value="<#ID#>">
+<input type="hidden" name="view_mode" value="<#VIEW_MODE#>">
+<input type="hidden" name="edit_mode" value="<#EDIT_MODE#>">
+<input type="hidden" name="mode" value="screen">
+</form>
+[#endif SCREEN_SHOW#]
 <form action="?" method="post" class="form-horizontal" name="frmSend">
 [#if SENT="1"#]<div class="alert alert-success"><#LANG_TERMINALS_MESSAGE_SENT#></div>[#endif SENT#]
 [#if SEND_FAILED="1"#]<div class="alert alert-danger"><#LANG_TERMINALS_MESSAGE_NOT_SENT#></div>[#endif SEND_FAILED#]

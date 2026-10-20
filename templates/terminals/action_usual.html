@@ -450,7 +450,7 @@
 		play: '<#LANG_TERMINALS_PLAY#>', pause: '<#LANG_TERMINALS_PAUSE#>', online: '<#LANG_TERMINALS_ONLINE#>',
 		lastSeen: '<#LANG_TERMINALS_LAST_SEEN#>', activity: '<#LANG_TERMINALS_ACTIVITY#>', reachable: '<#LANG_TERMINALS_REACHABLE#>', offline: '<#LANG_TERMINALS_OFFLINE#>',
 		name: '<#LANG_TERMINALS_SYSTEM_NAME#>', host: '<#LANG_TERMINALS_HOST#>', room: '<#LANG_TERMINALS_ROOM#>',
-		minLevel: '<#LANG_TERMINALS_MIN_LEVEL#>', byDefault: '<#LANG_TERMINALS_BY_DEFAULT#>', tts: '<#LANG_TERMINALS_TTS#>',
+		minLevel: '<#LANG_TERMINALS_MIN_LEVEL#>', screen: '<#LANG_TERMINALS_SCREEN#>', byDefault: '<#LANG_TERMINALS_BY_DEFAULT#>', tts: '<#LANG_TERMINALS_TTS#>',
 		player: '<#LANG_TERMINALS_PLAYER#>', noTts: '<#LANG_TERMINALS_NO_TTS#>', noPlayer: '<#LANG_TERMINALS_NO_PLAYER#>',
 		settings: '<#LANG_TERMINALS_SETTINGS#>', color: '<#LANG_TERMINALS_AVATAR_COLOR#>', resetColor: '<#LANG_TERMINALS_COLOR_DEFAULT#>',
 		loggedAs: '<#LANG_TERMINALS_LOGGED_AS#>', notLogged: '<#LANG_TERMINALS_NOT_LOGGED#>', loading: '<#LANG_TERMINALS_LOADING#>',
@@ -1526,6 +1526,7 @@
 					if (info.host) tmInfoRow(main, tmText.host, info.host);
 					if (info.room) tmInfoRow(main, tmText.room, info.room);
 					tmInfoRow(main, tmText.minLevel, info.min_level || tmText.byDefault);
+					if (info.screen) tmInfoRow(main, tmText.screen, info.screen);
 					var tts = tmInfoSection(tmText.tts + (info.tts ? ' — ' + info.tts.title : ''));
 					if (info.tts) {
 						tmInfoCaps(tts, info.tts.capabilities);

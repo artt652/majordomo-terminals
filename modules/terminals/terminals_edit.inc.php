@@ -113,11 +113,28 @@ if (is_array($rec) && !empty($rec['ID'])) {
     $out['USE_TOKENS'] = !empty($this->config['MESSAGES_USE_TOKENS']) ? 1 : 0;
 }
 
+// экран устройства PiPup (форк >= 0.28): состояние и кнопки на вкладке «Отправить сообщение»
+if (is_array($rec) && !empty($rec['ID']) && ($rec['TTS_TYPE'] == 'pipup' || $rec['PLAYER_TYPE'] == 'pipup_play')
+    && is_file(DIR_MODULES . 'terminals/tts/pipup.addon.php')) {
+    include_once DIR_MODULES . 'terminals/tts_addon.class.php';
+    include_once DIR_MODULES . 'terminals/tts/pipup.addon.php';
+    $pipup = new pipup($rec);
+    if ($this->mode == 'screen') {
+        $ok = $pipup->screen(gr('screen_state'));
+        $out[$ok ? 'SCREEN_DONE' : 'SCREEN_FAILED'] = 1;
+    }
+    $screen = $pipup->screenState(true);
+    $out['SCREEN_SHOW'] = 1;
+    $out['SCREEN_TEXT'] = terminalsScreenText($screen);
+    $out['SCREEN_KNOWN'] = is_array($screen) ? 1 : 0;
+    $out['SCREEN_CAN_SLEEP'] = (is_array($screen) && $screen['can_sleep']) ? 1 : 0;
+}
+
 // открыть вкладку той формы, кнопку которой нажали. Через $this->tab: после admin() модуль
 // записывает $out['TAB'] = $this->tab (terminals.class.php), прямое $out['TAB'] затиралось
 if (strpos((string)$this->mode, 'token_') === 0) {
     $this->tab = 'tab_access';
-} elseif ($this->mode == 'send') {
+} elseif ($this->mode == 'send' || $this->mode == 'screen') {
     $this->tab = 'tab_send';
 }
 $out['TAB'] = isset($this->tab) ? $this->tab : '';
