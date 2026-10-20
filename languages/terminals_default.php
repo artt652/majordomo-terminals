@@ -107,6 +107,7 @@ $dictionary = array(
 	'TERMINALS_CLEAR_HISTORY_ALL_CONFIRM' => 'Delete the whole history of this chat for all participants? This cannot be undone.',
 	'TERMINALS_SYSTEM_CHAT'               => 'System',
 	'TERMINALS_SYSTEM_SUB'                => 'messages from scripts and the control panel',
+	'TERMINALS_SYSTEM_READONLY'           => 'Messages from scripts and the control panel arrive here; you cannot reply.',
 	'TERMINALS_TOKEN_COPY'                => 'Copy',
 	'TERMINALS_TOKEN_API'                 => 'API — send a message and read the conversation as this terminal:',
 	'TERMINALS_LOCK_NEED_KEY'             => 'This terminal opens the Messages page only with its key. Open the link with the key on this device (terminal card, “Access to the Messages page” tab) or sign in to the control panel in this browser.',

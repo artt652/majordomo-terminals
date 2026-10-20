@@ -472,6 +472,7 @@
 		lastSeen: '<#LANG_TERMINALS_LAST_SEEN#>', activity: '<#LANG_TERMINALS_ACTIVITY#>', reachable: '<#LANG_TERMINALS_REACHABLE#>', offline: '<#LANG_TERMINALS_OFFLINE#>',
 		name: '<#LANG_TERMINALS_SYSTEM_NAME#>', host: '<#LANG_TERMINALS_HOST#>', room: '<#LANG_TERMINALS_ROOM#>',
 		minLevel: '<#LANG_TERMINALS_MIN_LEVEL#>', screen: '<#LANG_TERMINALS_SCREEN#>', systemSub: '<#LANG_TERMINALS_SYSTEM_SUB#>',
+		systemReadonly: '<#LANG_TERMINALS_SYSTEM_READONLY#>',
 		clearConfirm: '<#LANG_TERMINALS_CLEAR_HISTORY_CONFIRM#>', clearAllConfirm: '<#LANG_TERMINALS_CLEAR_HISTORY_ALL_CONFIRM#>', showEarlier: '<#LANG_TERMINALS_SHOW_EARLIER#>',
 		logout: '<#LANG_TERMINALS_LOGOUT#>', logoutConfirm: '<#LANG_TERMINALS_LOGOUT_CONFIRM#>', logoutNote: '<#LANG_TERMINALS_LOGOUT_NOTE#>', byDefault: '<#LANG_TERMINALS_BY_DEFAULT#>', tts: '<#LANG_TERMINALS_TTS#>',
 		player: '<#LANG_TERMINALS_PLAYER#>', noTts: '<#LANG_TERMINALS_NO_TTS#>', noPlayer: '<#LANG_TERMINALS_NO_PLAYER#>',
@@ -865,8 +866,8 @@
 		document.getElementById('tm_compose').classList.toggle('tg-text-only', !!chat.text_only);
 		document.getElementById('tm_compose').style.display = chat.readonly ? 'none' : '';
 		document.getElementById('tm_readonly').style.display = chat.readonly ? 'block' : 'none';
-		// почему нельзя писать: комната без других терминалов или не выполнен вход на сайт (общий чат)
-		document.getElementById('tm_readonly').textContent = chat.empty ? tmText.roomEmpty : tmText.login;
+		// почему нельзя писать: «Система» — только входящие; комната без других терминалов; не выполнен вход на сайт (общий чат)
+		document.getElementById('tm_readonly').textContent = chat.type == 'system' ? tmText.systemReadonly : (chat.empty ? tmText.roomEmpty : tmText.login);
 		if (chat.text_only && tmRec) tmRecStop(null);
 		tmSendIcon();
 		document.getElementById('tm_edit_group').style.display = (chat.type == 'group' && tmMe()) ? '' : 'none';
