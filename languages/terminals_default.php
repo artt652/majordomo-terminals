@@ -97,7 +97,7 @@ $dictionary = array(
 	'TERMINALS_CAP_SCREEN'             => 'screen on/off',
 	'TERMINALS_PIPUP_WAKE_LEVEL'       => 'Wake the screen from level',
 	'TERMINALS_PIPUP_WAKE_LEVEL_HINT'  => 'empty — never; 0 — any message; e.g. 9 — only urgent',
-	'TERMINALS_PIPUP_SLEEP_AFTER'      => 'Turn the screen off after messages',
+	'TERMINALS_PIPUP_SLEEP_AFTER'      => 'turn the screen off after messages',
 	'TERMINALS_TOKEN_REQUIRED'         => 'Only with the key',
 	'TERMINALS_TOKEN_REQUIRED_HELP'    => 'Without the key (by device address, session, ?terminal= or choosing on the page) the Messages page does not open as this terminal — this also protects against access through a reverse proxy, where every device has the proxy address. The control panel can still open it.',
 	'TERMINALS_LOGOUT'                 => 'Sign out on this device',

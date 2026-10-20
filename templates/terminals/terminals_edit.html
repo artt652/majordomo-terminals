@@ -290,6 +290,9 @@
 				input.appendChild(o);
 			}
 		} else if (field.TYPE == 'checkbox') {
+			// галочка — как «может проигрывать медиа-контент»: без подписи слева, текст справа от галочки
+			row.removeChild(label);
+			col.className = 'col-lg-offset-2 col-lg-5';
 			var hidden = document.createElement('input');
 			hidden.type = 'hidden';
 			hidden.name = name;
@@ -304,6 +307,7 @@
 			input.checked = (value == '1');
 			input.name = name;
 			l.appendChild(input);
+			l.appendChild(document.createTextNode(' ' + field.TITLE));
 			wrap.appendChild(l);
 			col.appendChild(wrap);
 			return row;
