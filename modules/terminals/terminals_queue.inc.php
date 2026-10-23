@@ -133,6 +133,25 @@ function terminalsReachable($terminal_rec, $tts = null)
     return false;
 }
 
+// Адрес устройства терминала для журнала: «хост:порт» дополнения (deviceAddress()), иначе HOST терминала
+function terminalsDeviceLabel($terminal_rec, $tts = null)
+{
+    if (is_object($tts) && method_exists($tts, 'deviceAddress')) {
+        list($host, $port) = $tts->deviceAddress();
+        if (trim((string)$host) != '') {
+            return trim((string)$host) . ((int)$port > 0 ? ':' . (int)$port : '');
+        }
+    }
+    return (isset($terminal_rec['HOST']) && trim((string)$terminal_rec['HOST']) != '') ? trim((string)$terminal_rec['HOST']) : '-';
+}
+
+// Текст для журнала без секретов: логин и пароль в ссылках (rtsp://user:pass@…), подписи и ключи в параметрах
+function terminalsLogSafe($text)
+{
+    $text = preg_replace('~(\b[a-z][a-z0-9+.-]*://)[^/@\s"\']+@~i', '$1***@', (string)$text);
+    return preg_replace('/([?&](?:token|sig|key|password|pass)=)[^&\s"\']+/i', '$1***', $text);
+}
+
 // Просит ли дополнение очередь
 function terminalsQueueUsed($tts)
 {
@@ -292,7 +311,8 @@ function terminalsQueueAdd($terminal_rec, $kind, $message, $level, $file, $image
         // ждём своей очереди
         SQLInsert('terminals_queue', $rec);
         terminalsQueueSchedule($tid, $busy ? (int)$current['FINISH'] - $now : 0);
-        DebMes('Queued for ' . $terminal_rec['TITLE'] . ': ' . (is_array($message) ? json_encode($message) : $message), 'terminals');
+        DebMes('Queued for ' . $terminal_rec['TITLE'] . ': '
+            . terminalsLogSafe(is_array($message) ? json_encode($message, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : $message), 'terminals');
     }
     terminalsQueueUnlock($tid);
     return $result;
@@ -399,25 +419,28 @@ function terminalsQueuePlay($terminal_rec, $kind, $message, $level, $file, $imag
     $result = false;
     $busy = 0;
     $tts = terminalsQueueAddon($terminal_rec);
+    $addr = terminalsDeviceLabel($terminal_rec, $tts);
     if (!is_object($tts) || !terminalsReachable($terminal_rec, $tts)) {
+        DebMes('Not delivered to ' . $terminal_rec['TITLE'] . " ($addr): " . (is_object($tts) ? 'not reachable' : 'no TTS addon'), 'terminals');
         return array($result, $busy);
     }
     if ($kind == 'call') {
         // метод дополнения из сценария (terminalsQueueCall)
         $method = (is_array($message) && isset($message['method'])) ? (string)$message['method'] : '';
         if (in_array($method, terminalsQueueCallMethods(), true) && method_exists($tts, $method)) {
-            DebMes('Calling ' . $method . ' on ' . $terminal_rec['TITLE'] . ': ' . json_encode($message['args']), 'terminals');
+            DebMes('Calling ' . $method . ' on ' . $terminal_rec['TITLE'] . " ($addr): "
+                . terminalsLogSafe(json_encode($message['args'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)), 'terminals');
             $result = call_user_func_array(array($tts, $method), isset($message['args']) ? array_values((array)$message['args']) : array());
             if ($result) {
                 $busy = isset($message['busy']) ? (int)$message['busy'] : 0;
             }
         }
-        return array($result, $busy);
+        return terminalsQueuePlayed($terminal_rec, $addr, $kind, $result, $busy);
     }
     if ($kind == 'sound') {
         // звуковой файл (terminalsSend): дополнению, которое умеет playFile()
         if (method_exists($tts, 'playFile')) {
-            DebMes("Playing sound to " . $terminal_rec['TITLE'] . " (level $level): $file", 'terminals');
+            DebMes("Playing sound to " . $terminal_rec['TITLE'] . " ($addr, level $level): $file", 'terminals');
             // длительность — 4-м аргументом: pipup держит окно (и звук) не меньше; остальные дополнения его не берут
             $result = $tts->playFile($file, $level, $sender, $duration);
             if ($result) {
@@ -426,19 +449,19 @@ function terminalsQueuePlay($terminal_rec, $kind, $message, $level, $file, $imag
                 $busy = ($seconds > 0) ? $seconds + 1 : 15;
             }
         }
-        return array($result, $busy);
+        return terminalsQueuePlayed($terminal_rec, $addr, $kind, $result, $busy);
     }
     if (($image != '' || $sender != '') && method_exists($tts, 'showMessage')) {
-        DebMes("Showing to " . $terminal_rec['TITLE'] . ' (level ' . $level . '): ' . $message . ($sender != '' ? " (from: $sender)" : '') . ($image != '' ? " (image: $image)" : '') . ($file != '' ? " (file: $file)" : ''), 'terminals');
+        DebMes("Showing to " . $terminal_rec['TITLE'] . " ($addr, level $level): " . $message . ($sender != '' ? " (from: $sender)" : '') . ($image != '' ? " (image: $image)" : '') . ($file != '' ? " (file: $file)" : ''), 'terminals');
         $result = $tts->showMessage($message, ($kind == 'ask') ? 9999 : $level, $image, $file, $sender);
         if ($result) {
             $seconds = ($file != '') ? terminalsQueueFileSeconds($file) : 0;
             $busy = ($seconds > 0) ? $seconds + 1 : terminalsQueueSpeechSeconds($message);
         }
-        return array($result, $busy);
+        return terminalsQueuePlayed($terminal_rec, $addr, $kind, $result, $busy);
     }
     if ($kind == 'say' || $kind == 'ask' || $kind == 'text') {
-        DebMes("Saying to " . $terminal_rec['TITLE'] . ' (level ' . $level . '): ' . $message, 'terminals');
+        DebMes("Saying to " . $terminal_rec['TITLE'] . " ($addr, level $level): " . $message, 'terminals');
         if ($kind == 'ask') {
             $result = $tts->ask($message, 9999);
         } else {
@@ -449,7 +472,7 @@ function terminalsQueuePlay($terminal_rec, $kind, $message, $level, $file, $imag
         }
     }
     if ($file != '') {
-        DebMes("Saying cached to " . $terminal_rec['TITLE'] . ' (level ' . $level . '): ' . $message . " (file: $file)", 'terminals');
+        DebMes("Saying cached to " . $terminal_rec['TITLE'] . " ($addr, level $level): " . $message . " (file: $file)", 'terminals');
         $cached = $tts->sayCached($message, $level, $file);
         if ($cached) {
             $seconds = terminalsQueueFileSeconds($file);
@@ -458,6 +481,15 @@ function terminalsQueuePlay($terminal_rec, $kind, $message, $level, $file, $imag
         if ($kind == 'cached') {
             $result = $cached;
         }
+    }
+    return terminalsQueuePlayed($terminal_rec, $addr, $kind, $result, $busy);
+}
+
+// Итог terminalsQueuePlay(): дополнение не приняло — строка в журнал (с адресом устройства)
+function terminalsQueuePlayed($terminal_rec, $addr, $kind, $result, $busy)
+{
+    if (!$result) {
+        DebMes('Not delivered to ' . $terminal_rec['TITLE'] . " ($addr): addon returned no result ($kind)", 'terminals');
     }
     return array($result, $busy);
 }

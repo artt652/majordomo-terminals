@@ -649,7 +649,9 @@ class pipup extends tts_addon
             }
         }
 
-        DebMes("Sending $type '$uri' to " . $url, 'terminals');
+        // ссылка в журнал — без логина, пароля и подписи (rtsp://user:pass@…, whep …&sig=…)
+        DebMes("Sending $type '" . (function_exists('terminalsLogSafe') ? terminalsLogSafe($uri) : preg_replace('~//[^/@]+@~', '//***@', $uri))
+            . "' to " . $url, 'terminals');
         $httpCode = $this->post($url, array_merge($data, $forkFields), $error);
         if ($httpCode === 400) {
             $httpCode = $this->post($url, $data, $error);

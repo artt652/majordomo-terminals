@@ -183,6 +183,16 @@ function terminalsSend($to, $message, $options = array())
     // только последнее событие с этим именем) и сразу обновляют переписку: сообщение уже записано,
     // доставка устройствам — дальше (она может быть долгой: устройство не отвечает)
     if (count($recipients)) {
+        // журнал: одна строка на отправку — кто (терминал или пользователь, адрес браузера или сценарий), кому
+        if (!empty($from_user['ID'])) {
+            $who = 'user:' . (int)$from_user['ID'] . ' ' . $sender;
+        } else {
+            $who = (!empty($from['ID']) ? 'terminal ' . $from['NAME'] : ($sender != '' ? $sender : '-'));
+        }
+        $where = (PHP_SAPI != 'cli' && !empty($_SERVER['REMOTE_ADDR'])) ? 'IP ' . $_SERVER['REMOTE_ADDR'] : 'script';
+        DebMes('terminalsSend ' . substr($send_id, 0, 8) . " from $who ($where) to " . implode(', ', $recipients) . ': '
+            . terminalsLogSafe($message) . ($image != '' ? " (image: $image)" : '') . ($sound != '' ? " (sound: $sound)" : '')
+            . ($video != '' ? " (video: $video)" : '') . ($file != '' ? " (file: $file)" : '') . ($stream != '' ? " (camera: $stream)" : ''), 'terminals');
         terminalsMessagesNotify(!empty($from_user['ID']) ? 'user:' . (int)$from_user['ID'] : $from_name, $recipients);
     }
     // after_record — страница «Сообщения» отвечает браузеру здесь, до доставки (terminals_messages.inc.php)
@@ -195,11 +205,13 @@ function terminalsSend($to, $message, $options = array())
         // получает сообщение только в переписку — на его страницу, без доставки дополнению TTS
         $speaks = $terminal_rec['CANTTS'] && $terminal_rec['TTS_TYPE'] != '';
         $level = isset($options['level']) ? (int)$options['level'] : terminalsMinLevel($terminal_rec);
-        DebMes('terminalsSend to ' . $terminal_rec['TITLE'] . ($sender != '' ? " from $sender" : '') . " (level $level): $message"
-            . ($image != '' ? " (image: $image)" : '') . ($sound != '' ? " (sound: $sound)" : '') . ($speaks ? '' : ' (page only)'), 'terminals');
         $tts = $speaks ? terminalsQueueAddon($terminal_rec) : null;
+        // журнал: строка на получателя — адрес устройства и номер сообщения в переписке
+        DebMes('terminalsSend ' . substr($send_id, 0, 8) . ' to ' . $terminal_rec['TITLE'] . ' (' . terminalsDeviceLabel($terminal_rec, $tts)
+            . ($speaks ? ', ' . $terminal_rec['TTS_TYPE'] : '') . ", level $level) message #$message_id" . ($speaks ? '' : ' (page only)'), 'terminals');
         // устройство выключено — не ждём его (terminalsReachable): сообщение остаётся в переписке
         if (is_object($tts) && !terminalsReachable($terminal_rec, $tts)) {
+            DebMes('terminalsSend ' . substr($send_id, 0, 8) . ' to ' . $terminal_rec['TITLE'] . ': not reachable, page only', 'terminals');
             continue;
         }
         // звук перед сообщением
