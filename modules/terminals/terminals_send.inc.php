@@ -5,6 +5,7 @@
  *   include_once(DIR_MODULES . 'terminals/terminals.class.php');
  *   terminalsSend('Кухня', 'Ужин готов', array(
  *       'from'  => 'Гостиная',                  // от кого: терминал (имя или название) или любой текст
+ *       'from_user' => 1,                       // от кого: пользователь MajorDoMo (ID) — вместо from
  *       'image' => 'cms/cached/snapshot.jpg',   // картинка: путь в веб-корне MajorDoMo или http-ссылка
  *       'sound' => 'cms/sounds/dingdong.mp3',   // звук перед сообщением: путь в веб-корне или http-ссылка
  *       'file'  => 'cms/cached/terminals/x.pdf', // файл для страницы «Сообщения» (скачать); на устройство — «Файл: имя»
@@ -21,7 +22,7 @@
  *       'shout' => true,                        // записать копию в общий чат MajorDoMo (для chat => 'all' — всегда)
  *   ));
  *
- * Куда: имя, название или адрес терминала; можно массив.
+ * Куда: имя, название или адрес терминала или пользователь 'user:ID' (только в переписку); можно массив.
  * Текст с озвучкой идёт как sayTo(): событие SAYTO, генераторы речи делают голос для получателя.
  * Без озвучки (voice => false) — только текст, сразу в очередь получателя.
  * Картинку и отправителя показывают дополнения с showMessage() (pipup: картинка в окне,
@@ -57,6 +58,15 @@ function terminalsSend($to, $message, $options = array())
         $from = terminalsFind($sender);
         if (!empty($from['ID'])) {
             $sender = $from['TITLE'];
+        }
+    }
+    // отправитель — пользователь MajorDoMo (from_user => ID): его имя вместо терминала
+    $from_user = array();
+    if (!empty($options['from_user'])) {
+        $from_user = SQLSelectOne("SELECT ID, NAME, USERNAME FROM users WHERE ID=" . (int)$options['from_user']);
+        if (!empty($from_user['ID'])) {
+            $sender = ($from_user['NAME'] != '') ? $from_user['NAME'] : $from_user['USERNAME'];
+            $from = array();
         }
     }
     $chat = isset($options['chat']) ? preg_replace('/[^a-z0-9:_]/i', '', (string)$options['chat']) : '';
@@ -99,6 +109,26 @@ function terminalsSend($to, $message, $options = array())
     $recipients = array();
     $from_name = (isset($from['NAME']) && !empty($from['ID'])) ? $from['NAME'] : $sender;
     foreach ((array)$to as $destination) {
+        // пользователь MajorDoMo (user:ID): только в переписку — на страницы «Сообщения», где он вошёл
+        if (is_string($destination) && preg_match('/^user:(\d+)$/', $destination, $m)) {
+            $user = SQLSelectOne("SELECT ID, NAME, USERNAME FROM users WHERE ID=" . (int)$m[1]);
+            if (empty($user['ID'])) {
+                continue;
+            }
+            $rec = array(
+                'FROM_NAME' => $from_name, 'TO_NAME' => ($user['NAME'] != '') ? $user['NAME'] : $user['USERNAME'],
+                'FROM_ID' => !empty($from['ID']) ? (int)$from['ID'] : 0, 'TO_ID' => 0,
+                'FROM_USER' => !empty($from_user['ID']) ? (int)$from_user['ID'] : 0, 'TO_USER' => (int)$user['ID'],
+                'MESSAGE' => json_encode($message), 'IMAGE' => $image, 'SOUND' => $sound, 'FILE' => $file, 'VIDEO' => $video,
+                'FILE_NAME' => $file_name,
+                'FORWARDED' => isset($options['forwarded']) ? mb_substr(trim((string)$options['forwarded']), 0, 255, 'UTF-8') : '',
+                'ADDED' => time(), 'CHAT' => $chat, 'SEND_ID' => $send_id,
+            );
+            SQLInsert('terminals_messages', $rec);
+            $recipients[] = 'user:' . (int)$user['ID'];
+            $sent++;
+            continue;
+        }
         $terminal_rec = terminalsFind($destination);
         if (empty($terminal_rec['ID'])) {
             DebMes('terminalsSend: terminal not found: ' . $destination, 'terminals');
@@ -111,6 +141,7 @@ function terminalsSend($to, $message, $options = array())
             'TO_NAME' => $terminal_rec['NAME'],
             'FROM_ID' => !empty($from['ID']) ? (int)$from['ID'] : 0,
             'TO_ID' => (int)$terminal_rec['ID'],
+            'FROM_USER' => !empty($from_user['ID']) ? (int)$from_user['ID'] : 0,
             'MESSAGE' => json_encode($message),
             'IMAGE' => $image,
             'SOUND' => $sound,
@@ -184,7 +215,7 @@ function terminalsSend($to, $message, $options = array())
     // открытые страницы «Сообщения» получают одно событие на отправку (кэш вебсокета хранит
     // только последнее событие с этим именем) и сразу обновляют переписку
     if (count($recipients)) {
-        terminalsMessagesNotify($from_name, $recipients);
+        terminalsMessagesNotify(!empty($from_user['ID']) ? 'user:' . (int)$from_user['ID'] : $from_name, $recipients);
     }
     return $sent;
 }
@@ -239,9 +270,10 @@ function terminalsMessagesCleanup($days)
         $where[] = "ADDED<" . (time() - (int)$days * 86400);
     }
     $where[] = "(CHAT LIKE 'group:%' AND CAST(SUBSTRING(CHAT, 7) AS UNSIGNED) NOT IN (SELECT ID FROM terminals_groups))";
-    $where[] = "TO_ID NOT IN (SELECT ID FROM terminals)";
-    // скрытые обеими сторонами («Очистить историю»); отправитель-не терминал (сценарий) скрыть не может
-    $where[] = "(HIDE_TO=1 AND (HIDE_FROM=1 OR FROM_ID=0))";
+    $where[] = "(TO_ID>0 AND TO_ID NOT IN (SELECT ID FROM terminals))";
+    $where[] = "(TO_USER>0 AND TO_USER NOT IN (SELECT ID FROM users))";
+    // скрытые обеими сторонами («Очистить историю»); отправитель-не терминал и не пользователь (сценарий) скрыть не может
+    $where[] = "(HIDE_TO=1 AND (HIDE_FROM=1 OR (FROM_ID=0 AND FROM_USER=0)))";
     $old = SQLSelectOne("SELECT COUNT(*) AS TOTAL FROM terminals_messages WHERE " . implode(' OR ', $where));
     if (!empty($old['TOTAL'])) {
         SQLExec("DELETE FROM terminals_messages WHERE " . implode(' OR ', $where));

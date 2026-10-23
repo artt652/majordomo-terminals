@@ -530,11 +530,14 @@ class terminals extends module
  terminals_messages: READ_AT int(10) NOT NULL DEFAULT '0'
  terminals_messages: FROM_ID int(10) NOT NULL DEFAULT '0'
  terminals_messages: TO_ID int(10) NOT NULL DEFAULT '0'
+ terminals_messages: FROM_USER int(10) NOT NULL DEFAULT '0'
+ terminals_messages: TO_USER int(10) NOT NULL DEFAULT '0'
  terminals_messages: HIDE_FROM int(3) NOT NULL DEFAULT '0'
  terminals_messages: HIDE_TO int(3) NOT NULL DEFAULT '0'
  terminals_messages: INDEX (TO_NAME)
  terminals_messages: INDEX (TO_ID)
  terminals_messages: INDEX (FROM_ID)
+ terminals_messages: INDEX (TO_USER)
 
  terminals_tokens: ID int(10) unsigned NOT NULL auto_increment
  terminals_tokens: TERMINAL_ID int(10) NOT NULL DEFAULT '0'

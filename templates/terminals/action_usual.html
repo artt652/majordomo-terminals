@@ -442,6 +442,8 @@
 	// «Показать раньше»: у каких чатов могут быть более ранние сообщения ('*' — у всех чатов терминалов),
 	// в каких уже догружали (их ранние сообщения сохраняются при обновлении) и какие дочитаны до начала
 	var tmMore = [#MORE_JSON#], tmOlderChats = {}, tmMoreDone = {};
+	// вошедший на сайт пользователь MajorDoMo (user:ID) — пишет от своего имени; аватары пользователей (картинки)
+	var tmMeUser = '[#ME_USER_KEY#]', tmUserAvatars = [#AVATARS_JSON#];
 	var tmChats = [#CHATS_JSON#];
 	var tmByKey = [#if BY_KEY="1"#]true[#else BY_KEY#]false[#endif BY_KEY#];
 	var tmTitles = [#TITLES_JSON#];
@@ -472,6 +474,8 @@
 		lastSeen: '<#LANG_TERMINALS_LAST_SEEN#>', activity: '<#LANG_TERMINALS_ACTIVITY#>', reachable: '<#LANG_TERMINALS_REACHABLE#>', offline: '<#LANG_TERMINALS_OFFLINE#>',
 		name: '<#LANG_TERMINALS_SYSTEM_NAME#>', host: '<#LANG_TERMINALS_HOST#>', room: '<#LANG_TERMINALS_ROOM#>',
 		minLevel: '<#LANG_TERMINALS_MIN_LEVEL#>', screen: '<#LANG_TERMINALS_SCREEN#>', systemSub: '<#LANG_TERMINALS_SYSTEM_SUB#>',
+		userSub: '<#LANG_TERMINALS_USER_SUB#>', username: '<#LANG_TERMINALS_USERNAME#>', usersSection: '<#LANG_TERMINALS_USERS#>',
+		thisUser: '<#LANG_TERMINALS_THIS_USER#>', descUser: '<#LANG_TERMINALS_DESC_USER#>',
 		systemReadonly: '<#LANG_TERMINALS_SYSTEM_READONLY#>',
 		clearConfirm: '<#LANG_TERMINALS_CLEAR_HISTORY_CONFIRM#>', clearAllConfirm: '<#LANG_TERMINALS_CLEAR_HISTORY_ALL_CONFIRM#>', showEarlier: '<#LANG_TERMINALS_SHOW_EARLIER#>',
 		logout: '<#LANG_TERMINALS_LOGOUT#>', logoutConfirm: '<#LANG_TERMINALS_LOGOUT_CONFIRM#>', logoutNote: '<#LANG_TERMINALS_LOGOUT_NOTE#>', byDefault: '<#LANG_TERMINALS_BY_DEFAULT#>', tts: '<#LANG_TERMINALS_TTS#>',
@@ -635,9 +639,10 @@
 	function tmAvatar(el, chat) {
 		var icons = {all: '📢', room: '🏠', group: '👥', house: '💬', shoutroom: '🗨️', system: '⚙️'};
 		var emoji = tmEmojiMap[chat.key] || '';
-		el.textContent = emoji || icons[chat.type] || (chat.title || '?').trim().charAt(0).toUpperCase();
+		var photo = !emoji && tmUserAvatars[chat.key];
+		el.textContent = photo ? '' : (emoji || icons[chat.type] || (chat.title || '?').trim().charAt(0).toUpperCase());
 		el.classList.toggle('tg-emoji', !!emoji);
-		el.style.background = tmColor(chat.key);
+		el.style.background = photo ? 'center / cover no-repeat url("' + photo + '")' : tmColor(chat.key);
 		// личный чат: зелёная точка, если терминал в сети
 		var name = (chat.type == 'term') ? chat.key.substr(5) : '';
 		el.classList.toggle('tg-online', !!(name && tmStatus[name] && tmStatus[name].online));
@@ -831,12 +836,14 @@
 
 	function tmMembersText(chat) {
 		if (chat.type == 'term') return chat.members[0] == chat.title ? '' : chat.members[0];
+		if (chat.type == 'user') return tmText.userSub + (chat.username ? ' · ' + chat.username : '');
 		if (chat.type == 'house') return tmText.houseSub;
 		if (chat.type == 'shoutroom') return tmText.shoutroomSub;
 		if (chat.type == 'system') return tmText.systemSub;
 		// участники — со своим терминалом (первым)
 		var me = tmMe();
-		var names = chat.members.filter(function (n) { return n == me; }).concat(chat.members.filter(function (n) { return n != me; }));
+		var mine = function (n) { return n == me || (tmMeUser && n == tmMeUser); };
+		var names = chat.members.filter(mine).concat(chat.members.filter(function (n) { return !mine(n); }));
 		return names.length ? names.map(tmTitle).join(', ') : (chat.type == 'room' ? tmText.noTerminals : '');
 	}
 
@@ -853,7 +860,7 @@
 		tmAvatar(document.getElementById('tm_chat_avatar'), chat);
 		document.getElementById('tm_chat_title').textContent = chat.title;
 		var sub = tmMembersText(chat);
-		var plain = (chat.type == 'term' || chat.type == 'house' || chat.type == 'shoutroom' || chat.type == 'system' || chat.empty || !sub);
+		var plain = (chat.type == 'term' || chat.type == 'user' || chat.type == 'house' || chat.type == 'shoutroom' || chat.type == 'system' || chat.empty || !sub);
 		var subEl = document.getElementById('tm_chat_sub');
 		subEl.textContent = plain ? sub : tmText.members + ': ' + sub;
 		subEl.classList.remove('tg-online-text');
@@ -1106,13 +1113,14 @@
 			div.className = 'tg-msg ' + (m.incoming ? 'tg-in' : 'tg-out');
 			// только аудио или только файл — время в одной строке с ним, без лишней строки снизу
 			if (!m.text && !m.image && !m.video && ((m.sound && !m.file) || (m.file && !m.sound))) div.classList.add('tg-inline-time');
-			if (m.incoming && chat.type != 'term') {
+			if (m.incoming && chat.type != 'term' && chat.type != 'user') {
 				var who = document.createElement('div');
 				who.className = 'tg-from';
-				who.style.color = m.color || tmColor('term:' + (m.other || m.other_title));
+				var whoKey = (m.other && m.other.indexOf('user:') === 0) ? m.other : 'term:' + (m.other || m.other_title);
+				who.style.color = m.color || tmColor(whoKey);
 				who.textContent = m.other_title;
 				// имя отправителя-терминала — открыть личный чат с ним
-				who.addEventListener('click', function () { if (m.other && tmChat('term:' + m.other)) tmOpen('term:' + m.other); });
+				who.addEventListener('click', function () { if (m.other && tmChat(whoKey)) tmOpen(whoKey); });
 				div.appendChild(who);
 			}
 			if (m.forwarded) {
@@ -1305,18 +1313,20 @@
 		document.getElementById('tm_group_delete').style.display = chat ? '' : 'none';
 		var box = document.getElementById('tm_group_members');
 		box.innerHTML = '';
-		// свой терминал — тоже в списке: всегда в группе (отметка не снимается)
-		var names = Object.keys(tmTitles).filter(function (n) { return n != me; }).sort(function (a, b) { return tmTitle(a).localeCompare(tmTitle(b)); });
-		names.unshift(me);
+		// свой терминал — тоже в списке: всегда в группе (отметка не снимается); затем терминалы, затем пользователи
+		var byTitle = function (a, b) { return tmTitle(a).localeCompare(tmTitle(b)); };
+		var keys = Object.keys(tmTitles);
+		var names = [me].concat(keys.filter(function (n) { return n != me && n.indexOf('user:') !== 0; }).sort(byTitle),
+			keys.filter(function (n) { return n.indexOf('user:') === 0; }).sort(byTitle));
 		names.forEach(function (name) {
 			var label = document.createElement('label');
 			label.className = 'tg-member';
 			var av = document.createElement('div');
 			av.className = 'tg-avatar';
-			tmAvatar(av, {key: 'term:' + name, type: 'term', title: tmTitle(name)});
+			tmAvatar(av, tmMemberChat(name));
 			var title = document.createElement('div');
 			title.className = 'tg-grow';
-			title.textContent = tmTitle(name) + (name == me ? ' (' + tmText.thisTerminal.toLowerCase() + ')' : '');
+			title.textContent = tmTitle(name) + (name == me ? ' (' + tmText.thisTerminal.toLowerCase() + ')' : (name == tmMeUser ? ' (' + tmText.thisUser + ')' : ''));
 			var cb = document.createElement('input');
 			cb.type = 'checkbox';
 			cb.value = name;
@@ -1473,26 +1483,31 @@
 		caps.forEach(function (c) { box.appendChild(tmEl('span', '', c)); });
 		sec.appendChild(box);
 	}
+	// участник группы: терминал (имя) или пользователь (user:ID) — как чат для аватарки
+	function tmMemberChat(name) {
+		return name.indexOf('user:') === 0 ? {key: name, type: 'user', title: tmTitle(name)} : {key: 'term:' + name, type: 'term', title: tmTitle(name)};
+	}
 	function tmInfoMembers(sec, names) {
 		names.forEach(function (name) {
 			var row = tmEl('div', 'tg-member tg-clickable');
 			var av = tmEl('div', 'tg-avatar');
-			tmAvatar(av, {key: 'term:' + name, type: 'term', title: tmTitle(name)});
+			var mc = tmMemberChat(name);
+			tmAvatar(av, mc);
 			var box = tmEl('div', 'tg-grow');
-			box.appendChild(tmEl('div', '', tmTitle(name) + (name == tmMe() ? ' (' + tmText.thisTerminal.toLowerCase() + ')' : '')));
-			var st = tmEl('div', 'tg-sub', tmStatusText(name));
+			box.appendChild(tmEl('div', '', tmTitle(name) + (name == tmMe() ? ' (' + tmText.thisTerminal.toLowerCase() + ')' : (name == tmMeUser ? ' (' + tmText.thisUser + ')' : ''))));
+			var st = tmEl('div', 'tg-sub', mc.type == 'user' ? tmText.userSub : tmStatusText(name));
 			if (tmStatus[name] && tmStatus[name].online) st.classList.add('tg-online-text');
 			box.appendChild(st);
 			row.appendChild(av);
 			row.appendChild(box);
-			row.addEventListener('click', function () { if (tmChat('term:' + name)) { tmInfoClose(); tmOpen('term:' + name); } });
+			row.addEventListener('click', function () { if (tmChat(mc.key)) { tmInfoClose(); tmOpen(mc.key); } });
 			sec.appendChild(row);
 		});
 	}
 	// эмодзи-аватарка (терминалы, свои группы, чаты MajorDoMo) и цвет — общие для всех устройств
 	var tmEmojiList = ['🏠', '🍳', '🛋️', '🛏️', '🚪', '🛁', '🧸', '💻', '📺', '📱', '🖥️', '🔊', '🎵', '📻', '🎧', '🤖', '💡', '🌡️',
 		'🌿', '🌞', '🌙', '⭐', '❤️', '🔔', '📢', '🎮', '📷', '🚗', '🏡', '👪', '👶', '👵', '🐱', '🐶', '☕', '🍽️', '🧺', '🔧', '🛡️', '🎉'];
-	function tmEmojiAllowed(key) { return /^(term:.+|room:\d+|group:\d+|house|shout:\d+)$/.test(key); }
+	function tmEmojiAllowed(key) { return /^(term:.+|user:\d+|room:\d+|group:\d+|house|shout:\d+)$/.test(key); }
 	function tmInfoPalette(key) {
 		if (tmEmojiAllowed(key)) {
 			var esec = tmInfoSection(tmText.emoji);
@@ -1672,6 +1687,14 @@
 					}
 				})
 				.catch(function () {});
+		} else if (chat.type == 'user') {
+			// пользователь MajorDoMo: имя, логин; сообщения ему видны там, где он вошёл на сайт
+			status.textContent = tmText.userSub;
+			var us = tmInfoSection('');
+			tmInfoRow(us, tmText.name, chat.title);
+			if (chat.username) tmInfoRow(us, tmText.username, chat.username);
+			us.appendChild(tmEl('div', 'tg-note', tmText.descUser));
+			tmInfoPalette(key);
 		} else if (chat.type == 'house' || chat.type == 'shoutroom') {
 			status.textContent = chat.type == 'house' ? tmText.houseSub : tmText.shoutroomSub;
 			var sec = tmInfoSection('');
@@ -1751,7 +1774,8 @@
 			var v = d && d.EVENT_DATA ? d.EVENT_DATA.VALUE : null;
 			if (typeof v == 'string') { try { v = JSON.parse(v); } catch (e) { v = null; } }
 			var me = tmMe();
-			if (d && d.EVENT_DATA && d.EVENT_DATA.NAME == 'TERMINAL_MESSAGE' && (!v || v.FROM == me || (Array.isArray(v.TO) ? v.TO.indexOf(me) >= 0 : v.TO == me))) {
+			var mineKey = function (k) { return k == me || (tmMeUser && k == tmMeUser); };
+			if (d && d.EVENT_DATA && d.EVENT_DATA.NAME == 'TERMINAL_MESSAGE' && (!v || mineKey(v.FROM) || (Array.isArray(v.TO) ? v.TO.some(mineKey) : mineKey(v.TO)))) {
 				tmRefresh();
 			}
 		};
