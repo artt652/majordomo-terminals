@@ -213,6 +213,15 @@
 	.tg-viewer-body img, .tg-viewer-body video { width: 100%; height: 100%; object-fit: contain; touch-action: pinch-zoom; }
 	.tg-viewer-body img { cursor: zoom-out; }
 	.tg-viewer:fullscreen .tg-viewer-body { padding: 0; }
+	/* камера: предпросмотр (зеркально, как в зеркале), внизу кнопка — снимок (белый круг) или запись (красный; идёт запись — квадрат) */
+	.tg-camera .tg-viewer-bar { align-items: center; }
+	.tg-cam-time { flex: 1; color: #fff; font-size: 15px; padding-left: 6px; font-variant-numeric: tabular-nums; }
+	.tg-camera video { transform: scaleX(-1); }
+	.tg-cam-controls { flex: none; display: flex; justify-content: center; padding: 6px 0 18px; padding-bottom: max(18px, env(safe-area-inset-bottom)); }
+	.tg-cam-shot { width: 66px; height: 66px; border-radius: 50%; border: 4px solid #fff; background: #fff; cursor: pointer; padding: 0;
+		box-shadow: inset 0 0 0 3px #000; transition: border-radius .15s; }
+	.tg-cam-shot.tg-cam-rec { background: #e53935; }
+	.tg-cam-shot.tg-cam-rec.tg-cam-on { border-radius: 16px; }
 	.tg-msg audio { display: block; width: 240px; max-width: 100%; margin: 2px 0 4px; }
 	.tg-ticks { display: inline-block; vertical-align: -1px; margin-left: 3px; color: var(--tg-time); }
 	.tg-ticks.tg-read { color: var(--tg-accent); }
@@ -405,10 +414,10 @@
 			<div class="tg-compose" id="tm_compose">
 				<div class="tg-menu" id="tm_menu">
 					<label>🖼 <#LANG_TERMINALS_PHOTO#><input type="file" name="image" accept="image/*" multiple style="display:none"></label>
-					<label>📷 <#LANG_TERMINALS_CAMERA#><input type="file" name="image_camera" accept="image/*" capture="environment" style="display:none"></label>
+					<label id="tm_cam_photo">📷 <#LANG_TERMINALS_CAMERA#><input type="file" name="image_camera" accept="image/*" capture="environment" style="display:none"></label>
 					<label>📄 <#LANG_TERMINALS_FILE#><input type="file" name="file" multiple style="display:none"></label>
 					<label>🎬 <#LANG_TERMINALS_VIDEO#><input type="file" name="video" accept="video/*" multiple style="display:none"></label>
-					<label>🎥 <#LANG_TERMINALS_VIDEO_CAMERA#><input type="file" name="video_camera" accept="video/*" capture="environment" style="display:none"></label>
+					<label id="tm_cam_video_btn">🎥 <#LANG_TERMINALS_VIDEO_CAMERA#><input type="file" name="video_camera" accept="video/*" capture="environment" style="display:none"></label>
 					<label>🎵 <#LANG_TERMINALS_AUDIO_FILE#><input type="file" name="audio" accept="audio/*" multiple style="display:none"></label>
 				</div>
 				<!-- запись голосового: идёт запись, время, отмена -->
@@ -496,6 +505,16 @@
 		</div>
 		<div class="tg-viewer-body" id="tm_viewer_body"></div>
 	</div>
+
+	<!-- камера на компьютере (там браузер вместо камеры открывает выбор файла): снимок или запись видео -->
+	<div class="tg-viewer tg-camera" id="tm_cam">
+		<div class="tg-viewer-bar">
+			<span class="tg-cam-time" id="tm_cam_time"></span>
+			<button type="button" class="tg-viewer-btn" id="tm_cam_close" title="<#LANG_TERMINALS_CANCEL#>"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+		</div>
+		<div class="tg-viewer-body"><video id="tm_cam_view" autoplay muted playsinline></video></div>
+		<div class="tg-cam-controls"><button type="button" class="tg-cam-shot" id="tm_cam_shot"></button></div>
+	</div>
 </div>
 
 <script type="text/javascript">
@@ -551,7 +570,9 @@
 		stRead: '<#LANG_TERMINALS_ST_READ#>', groupNote: '<#LANG_TERMINALS_GROUP_NOTE#>', created: '<#LANG_TERMINALS_CREATED#>',
 		descAll: '<#LANG_TERMINALS_DESC_ALL#>', descRoom: '<#LANG_TERMINALS_DESC_ROOM#>', descGroup: '<#LANG_TERMINALS_DESC_GROUP#>',
 		descHouse: '<#LANG_TERMINALS_DESC_HOUSE#>', descShoutroom: '<#LANG_TERMINALS_DESC_SHOUTROOM#>', wsNone: '<#LANG_TERMINALS_WS_NONE#>',
-		shoutroomSub: '<#LANG_TERMINALS_SHOUTROOM#>', roomEmpty: '<#LANG_TERMINALS_ROOM_EMPTY#>', noTerminals: '<#LANG_TERMINALS_NO_TERMINALS#>', login: '<#LANG_TERMINALS_LOGIN_TO_WRITE#>', micHttps: '<#LANG_TERMINALS_MIC_HTTPS#>', micDenied: '<#LANG_TERMINALS_MIC_DENIED#>'
+		shoutroomSub: '<#LANG_TERMINALS_SHOUTROOM#>', roomEmpty: '<#LANG_TERMINALS_ROOM_EMPTY#>', noTerminals: '<#LANG_TERMINALS_NO_TERMINALS#>', login: '<#LANG_TERMINALS_LOGIN_TO_WRITE#>', micHttps: '<#LANG_TERMINALS_MIC_HTTPS#>', micDenied: '<#LANG_TERMINALS_MIC_DENIED#>',
+		camHttps: '<#LANG_TERMINALS_CAM_HTTPS#>', camDenied: '<#LANG_TERMINALS_CAM_DENIED#>',
+		camShot: '<#LANG_TERMINALS_CAM_SHOT#>', camRec: '<#LANG_TERMINALS_CAM_REC#>', camStop: '<#LANG_TERMINALS_CAM_STOP#>'
 	};
 	var tmMaxMedia = parseFloat('[#MAX_MEDIA_MB#]') || 15, tmMaxFile = parseFloat('[#MAX_FILE_MB#]') || 50;
 
@@ -1836,6 +1857,116 @@
 		});
 		return box;
 	}
+	// Камера на компьютере. Атрибут capture («снять камерой») понимают только телефоны и планшеты; на компьютере
+	// браузер открывает выбор файла. Там «Камера» и «Снять видео» открывают камеру в окне страницы (getUserMedia —
+	// только по HTTPS или на localhost): снимок или запись кладутся в те же поля, что и с телефона, дальше — как обычно
+	var tmCam = {el: document.getElementById('tm_cam'), stream: null, kind: '', rec: null, timer: null};
+	function tmCamWanted() {
+		return !(window.matchMedia && matchMedia('(pointer: coarse)').matches);
+	}
+	function tmCamSupported() {
+		var dt = false;
+		try { dt = !!new DataTransfer(); } catch (e) {}
+		return dt && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+	}
+	// файл — в поле вложения, как будто выбран (фишка над полем, отправка — как обычно)
+	function tmCamPut(input, file, seconds) {
+		var dt = new DataTransfer();
+		dt.items.add(file);
+		input.files = dt.files;
+		input.dispatchEvent(new Event('change'));
+		// длительность записи знает страница (в webm-записи браузера её нет)
+		if (seconds) input.tmDurations = [seconds];
+	}
+	function tmCamOpen(kind) {
+		var status = document.getElementById('tm_status');
+		var input = kind == 'video' ? tmForm.video_camera : tmForm.image_camera;
+		tmMenu.style.display = 'none';
+		if (!tmCamSupported()) {
+			// камеры в браузере нет (обычно — страница не по HTTPS): как раньше, выбор файла
+			status.textContent = tmText.camHttps;
+			input.click();
+			return;
+		}
+		navigator.mediaDevices.getUserMedia({video: true, audio: kind == 'video'}).then(function (stream) {
+			tmCam.stream = stream;
+			tmCam.kind = kind;
+			document.getElementById('tm_cam_view').srcObject = stream;
+			var shot = document.getElementById('tm_cam_shot');
+			shot.classList.toggle('tg-cam-rec', kind == 'video');
+			shot.classList.remove('tg-cam-on');
+			shot.title = kind == 'video' ? tmText.camRec : tmText.camShot;
+			document.getElementById('tm_cam_time').textContent = '';
+			status.textContent = '';
+			tmCam.el.classList.add('tg-show');
+		}).catch(function () {
+			status.textContent = tmText.camDenied;
+		});
+	}
+	function tmCamClose() {
+		if (tmCam.rec) { tmCam.rec.onstop = null; try { tmCam.rec.stop(); } catch (e) {} tmCam.rec = null; }
+		clearInterval(tmCam.timer);
+		if (tmCam.stream) tmCam.stream.getTracks().forEach(function (t) { t.stop(); });
+		tmCam.stream = null;
+		document.getElementById('tm_cam_view').srcObject = null;
+		tmCam.el.classList.remove('tg-show');
+	}
+	document.getElementById('tm_cam_shot').addEventListener('click', function () {
+		var view = document.getElementById('tm_cam_view'), shot = this;
+		if (!tmCam.stream) return;
+		if (tmCam.kind == 'image') {
+			// снимок: кадр камеры в JPEG (без зеркала — как видит камера)
+			var c = document.createElement('canvas');
+			c.width = view.videoWidth || 1280;
+			c.height = view.videoHeight || 720;
+			c.getContext('2d').drawImage(view, 0, 0, c.width, c.height);
+			c.toBlob(function (blob) {
+				if (blob) tmCamPut(tmForm.image_camera, new File([blob], 'photo.jpg', {type: 'image/jpeg'}));
+				tmCamClose();
+			}, 'image/jpeg', 0.9);
+			return;
+		}
+		if (!window.MediaRecorder) return;
+		if (!tmCam.rec) {
+			// видео: первое нажатие — начать запись, второе — закончить
+			var types = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'], type = '';
+			for (var i = 0; i < types.length; i++) {
+				if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(types[i])) { type = types[i]; break; }
+			}
+			var rec = type ? new MediaRecorder(tmCam.stream, {mimeType: type}) : new MediaRecorder(tmCam.stream);
+			var chunks = [], started = Date.now();
+			rec.ondataavailable = function (ev) { if (ev.data && ev.data.size) chunks.push(ev.data); };
+			rec.onstop = function () {
+				var mime = (rec.mimeType || 'video/webm').split(';')[0];
+				var blob = new Blob(chunks, {type: mime});
+				if (blob.size) tmCamPut(tmForm.video_camera, new File([blob], 'video.' + (mime.indexOf('mp4') >= 0 ? 'mp4' : 'webm'), {type: mime}),
+					(Date.now() - started) / 1000);
+				tmCam.rec = null;
+				tmCamClose();
+			};
+			rec.start();
+			tmCam.rec = rec;
+			shot.classList.add('tg-cam-on');
+			shot.title = tmText.camStop;
+			var time = document.getElementById('tm_cam_time');
+			time.textContent = '0:00';
+			tmCam.timer = setInterval(function () { time.textContent = tmFmt((Date.now() - started) / 1000); }, 500);
+		} else {
+			clearInterval(tmCam.timer);
+			tmCam.rec.stop();
+		}
+	});
+	document.getElementById('tm_cam_close').addEventListener('click', tmCamClose);
+	document.addEventListener('keydown', function (e) { if (e.key == 'Escape' && tmCam.el.classList.contains('tg-show')) tmCamClose(); });
+	[['tm_cam_photo', 'image'], ['tm_cam_video_btn', 'video']].forEach(function (item) {
+		document.getElementById(item[0]).addEventListener('click', function (e) {
+			// на телефоне — камера через capture, как раньше; нажатие на само поле (input.click() из кода) не перехватываем
+			if (e.target.tagName == 'INPUT' || !tmCamWanted()) return;
+			e.preventDefault();
+			tmCamOpen(item[1]);
+		});
+	});
+
 	// Просмотр картинки или видео на весь экран чата (kind: image | video; видео — с места at).
 	// «Назад» телефона, ✕, Escape или нажатие на фон закрывают; ⤓ — открыть файл; ⛶ — на весь экран устройства
 	var tmViewerEl = document.getElementById('tm_viewer');
