@@ -1,4 +1,15 @@
 <?php
+/*
+ * Сообщения на плеер терминала (тип плеера — в разделе «Может воспроизводить медиа»).
+ *
+ * Один тип TTS для всех плееров app_player, как в оригинале; особенности плееров — здесь же, по типу плеера:
+ * - mpd, lms, kodi: play() их дополнений заменяет плейлист — сообщение добавляется в конец плейлиста (pl_add)
+ *   и включается по номеру (pl_play), после сообщений возвращается прежний трек по номеру. Номер — только
+ *   если однозначен в плейлисте, иначе — запуск файла. У mpd в статусе track_id — позиция, а не номер трека;
+ * - chromecast: перемотки в app_player нет — прежний трек загружается сразу с позиции (GChromecast::load);
+ * - dnla: многие устройства не играют wav — перед отправкой wav перекодируется в mp3 (как say_message() в dnla).
+ * lms, kodi, chromecast, dnla написаны по коду их дополнений app_player, на устройствах не проверялись.
+ */
 
 include_once(DIR_MODULES . 'terminals/terminals_settings.inc.php');
 
@@ -16,11 +27,29 @@ class mediaplayer extends tts_addon
         parent::__construct($terminal);
     }
 
+    // Тип плеера терминала (mpd, lms, kodi, chromecast, dnla, vlcweb, …)
+    protected function playerType()
+    {
+        return strtolower(isset($this->terminal['PLAYER_TYPE']) ? (string)$this->terminal['PLAYER_TYPE'] : '');
+    }
+
+    // Плееры, у которых play() заменяет плейлист: сообщение — в конец плейлиста
+    protected function messageInPlaylist()
+    {
+        return in_array($this->playerType(), array('mpd', 'lms', 'kodi'), true);
+    }
+
     public function sayCached($phrase, $level = 0, $cached_file = '')
     {
+        if ($this->playerType() == 'dnla') {
+            $cached_file = $this->dlnaFile($cached_file);
+        }
         $cached_file_url = $this->messageUrl($cached_file);
         if ($cached_file_url == '') {
             return false;
+        }
+        if ($this->messageInPlaylist() && $this->playInPlaylist($cached_file_url)) {
+            return true;
         }
         $this->applyMessageVolume();
         // очередь, порядок и восстановление плеера ведёт модуль terminals (terminals_queue.inc.php)
@@ -29,7 +58,7 @@ class mediaplayer extends tts_addon
     }
 
     // Звуковой файл (голосовое, музыка или звук перед сообщением из terminalsSend, сигнал очереди): путь в веб-корне MajorDoMo или http-ссылка.
-    // Играет так же, как файл голоса, — у наследников (mpd_tts и др.) их способом
+    // Играет так же, как файл голоса
     public function playFile($file, $level = 0, $title = '')
     {
         return $this->sayCached('', $level, $file);
@@ -145,9 +174,14 @@ class mediaplayer extends tts_addon
         return false;
     }
 
-    // Номер текущего трека в плейлисте (для возврата через pl_play) или -1
+    // Номер текущего трека в плейлисте (для возврата через pl_play) или -1.
+    // У mpd track_id — позиция трека, номер — у элемента плейлиста в этой позиции
     protected function currentTrackId($played)
     {
+        if ($this->playerType() == 'mpd') {
+            $position = isset($played['track_id']) ? (int)$played['track_id'] : -1;
+            return ($position >= 0 && isset($played[$position]['id'])) ? (int)$played[$position]['id'] : -1;
+        }
         return (isset($played['track_id']) && (int)$played['track_id'] >= 0) ? (int)$played['track_id'] : -1;
     }
 
@@ -180,6 +214,11 @@ class mediaplayer extends tts_addon
     // Текущий файл плеера из ответа getPlayerStatus()
     protected function currentFile($played)
     {
+        if ($this->playerType() == 'mpd') {
+            // статус app_player/mpd: track_id — позиция трека, элементы плейлиста идут по порядку
+            $position = isset($played['track_id']) ? (int)$played['track_id'] : -1;
+            return ($position >= 0 && isset($played[$position]['file'])) ? $played[$position]['file'] : '';
+        }
         if (!empty($played['file'])) {
             return $played['file'];
         }
@@ -205,6 +244,9 @@ class mediaplayer extends tts_addon
                 return true;
             }
             return false;
+        }
+        if ($this->playerType() == 'chromecast') {
+            return $this->restoreChromecast($state);
         }
         $title = $this->terminal['TITLE'];
         $this->playerSession();
@@ -283,7 +325,7 @@ class mediaplayer extends tts_addon
     }
 
     // Добавить сообщение в конец плейлиста и включить его по номеру, не трогая остальные треки.
-    // Для плееров, у которых play() заменяет плейлист (mpd_tts, lms_tts, kodi_tts). Возвращает успех
+    // Для плееров, у которых play() заменяет плейлист (mpd, lms, kodi). Возвращает успех
     protected function playInPlaylist($url)
     {
         $this->applyMessageVolume();
@@ -314,6 +356,55 @@ class mediaplayer extends tts_addon
                 $this->playerCommand('pl_delete', (int)$item['id']);
             }
         }
+    }
+
+    // Chromecast: в app_player/chromecast нет перемотки — прежний трек загружается сразу с позиции
+    // через ту же библиотеку (modules/app_player/libs/castv2)
+    protected function restoreChromecast($state)
+    {
+        include_once(DIR_MODULES . 'app_player/libs/castv2/Chromecast.php');
+        $port = empty($this->terminal['PLAYER_PORT']) ? 8009 : $this->terminal['PLAYER_PORT'];
+        try {
+            $cc = new GChromecast($this->terminal['HOST'], $port);
+            $cc->requestId = time();
+            $cc->load($state['file'], !empty($state['time']) ? (int)$state['time'] : 0);
+            $cc->play();
+        } catch (Exception $e) {
+            DebMes('Chromecast restore error: ' . $e->getMessage(), 'terminals');
+            return false;
+        }
+        if (!empty($state['volume'])) {
+            $this->playerSession();
+            setPlayerVolume($this->terminal['TITLE'], (int)$state['volume']);
+        }
+        return true;
+    }
+
+    // DLNA: wav — в mp3 рядом с исходным файлом (как say_message() в app_player/dnla); не вышло — исходный файл
+    protected function dlnaFile($file)
+    {
+        if (strtolower(pathinfo((string)$file, PATHINFO_EXTENSION)) != 'wav') {
+            return $file;
+        }
+        if (!is_file($file) && is_file(ROOT . ltrim((string)$file, '/'))) {
+            $file = ROOT . ltrim((string)$file, '/'); // путь от веб-корня (звук из «Сообщений»)
+        }
+        $mp3 = preg_replace('/\.wav$/i', '.mp3', $file);
+        if (!file_exists($mp3)) {
+            if (!defined('PATH_TO_FFMPEG')) {
+                if (IsWindowsOS()) {
+                    define("PATH_TO_FFMPEG", SERVER_ROOT . '/apps/ffmpeg/ffmpeg.exe');
+                } else {
+                    define("PATH_TO_FFMPEG", 'ffmpeg');
+                }
+            }
+            shell_exec(PATH_TO_FFMPEG . " -i " . escapeshellarg($file) . " -acodec libmp3lame -ar 44100 " . escapeshellarg($mp3) . " 2>&1");
+        }
+        if (file_exists($mp3)) {
+            return $mp3;
+        }
+        DebMes('DLNA: could not convert to mp3: ' . $file, 'terminals');
+        return $file;
     }
 
     // app_player::usual() пишет в $session->data. В заданиях и фоновых событиях (objects/?job=…)

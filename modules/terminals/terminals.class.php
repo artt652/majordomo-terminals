@@ -574,6 +574,25 @@ EOD;
             SQLUpdate('terminals', $terminal);
         }
 
+        // Отдельные типы TTS для плееров (mpd_tts, lms_tts, kodi_tts, chromecast_tts, dnla_tts) объединены
+        // в mediaplayer: он сам учитывает тип плеера. Терминалам — mediaplayer с их прежними настройками,
+        // файлы прежних типов (только эти, наследники mediaplayer) — удалить, чтобы не было в списке типов
+        $merged = array('mpd_tts', 'lms_tts', 'kodi_tts', 'chromecast_tts', 'dnla_tts');
+        foreach (SQLSelect("SELECT ID, TTS_TYPE, TTS_SETTINGS FROM terminals WHERE TTS_TYPE IN ('" . implode("','", $merged) . "')") as $terminal) {
+            $settings = json_decode((string)$terminal['TTS_SETTINGS'], true);
+            $settings = is_array($settings) ? $settings : array();
+            if (!isset($settings['mediaplayer']) && isset($settings[$terminal['TTS_TYPE']])) {
+                $settings['mediaplayer'] = $settings[$terminal['TTS_TYPE']];
+            }
+            SQLUpdate('terminals', array('ID' => (int)$terminal['ID'], 'TTS_TYPE' => 'mediaplayer', 'TTS_SETTINGS' => json_encode($settings)));
+        }
+        foreach ($merged as $name) {
+            $file = DIR_MODULES . 'terminals/tts/' . $name . '.addon.php';
+            if (is_file($file) && strpos((string)@file_get_contents($file), 'class ' . $name . ' extends mediaplayer') !== false) {
+                @unlink($file);
+            }
+        }
+
         // ключ доступа к странице «Сообщения» — каждому терминалу (terminals_auth.inc.php)
         terminalsTokenEnsureAll();
         // переписка «Сообщений» узнаёт терминалы по ID (переименование не теряет историю): прежним записям —
