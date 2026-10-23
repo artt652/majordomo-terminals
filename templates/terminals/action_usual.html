@@ -842,6 +842,8 @@
 			var max = 0;
 			tmConversation.forEach(function (m) { if (m.chat == key && m.id > max) max = m.id; });
 			if (max) tmStore('read_' + tmWho() + '_' + key, String(max));
+			// отметка хранится в браузере — список не перерисовывается, заголовок обновить здесь
+			tmUpdateTitle();
 			return;
 		}
 		var unread = tmConversation.filter(function (m) { return m.chat == key && m.incoming && !m.read; });
@@ -1416,6 +1418,9 @@
 				if (res.status) tmStatus = res.status;
 				if (res.colors) tmColorsMap = Array.isArray(res.colors) ? {} : res.colors;
 				if (res.emojis) tmEmojiMap = Array.isArray(res.emojis) ? {} : res.emojis;
+				// число непрочитанных в заголовке — при каждом обновлении, даже если список не перерисовывается
+				// (вкладка в фоне, обновление с собственным продолжением)
+				tmUpdateTitle();
 				if (then) { then(); return; }
 				if (changed) {
 					if (tmCurrent && !tmChat(tmCurrent)) { tmOpen(''); return; }
