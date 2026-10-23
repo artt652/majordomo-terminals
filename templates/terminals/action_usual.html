@@ -93,8 +93,12 @@
 		display: flex; align-items: center; justify-content: center; padding: 0; }
 	.tg-out .tg-audio-btn { background: var(--tg-audio-out, var(--tg-accent)); }
 	.tg-audio-info { flex: 1; min-width: 0; }
-	.tg-audio-bar { height: 4px; border-radius: 2px; background: rgba(127,127,127,.3); cursor: pointer; position: relative; margin: 8px 0 6px; }
-	.tg-audio-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 2px; background: var(--tg-accent); }
+	/* волна звука: полоски по громкости записи; прослушанное — цветом; нажатие или ведение пальцем — перемотка */
+	.tg-wave { display: flex; align-items: center; justify-content: space-between; gap: 2px; height: 30px; margin: 2px 0 3px;
+		cursor: pointer; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+	.tg-wave span { flex: 0 1 3px; min-width: 2px; min-height: 3px; border-radius: 2px; background: rgba(127,127,127,.38); transition: background .1s; }
+	.tg-wave span.tg-on { background: var(--tg-accent); }
+	.tg-out .tg-wave span.tg-on { background: var(--tg-audio-out, var(--tg-accent)); }
 	.tg-audio-time { font-size: 12px; color: var(--tg-time); }
 	/* меню вида: тема и фон */
 	.tg-chat-view > .tg-head { position: relative; }
@@ -173,6 +177,10 @@
 	.tg-in .tg-fwd-btn { right: -40px; }
 	.tg-out .tg-fwd-btn { left: -40px; }
 	.tg-msg:hover .tg-fwd-btn, .tg-msg.tg-actions .tg-fwd-btn { opacity: 1; pointer-events: auto; }
+	/* мостик от сообщения до кнопки: курсор по дороге к ней не уходит с сообщения, кнопка не прячется */
+	.tg-msg.tg-has-fwd::after { content: ''; position: absolute; top: 0; bottom: 0; width: 44px; }
+	.tg-in.tg-has-fwd::after { right: -44px; }
+	.tg-out.tg-has-fwd::after { left: -44px; }
 	.tg-fwd-from { font-size: 13px; color: var(--tg-accent); margin-bottom: 2px; white-space: normal; }
 	.tg-fwd-from b { font-weight: 600; }
 	.tg-fwd-list { overflow-y: auto; flex: 1; min-height: 120px; padding: 0 8px; }
@@ -1225,6 +1233,7 @@
 			fb.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5l7 7-7 7M21 12H9a6 6 0 0 0-6 6v1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 			fb.addEventListener('click', function (e) { e.stopPropagation(); tmForwardOpen(m); });
 			div.appendChild(fb);
+			div.classList.add('tg-has-fwd');
 			// касание сообщения (не плеера, не картинки, не ссылки) показывает кнопку «Переслать»
 			div.addEventListener('click', function (e) {
 				if (e.target.closest('a, img, video, audio, button, .tg-audio, .tg-from')) return;
@@ -1630,6 +1639,62 @@
 		sec = Math.round(sec);
 		return Math.floor(sec / 60) + ':' + ('0' + sec % 60).slice(-2);
 	}
+	// Волна звука: громкость по долям записи (Web Audio), 0..1. Считается один раз на файл, по одному файлу
+	// за раз; большие файлы (музыка) и то, что браузер не разобрал, — ровные «псевдо» полоски по имени файла.
+	// Скачанный для волны файл плеер берёт из памяти (url): перемотка работает и там, где веб-сервер
+	// не отдаёт файл частями (Range), и файл не качается второй раз
+	var tmWaveBars = 40, tmWaveCache = {}, tmWaveQueue = [], tmWaveBusy = false;
+	function tmWaveFallback(src) {
+		var h = 0, out = [];
+		for (var i = 0; i < src.length; i++) h = (h * 31 + src.charCodeAt(i)) >>> 0;
+		for (var j = 0; j < tmWaveBars; j++) {
+			h = (h * 1103515245 + 12345) >>> 0;
+			out.push(0.25 + (h % 1000) / 1000 * 0.5);
+		}
+		return out;
+	}
+	function tmWaveLoad(src, done) {
+		if (tmWaveCache[src]) { done(tmWaveCache[src].peaks, tmWaveCache[src].url); return; }
+		tmWaveQueue.push({src: src, done: done});
+		tmWaveNext();
+	}
+	function tmWaveNext() {
+		if (tmWaveBusy || !tmWaveQueue.length) return;
+		var job = tmWaveQueue.shift();
+		if (tmWaveCache[job.src]) { job.done(tmWaveCache[job.src].peaks, tmWaveCache[job.src].url); tmWaveNext(); return; }
+		var Ctx = window.AudioContext || window.webkitAudioContext;
+		var url = '';
+		var finish = function (peaks) {
+			tmWaveCache[job.src] = {peaks: peaks, url: url};
+			job.done(peaks, url);
+			tmWaveBusy = false;
+			tmWaveNext();
+		};
+		if (!Ctx || !window.fetch) { finish(tmWaveFallback(job.src)); return; }
+		tmWaveBusy = true;
+		fetch(job.src, {credentials: 'same-origin'})
+			.then(function (r) { return r.arrayBuffer(); })
+			.then(function (buf) {
+				if (buf.byteLength > 4 * 1048576) throw new Error('big');
+				// копия для плеера — до разбора (decodeAudioData может забрать буфер себе)
+				if (window.URL && URL.createObjectURL) url = URL.createObjectURL(new Blob([buf]));
+				var ctx = new Ctx();
+				return new Promise(function (ok, fail) { ctx.decodeAudioData(buf, ok, fail); })
+					.then(function (data) { if (ctx.close) ctx.close(); return data; });
+			})
+			.then(function (data) {
+				var ch = data.getChannelData(0), step = Math.max(1, Math.floor(ch.length / tmWaveBars)), peaks = [], max = 0;
+				for (var b = 0; b < tmWaveBars; b++) {
+					var sum = 0, n = 0;
+					for (var k = b * step; k < Math.min(ch.length, (b + 1) * step); k += 16) { sum += ch[k] * ch[k]; n++; }
+					var v = n ? Math.sqrt(sum / n) : 0;
+					peaks.push(v);
+					if (v > max) max = v;
+				}
+				finish(peaks.map(function (v) { return max ? 0.12 + 0.88 * v / max : 0.12; }));
+			})
+			.catch(function () { finish(tmWaveFallback(job.src)); });
+	}
 	function tmAudio(src) {
 		var box = tmEl('div', 'tg-audio');
 		var btn = tmEl('button', 'tg-audio-btn');
@@ -1637,22 +1702,33 @@
 		btn.title = tmText.play;
 		btn.innerHTML = tmPlaySvg;
 		var info = tmEl('div', 'tg-audio-info');
-		var bar = tmEl('div', 'tg-audio-bar');
-		var fill = tmEl('div', 'tg-audio-fill');
+		var wave = tmEl('div', 'tg-wave');
+		var bars = [];
+		for (var i = 0; i < tmWaveBars; i++) {
+			var bar = document.createElement('span');
+			bar.style.height = '20%';
+			wave.appendChild(bar);
+			bars.push(bar);
+		}
 		var time = tmEl('div', 'tg-audio-time', '');
-		bar.appendChild(fill);
-		info.appendChild(bar);
+		info.appendChild(wave);
 		info.appendChild(time);
 		box.appendChild(btn);
 		box.appendChild(info);
 		var audio = new Audio();
 		audio.preload = 'metadata';
 		audio.src = src;
+		tmWaveLoad(src, function (peaks, url) {
+			peaks.forEach(function (v, n) { if (bars[n]) bars[n].style.height = Math.round(v * 100) + '%'; });
+			// файл уже в памяти — плеер берёт его оттуда (если ещё не начали слушать)
+			if (url && audio.paused && !audio.currentTime) audio.src = url;
+		});
 		var fixing = false;
 		function duration() { return isFinite(audio.duration) ? audio.duration : 0; }
 		function show() {
 			var d = duration();
-			fill.style.width = d ? Math.min(100, audio.currentTime / d * 100) + '%' : '0';
+			var on = d ? Math.round(Math.min(1, audio.currentTime / d) * tmWaveBars) : 0;
+			bars.forEach(function (bar, n) { bar.classList.toggle('tg-on', n < on); });
 			time.textContent = (audio.currentTime > 0 && !audio.paused ? tmFmt(audio.currentTime) + ' / ' : '') + tmFmt(d);
 		}
 		audio.addEventListener('loadedmetadata', function () {
@@ -1681,12 +1757,23 @@
 				audio.pause();
 			}
 		});
-		bar.addEventListener('click', function (e) {
+		// перемотка: нажатие на волну или ведение по ней (мышь, палец); вертикально — прокрутка переписки
+		var dragging = false;
+		function seek(e) {
 			var d = duration();
 			if (!d) return;
-			var r = bar.getBoundingClientRect();
+			var r = wave.getBoundingClientRect();
 			audio.currentTime = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * d;
 			show();
+		}
+		wave.addEventListener('pointerdown', function (e) {
+			dragging = true;
+			if (wave.setPointerCapture) wave.setPointerCapture(e.pointerId);
+			seek(e);
+		});
+		wave.addEventListener('pointermove', function (e) { if (dragging) seek(e); });
+		['pointerup', 'pointercancel', 'lostpointercapture'].forEach(function (name) {
+			wave.addEventListener(name, function () { dragging = false; });
 		});
 		return box;
 	}
