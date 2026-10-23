@@ -209,6 +209,12 @@
 		display: flex; align-items: center; justify-content: center; pointer-events: none; }
 	/* видео в сообщении: кнопка «развернуть» в углу */
 	.tg-video-wrap { position: relative; }
+	/* видео в переписке — превью (кадр от отправителя или тёмное окно) с кнопкой ▶; сам ролик грузится по нажатию */
+	.tg-video-thumb { position: relative; width: 320px; max-width: 100%; aspect-ratio: 16 / 9; border-radius: 8px; margin: 2px 0 4px;
+		background: #000; overflow: hidden; cursor: pointer; display: block; }
+	.tg-msg .tg-video-thumb img { width: 100%; height: 100%; max-height: none; object-fit: contain; margin: 0; border-radius: 0; }
+	.tg-video-play { position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; margin: -27px 0 0 -27px; border-radius: 50%;
+		background: rgba(0,0,0,.55); color: #fff; display: flex; align-items: center; justify-content: center; pointer-events: none; }
 	.tg-expand { position: absolute; top: 8px; right: 8px; width: 34px; height: 34px; border-radius: 50%; border: 0; padding: 0; cursor: pointer;
 		background: rgba(0,0,0,.5); color: #fff; display: flex; align-items: center; justify-content: center; }
 	.tg-expand:hover { background: rgba(0,0,0,.7); }
@@ -1083,14 +1089,37 @@
 	// (у каждого выбранного файла — своя)
 	function tmProbeDuration(input) {
 		input.tmDurations = [];
+		input.tmPosters = [];
 		if (!input.files || !/^(video_camera|video|audio)$/.test(input.name) || !window.URL || !URL.createObjectURL) return;
 		Array.prototype.forEach.call(input.files, function (f, n) {
 			var el = document.createElement(input.name == 'audio' ? 'audio' : 'video');
 			var url = URL.createObjectURL(f);
-			el.preload = 'metadata';
+			var video = input.name != 'audio';
+			el.preload = video ? 'auto' : 'metadata';
+			el.muted = true;
+			el.setAttribute('playsinline', '');
 			el.onloadedmetadata = function () {
 				if (input.files && input.files[n] === f && isFinite(el.duration) && el.duration > 0) input.tmDurations[n] = el.duration;
-				URL.revokeObjectURL(url);
+				if (!video) { URL.revokeObjectURL(url); return; }
+				// превью видео: кадр на 1-й секунде (короче — середина), до 480 px по ширине, JPEG
+				var at = (isFinite(el.duration) && el.duration > 0) ? Math.min(1, el.duration / 2) : 0.1;
+				el.onseeked = function () {
+					el.onseeked = null;
+					try {
+						var w = el.videoWidth, h = el.videoHeight;
+						if (w && h) {
+							var k = Math.min(1, 480 / w), c = document.createElement('canvas');
+							c.width = Math.round(w * k);
+							c.height = Math.round(h * k);
+							c.getContext('2d').drawImage(el, 0, 0, c.width, c.height);
+							c.toBlob(function (blob) {
+								if (blob && input.files && input.files[n] === f) { input.tmPosters = input.tmPosters || []; input.tmPosters[n] = blob; }
+							}, 'image/jpeg', 0.75);
+						}
+					} catch (e) {}
+					URL.revokeObjectURL(url);
+				};
+				el.currentTime = at;
 			};
 			el.onerror = function () { URL.revokeObjectURL(url); };
 			el.src = url;
@@ -1322,26 +1351,51 @@
 			if (m.video) {
 				var vw = document.createElement('div');
 				vw.className = 'tg-video-wrap';
-				var v = document.createElement('video');
-				v.controls = true;
-				v.preload = 'metadata';
-				v.setAttribute('playsinline', '');
-				v.src = m.video;
-				vw.appendChild(v);
+				// превью: ролик не грузится, пока его не включили (нажатие — плеер на этом месте, сразу играет)
+				var thumb = document.createElement('div');
+				thumb.className = 'tg-video-thumb';
+				thumb.title = tmText.play;
+				if (m.video_poster) {
+					var poster = document.createElement('img');
+					poster.src = m.video_poster;
+					poster.alt = '';
+					poster.loading = 'lazy';
+					thumb.appendChild(poster);
+				}
+				var playIcon = document.createElement('div');
+				playIcon.className = 'tg-video-play';
+				playIcon.innerHTML = '<svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>';
+				thumb.appendChild(playIcon);
+				vw.appendChild(thumb);
+				var v = null;
+				(function (vw, thumb) {
+					thumb.addEventListener('click', function (e) {
+						e.stopPropagation();
+						var player = document.createElement('video');
+						player.controls = true;
+						player.autoplay = true;
+						player.setAttribute('playsinline', '');
+						if (m.video_poster) player.poster = m.video_poster;
+						player.src = m.video;
+						vw.replaceChild(player, thumb);
+						vw.tmPlayer = player;
+					});
+				})(vw, thumb);
 				// развернуть: видео — в окно просмотра на весь экран чата, с того же места
 				var ex = document.createElement('button');
 				ex.type = 'button';
 				ex.className = 'tg-expand';
 				ex.title = tmText.fullscreen;
 				ex.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-				(function (v) {
+				(function (vw) {
 					ex.addEventListener('click', function (e) {
 						e.stopPropagation();
-						var at = v.currentTime, playing = !v.paused;
-						v.pause();
+						// уже включённый плеер — с того же места; превью — с начала, сразу играет
+						var player = vw.tmPlayer, at = player ? player.currentTime : 0, playing = player ? !player.paused : true;
+						if (player) player.pause();
 						tmViewer('video', m.video, at, playing);
 					});
-				})(v);
+				})(vw);
 				vw.appendChild(ex);
 				div.appendChild(vw);
 			}
@@ -1479,6 +1533,10 @@
 			if (voice && n == 0) data.set('audio', voice.blob, voice.name);
 			var audioSec = (voice && n == 0) ? voice.duration : tmFileDuration(tmForm.audio, n);
 			var videoSec = tmFileDuration(tmForm.video, n) || tmFileDuration(tmForm.video_camera, n);
+			// превью видео (кадр, снятый при выборе файла) — показывается в переписке вместо ролика
+			var posterBlob = (tmForm.video.files && tmForm.video.files[n] && tmForm.video.tmPosters && tmForm.video.tmPosters[n])
+				|| (tmForm.video_camera.files && tmForm.video_camera.files[n] && tmForm.video_camera.tmPosters && tmForm.video_camera.tmPosters[n]);
+			if (posterBlob) data.append('video_poster', posterBlob, 'poster.jpg');
 			if (audioSec) data.append('audio_duration', audioSec.toFixed(2));
 			if (videoSec) data.append('video_duration', videoSec.toFixed(2));
 			parts.push(data);

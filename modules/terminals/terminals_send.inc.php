@@ -292,6 +292,8 @@ function terminalsMessagesCleanup($days)
         foreach ($row as $path) {
             if ($path != '') {
                 $used[basename((string)$path)] = true;
+                // превью видео (кадр от браузера отправителя) — рядом с видео: «имя.webm.jpg»
+                $used[basename((string)$path) . '.jpg'] = true;
             }
         }
     }

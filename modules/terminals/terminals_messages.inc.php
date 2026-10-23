@@ -708,6 +708,15 @@ if ($this->mode == 'send_message' || gr('mode') == 'send_message') {
         // видео с камеры (отдельный пункт меню)
         $video = $save_upload('video_camera', $video_ext, $max_file);
     }
+    // превью видео — кадр, снятый браузером отправителя (JPEG до 2 МБ): лежит рядом с видео, «имя видео.jpg».
+    // В переписке показывается оно, а само видео грузится по нажатию
+    if ($video != '' && !empty($_FILES['video_poster']['tmp_name']) && is_uploaded_file($_FILES['video_poster']['tmp_name'])
+        && (int)$_FILES['video_poster']['size'] > 0 && (int)$_FILES['video_poster']['size'] <= 2 * 1024 * 1024) {
+        $info = @getimagesize($_FILES['video_poster']['tmp_name']);
+        if (is_array($info) && isset($info[2]) && $info[2] == IMAGETYPE_JPEG) {
+            @move_uploaded_file($_FILES['video_poster']['tmp_name'], ROOT . $video . '.jpg');
+        }
+    }
     $sent = 0;
     if ($upload_error == '') {
         // длительность звука и видео — от браузера (знает её при выборе файла и при записи голосового;
@@ -903,6 +912,9 @@ $build_messages = function ($rows, $limit) use ($me_id, $user_id, $id_names, $al
             'image_size' => $image_size($row['IMAGE']),
             'sound' => ($row['SOUND'] != '' && !preg_match('/^https?:/i', $row['SOUND'])) ? ROOTHTML . ltrim($row['SOUND'], '/') : $row['SOUND'],
             'video' => (!empty($row['VIDEO']) && !preg_match('/^https?:/i', $row['VIDEO'])) ? ROOTHTML . ltrim($row['VIDEO'], '/') : (isset($row['VIDEO']) ? $row['VIDEO'] : ''),
+            // превью видео (кадр от браузера отправителя), если есть
+            'video_poster' => (!empty($row['VIDEO']) && !preg_match('/^https?:/i', $row['VIDEO']) && is_file(ROOT . ltrim($row['VIDEO'], '/') . '.jpg'))
+                ? ROOTHTML . ltrim($row['VIDEO'], '/') . '.jpg' : '',
             'file' => (!empty($row['FILE']) && !preg_match('/^https?:/i', $row['FILE'])) ? ROOTHTML . ltrim($row['FILE'], '/') : (isset($row['FILE']) ? $row['FILE'] : ''),
             'file_name' => isset($row['FILE_NAME']) ? $row['FILE_NAME'] : '',
             'time' => date('d.m H:i', (int)$row['ADDED']),
