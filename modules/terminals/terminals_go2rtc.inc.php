@@ -115,8 +115,9 @@ function terminalsGo2rtcStreams()
     $data = json_decode(terminalsGo2rtcRequest('GET', 'api/streams', array(), null, '', $code), true);
     if ($code == 200 && is_array($data)) {
         foreach (array_keys($data) as $name) {
-            // имена — для ссылок и страницы; странные (с пробелами, слэшами) пропускаем
-            if (is_string($name) && preg_match('/^[\w.\-]{1,100}$/u', $name)) {
+            // любое имя go2rtc (пробелы, скобки, кириллица — в ссылках оно кодируется), кроме управляющих
+            // символов; до 100 символов — столько хранит переписка (terminals_messages.STREAM)
+            if (is_string($name) && preg_match('/^[^\x00-\x1f\x7f]{1,100}$/u', $name)) {
                 $names[] = $name;
             }
         }
