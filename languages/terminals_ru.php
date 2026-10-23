@@ -257,6 +257,7 @@ $dictionary = array(
 	'TERMINALS_CAM_DURATION'              => 'Сколько показывать',
 	'TERMINALS_CAM_NO_ACCESS'             => 'Этим получателям камера не разрешена',
 	'TERMINALS_CAM_FAILED'                => 'Камера не ответила',
+	'TERMINALS_CAM_OFFLINE'               => 'Нет связи с камерой',
 	'TERMINALS_CAM_LIVE'                  => 'Прямой эфир',
 	'TERMINALS_CAM_SNAPSHOT'              => 'Снимок, обновляется раз в несколько секунд',
 	'TERMINALS_CAMERAS_SUB'               => 'потоки go2rtc',

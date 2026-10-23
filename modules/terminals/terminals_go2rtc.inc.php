@@ -199,15 +199,41 @@ function terminalsGo2rtcSign($name, $terminal_id, $exp)
 // Снимок потока (JPEG) или пустая строка; $width — ширина (0 — как у камеры). cache — не дёргать камеру чаще раза в 5 с
 function terminalsGo2rtcFrame($name, $width = 0)
 {
-    if (!terminalsGo2rtcHas($name)) {
+    if (!terminalsGo2rtcHas($name) || terminalsGo2rtcDown($name)) {
         return '';
     }
     $query = array('src' => $name, 'cache' => '5s');
     if ($width > 0) {
         $query['width'] = (int)$width;
     }
-    $jpeg = terminalsGo2rtcRequest('GET', 'api/frame.jpeg', $query, null, '', $code, 15, $type);
-    return ($code == 200 && strpos($type, 'image/jpeg') === 0 && $jpeg != '') ? $jpeg : '';
+    // камера просыпается (go2rtc подключается к ней) обычно за 1–3 с; дольше 6 с — считаем недоступной
+    $jpeg = terminalsGo2rtcRequest('GET', 'api/frame.jpeg', $query, null, '', $code, 6, $type);
+    $ok = ($code == 200 && strpos($type, 'image/jpeg') === 0 && $jpeg != '');
+    if (!$ok) {
+        terminalsGo2rtcDown($name, true);
+    }
+    return $ok ? $jpeg : '';
+}
+
+// Недоступная камера: снимок не получился — следующие 30 с к ней не обращаемся (ответ сразу), чтобы
+// страница и показ не ждали её каждый раз. $set === true — отметить недоступной. cms/cached/terminals_go2rtc_down.json
+function terminalsGo2rtcDown($name, $set = null)
+{
+    $file = ROOT . 'cms/cached/terminals_go2rtc_down.json';
+    $down = is_file($file) ? json_decode((string)@file_get_contents($file), true) : array();
+    $down = is_array($down) ? $down : array();
+    if ($set === true) {
+        $down[$name] = time();
+        foreach ($down as $key => $time) {
+            if ($time < time() - 30) {
+                unset($down[$key]);
+            }
+        }
+        @file_put_contents($file, json_encode($down));
+        DebMes('go2rtc: camera not responding: ' . $name, 'terminals');
+        return true;
+    }
+    return isset($down[$name]) && $down[$name] > time() - 30;
 }
 
 // Снимок потока — файлом в cms/cached/terminals (для сообщения); путь от веб-корня или ''

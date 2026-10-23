@@ -213,6 +213,10 @@
 	.tg-cam { position: relative; background: #000; border-radius: 10px; overflow: hidden; aspect-ratio: 16 / 9; cursor: pointer; box-shadow: var(--tg-shadow); }
 	.tg-cam img { width: 100%; height: 100%; object-fit: cover; display: block; }
 	.tg-cam img:not([src]) { visibility: hidden; }
+	.tg-cam-offline { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; color: rgba(255,255,255,.75); font-size: 13px; }
+	.tg-cam-off .tg-cam-offline { display: flex; }
+	.tg-cam-off img { opacity: .35; }
+	#tm_viewer_body.tg-cam-off::after { content: attr(data-off); position: absolute; color: rgba(255,255,255,.8); font-size: 15px; }
 	.tg-cam-name { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 8px 5px; color: #fff; font-size: 13px; font-weight: 600;
 		background: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,.6)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 	.tg-cam-share { position: absolute; top: 6px; right: 6px; background: rgba(0,0,0,.6); color: #fff; font-size: 11px; padding: 2px 7px; border-radius: 10px; }
@@ -608,7 +612,7 @@
 		camPhoto: '<#LANG_TERMINALS_CAM_PHOTO#>', camShare: '<#LANG_TERMINALS_CAM_SHARE#>', camShared: '<#LANG_TERMINALS_CAM_SHARED#>',
 		camUnshare: '<#LANG_TERMINALS_CAM_UNSHARE#>', camCopied: '<#LANG_TERMINALS_CAM_COPIED#>', camDuration: '<#LANG_TERMINALS_CAM_DURATION#>',
 		camNoAccess: '<#LANG_TERMINALS_CAM_NO_ACCESS#>', camFailed: '<#LANG_TERMINALS_CAM_FAILED#>', camLive: '<#LANG_TERMINALS_CAM_LIVE#>',
-		camSnapshot: '<#LANG_TERMINALS_CAM_SNAPSHOT#>',
+		camSnapshot: '<#LANG_TERMINALS_CAM_SNAPSHOT#>', camOffline: '<#LANG_TERMINALS_CAM_OFFLINE#>',
 		fwdTextOnly: '<#LANG_TERMINALS_FORWARD_TEXT_ONLY#>', fwdNotFound: '<#LANG_TERMINALS_FORWARD_NOT_FOUND#>', emoji: '<#LANG_TERMINALS_AVATAR_EMOJI#>',
 		emojiReset: '<#LANG_TERMINALS_EMOJI_DEFAULT#>', wall_pattern: '<#LANG_TERMINALS_WALL_PATTERN#>', wall_mint: '<#LANG_TERMINALS_WALL_MINT#>',
 		wall_sunset: '<#LANG_TERMINALS_WALL_SUNSET#>', wall_ocean: '<#LANG_TERMINALS_WALL_OCEAN#>', wall_plain: '<#LANG_TERMINALS_WALL_PLAIN#>',
@@ -2201,9 +2205,12 @@
 	}
 	function tmFmtClock(ts) { var d = new Date(ts * 1000); return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
 	// картинку менять, только когда новый снимок загрузился (без мигания)
+	// не загрузилась (камера не отвечает) — на карточке и в просмотре «нет связи»
 	function tmCamRefreshImg(img, url) {
 		var next = new Image();
-		next.onload = function () { img.src = next.src; };
+		var box = img.parentNode;
+		next.onload = function () { img.src = next.src; if (img.parentNode) img.parentNode.classList.remove('tg-cam-off'); };
+		next.onerror = function () { if (img.parentNode) img.parentNode.classList.add('tg-cam-off'); };
 		next.src = url;
 	}
 	function tmRenderCameras(chat) {
@@ -2218,6 +2225,7 @@
 			tmCamRefreshImg(img, tmCamFrameUrl(c.name, 480));
 			img.setAttribute('data-cam', c.name);
 			card.appendChild(img);
+			card.appendChild(tmEl('div', 'tg-cam-offline', tmText.camOffline));
 			card.appendChild(tmEl('div', 'tg-cam-name', c.name));
 			if (c.shared && c.shared * 1000 > Date.now()) card.appendChild(tmEl('div', 'tg-cam-share', '🔗 ' + tmFmtClock(c.shared)));
 			card.addEventListener('click', function () { tmCamOpen(c.name); });
@@ -2298,6 +2306,8 @@
 		video.style.display = 'none';
 		body.appendChild(img);
 		body.appendChild(video);
+		body.classList.remove('tg-cam-off');
+		body.setAttribute('data-off', tmText.camOffline);
 		var count = document.getElementById('tm_viewer_count');
 		count.textContent = name + ' · ' + tmText.camSnapshot;
 		// пока нет живого видео — снимок раз в 2 с

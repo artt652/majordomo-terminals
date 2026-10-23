@@ -730,8 +730,13 @@ if (gr('mode') == 'whep') {
     }
     $type_in = isset($_SERVER['CONTENT_TYPE']) ? (string)$_SERVER['CONTENT_TYPE'] : 'application/sdp';
     $type_in = (stripos($type_in, 'json') !== false) ? 'application/json' : 'application/sdp';
+    // камера недавно не ответила — сразу отказ (браузер покажет снимок «нет связи», PHP не ждёт)
+    if (terminalsGo2rtcDown($name)) {
+        header('HTTP/1.1 504 Gateway Timeout');
+        exit;
+    }
     $answer = terminalsGo2rtcRequest('POST', 'api/webrtc', array('src' => $name), (string)file_get_contents('php://input'),
-        $type_in, $code, 15, $type_out);
+        $type_in, $code, 8, $type_out);
     header('HTTP/1.1 ' . (($code >= 200 && $code < 300) ? $code . ' OK' : '502 Bad Gateway'));
     header('Content-Type: ' . (($type_out != '') ? $type_out : $type_in));
     echo $answer;
