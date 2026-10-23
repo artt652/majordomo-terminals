@@ -233,6 +233,9 @@
 	.tg-viewer-count { flex: 1; color: #fff; font-size: 15px; align-self: center; padding-left: 6px; }
 	.tg-viewer-body { position: relative; }
 	.tg-viewer:fullscreen .tg-viewer-body { padding: 0; }
+	/* просмотр: панель кнопок — поверх снимка (на затемнении), снимок по центру всего экрана, а не места под панелью */
+	#tm_viewer .tg-viewer-bar { position: absolute; top: 0; left: 0; right: 0; z-index: 2; background: linear-gradient(rgba(0,0,0,.55), rgba(0,0,0,0)); }
+	#tm_viewer .tg-viewer-body { padding: 0; }
 	/* камера: предпросмотр (зеркально, как в зеркале), внизу кнопка — снимок (белый круг) или запись (красный; идёт запись — квадрат) */
 	.tg-camera .tg-viewer-bar { align-items: center; }
 	.tg-cam-time { flex: 1; color: #fff; font-size: 15px; padding-left: 6px; font-variant-numeric: tabular-nums; }
