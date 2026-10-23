@@ -251,6 +251,52 @@ if ($lock != '') {
     return;
 }
 
+// Запросы страницы (ajax, mode) — короткие, но некоторые ждут сеть (снимки камер, доставка устройствам).
+// Файл сессии ядра заперт до конца запроса, и остальные запросы этой страницы (обновление, снимки,
+// отправка) стояли бы в очереди за ним. Сессию сохраняем и закрываем сразу; в памяти её данные остаются
+// до конца запроса (правила безопасности смотрят их)
+if (gr('ajax') || gr('mode') != '') {
+    $session_now = is_object($session) ? $session->data : null;
+    $finish_session();
+    if (function_exists('session_write_close') && session_id()) {
+        session_write_close();
+    }
+    if (is_object($session)) {
+        $session->data = $session_now;
+    }
+}
+// Ответ браузеру сейчас, а работа (доставка устройствам) — дальше, уже без него: отправка не ждёт
+// медленные или выключенные устройства. Content-Length и Connection: close — браузер получает ответ
+// целиком; под PHP-FPM — fastcgi_finish_request()
+$respond_now = function ($data) {
+    ignore_user_abort(true);
+    $json = json_encode($data);
+    while (ob_get_level() > 0) {
+        @ob_end_clean();
+    }
+    if (!headers_sent()) {
+        header('Content-Type: application/json; charset=utf-8');
+        header('Content-Length: ' . strlen($json));
+        header('Connection: close');
+        header('Content-Encoding: none');
+    }
+    echo $json;
+    flush();
+    if (function_exists('fastcgi_finish_request')) {
+        fastcgi_finish_request();
+    }
+};
+// после записи сообщения в переписку — ответить сразу (terminalsSend, опция after_record)
+$responded = false;
+$answer_after_record = function ($extra = array()) use (&$responded, $respond_now) {
+    return function ($sent) use (&$responded, $respond_now, $extra) {
+        if ($sent > 0 && !$responded) {
+            $responded = true;
+            $respond_now(array_merge(array('sent' => $sent, 'error' => ''), $extra));
+        }
+    };
+};
+
 // сохранить загруженный файл в cms/cached/terminals; вернуть путь от веб-корня или ''
 // (ошибка — в $upload_error: too_big, type, upload)
 $save_upload = function ($field, $allowed, $max_size) use ($messages_dir, &$upload_error) {
@@ -672,7 +718,7 @@ $send_to_shouts = function ($chat, $text) use ($user_id, $me, $me_name, &$sessio
 
 // терминалам чата (или списку $to): текст и вложения ($media — image, sound, file, file_name, video),
 // $forwarded — от кого пересланное сообщение. Возвращает число получателей
-$send_to_terminals = function ($chat, $to, $text, $media, $voice, $forwarded = '') use ($me_name, $user_id) {
+$send_to_terminals = function ($chat, $to, $text, $media, $voice, $forwarded = '', $after_record = null) use ($me_name, $user_id) {
     $media = array_merge(array('image' => '', 'sound' => '', 'file' => '', 'file_name' => '', 'video' => '',
         'sound_duration' => 0, 'video_duration' => 0), (array)$media);
     if (($me_name == '' && !$user_id) || !count($to) || ($text == '' && $media['image'] == '' && $media['sound'] == '' && $media['file'] == '' && $media['video'] == '')) {
@@ -693,6 +739,9 @@ $send_to_terminals = function ($chat, $to, $text, $media, $voice, $forwarded = '
     // вошедший на сайт пишет от своего имени (на устройстве — его имя в заголовке)
     if ($user_id) {
         $options['from_user'] = $user_id;
+    }
+    if ($after_record) {
+        $options['after_record'] = $after_record;
     }
     // групповой чат: на странице сообщение попадёт в этот чат, на устройстве — «Отправитель · Чат»
     if (!empty($chat['key']) && $chat['type'] != 'term' && $chat['type'] != 'user') {
@@ -768,6 +817,7 @@ if (gr('mode') == 'cam_show' || gr('mode') == 'cam_photo') {
         $options['chat'] = $chat['key'];
         $options['chat_title'] = $chat['title'];
     }
+    $options['after_record'] = $answer_after_record(array('chat' => $chat['key']));
     if (gr('mode') == 'cam_show') {
         $options['stream'] = $name;
         $options['stream_duration'] = max(10, min(600, gr('duration', 'int') ? gr('duration', 'int') : 60));
@@ -776,6 +826,9 @@ if (gr('mode') == 'cam_show' || gr('mode') == 'cam_photo') {
         $snapshot = terminalsGo2rtcSnapshot($name);
         $options['image'] = $snapshot;
         $sent = ($snapshot != '') ? terminalsSend($to, '', $options) : 0;
+    }
+    if ($responded) {
+        exit;
     }
     $json_out(array('sent' => $sent, 'error' => $sent ? '' : 'camera', 'chat' => $chat['key']));
 }
@@ -833,7 +886,11 @@ if ($this->mode == 'send_message' || gr('mode') == 'send_message') {
         $sent = $send_to_terminals($chat, $to, $text, array('image' => $image, 'sound' => $sound, 'file' => $file,
             'file_name' => ($file != '') ? $upload_name('file') : '', 'video' => $video,
             'sound_duration' => ($sound != '') ? $browser_seconds('audio_duration') : 0,
-            'video_duration' => ($video != '') ? $browser_seconds('video_duration') : 0), gr('voice', 'int'));
+            'video_duration' => ($video != '') ? $browser_seconds('video_duration') : 0), gr('voice', 'int'), '', $answer_after_record());
+    }
+    if ($responded) {
+        $finish_session();
+        exit;
     }
     $json_out(array('sent' => $sent, 'error' => $upload_error));
 }
@@ -889,7 +946,10 @@ if (gr('mode') == 'forward' && $can_write) {
         }
     } else {
         $sent = $send_to_terminals($chat, array_values(array_diff($chat['members'], array($me_name, $me_user_key))), $src['text'], $src['media'],
-            gr('voice', 'int'), $src['from']);
+            gr('voice', 'int'), $src['from'], $answer_after_record(array('chat' => $chat['key'])));
+    }
+    if ($responded) {
+        exit;
     }
     $json_out(array('sent' => $sent, 'error' => $error, 'chat' => !empty($chat['key']) ? $chat['key'] : ''));
 }

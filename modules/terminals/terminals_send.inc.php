@@ -124,6 +124,8 @@ function terminalsSend($to, $message, $options = array())
     }
     $sent = 0;
     $recipients = array();
+    // сначала все записи переписки (страницы сразу видят сообщение), потом доставка устройствам
+    $deliveries = array();
     $from_name = (isset($from['NAME']) && !empty($from['ID'])) ? $from['NAME'] : $sender;
     foreach ((array)$to as $destination) {
         // пользователь MajorDoMo (user:ID): только в переписку — на страницы «Сообщения», где он вошёл
@@ -175,6 +177,20 @@ function terminalsSend($to, $message, $options = array())
         $message_id = (int)$rec['ID'];
         $recipients[] = $terminal_rec['NAME'];
         $sent++;
+        $deliveries[] = array($terminal_rec, $message_id);
+    }
+    // открытые страницы «Сообщения» получают одно событие на отправку (кэш вебсокета хранит
+    // только последнее событие с этим именем) и сразу обновляют переписку: сообщение уже записано,
+    // доставка устройствам — дальше (она может быть долгой: устройство не отвечает)
+    if (count($recipients)) {
+        terminalsMessagesNotify(!empty($from_user['ID']) ? 'user:' . (int)$from_user['ID'] : $from_name, $recipients);
+    }
+    // after_record — страница «Сообщения» отвечает браузеру здесь, до доставки (terminals_messages.inc.php)
+    if (isset($options['after_record']) && is_callable($options['after_record'])) {
+        call_user_func($options['after_record'], $sent);
+    }
+    foreach ($deliveries as $delivery) {
+        list($terminal_rec, $message_id) = $delivery;
         // терминал без «Может проговаривать» (например, только браузер со страницей «Сообщения»)
         // получает сообщение только в переписку — на его страницу, без доставки дополнению TTS
         $speaks = $terminal_rec['CANTTS'] && $terminal_rec['TTS_TYPE'] != '';
@@ -240,11 +256,6 @@ function terminalsSend($to, $message, $options = array())
                 $terminals->terminalSay($terminal_rec, $message, $level, $device_image, $sender_title, $message_id, true);
             }
         }
-    }
-    // открытые страницы «Сообщения» получают одно событие на отправку (кэш вебсокета хранит
-    // только последнее событие с этим именем) и сразу обновляют переписку
-    if (count($recipients)) {
-        terminalsMessagesNotify(!empty($from_user['ID']) ? 'user:' . (int)$from_user['ID'] : $from_name, $recipients);
     }
     return $sent;
 }
