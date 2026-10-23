@@ -240,8 +240,9 @@ class terminals extends module
         }
     }
 
-    // $message_id — номер сообщения страницы «Сообщения» (terminals_messages): отметка «доставлено»
-    function terminalSay($terminal_rec, $message, $level, $image = '', $sender = '', $message_id = 0)
+    // $message_id — номер сообщения страницы «Сообщения» (terminals_messages): отметка «доставлено»;
+    // $silent — текст или картинка без озвучки: в очереди не задерживает следующие сообщения
+    function terminalSay($terminal_rec, $message, $level, $image = '', $sender = '', $message_id = 0, $silent = false)
     {
         $asking = 0;
         if ($level === 'ask') {
@@ -256,7 +257,7 @@ class terminals extends module
             return false;
         }
         if (terminalsQueueUsed(terminalsQueueAddon($terminal_rec))) {
-            return terminalsQueueAdd($terminal_rec, $asking ? 'ask' : 'say', $message, $level, '', $image, $sender, $message_id);
+            return terminalsQueueAdd($terminal_rec, $asking ? 'ask' : ($silent ? 'text' : 'say'), $message, $level, '', $image, $sender, $message_id);
         }
         DebMes("Saying to " . $terminal_rec['TITLE'] . ' (level ' . $level . '): ' . $message, 'terminals');
         include_once DIR_MODULES . 'terminals/tts_addon.class.php';

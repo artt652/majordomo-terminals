@@ -377,12 +377,12 @@
 			<div class="tg-readonly" id="tm_readonly"><#LANG_TERMINALS_LOGIN_TO_WRITE#></div>
 			<div class="tg-compose" id="tm_compose">
 				<div class="tg-menu" id="tm_menu">
-					<label>🖼 <#LANG_TERMINALS_PHOTO#><input type="file" name="image" accept="image/*" style="display:none"></label>
+					<label>🖼 <#LANG_TERMINALS_PHOTO#><input type="file" name="image" accept="image/*" multiple style="display:none"></label>
 					<label>📷 <#LANG_TERMINALS_CAMERA#><input type="file" name="image_camera" accept="image/*" capture="environment" style="display:none"></label>
-					<label>📄 <#LANG_TERMINALS_FILE#><input type="file" name="file" style="display:none"></label>
-					<label>🎬 <#LANG_TERMINALS_VIDEO#><input type="file" name="video" accept="video/*" style="display:none"></label>
+					<label>📄 <#LANG_TERMINALS_FILE#><input type="file" name="file" multiple style="display:none"></label>
+					<label>🎬 <#LANG_TERMINALS_VIDEO#><input type="file" name="video" accept="video/*" multiple style="display:none"></label>
 					<label>🎥 <#LANG_TERMINALS_VIDEO_CAMERA#><input type="file" name="video_camera" accept="video/*" capture="environment" style="display:none"></label>
-					<label>🎵 <#LANG_TERMINALS_AUDIO_FILE#><input type="file" name="audio" accept="audio/*" style="display:none"></label>
+					<label>🎵 <#LANG_TERMINALS_AUDIO_FILE#><input type="file" name="audio" accept="audio/*" multiple style="display:none"></label>
 				</div>
 				<!-- запись голосового: идёт запись, время, отмена -->
 				<div class="tg-rec" id="tm_rec">
@@ -959,7 +959,9 @@
 			if (!input.files || !input.files.length) return;
 			var chip = document.createElement('span');
 			chip.className = 'tg-chip';
-			chip.textContent = ({image: '🖼 ', image_camera: '📷 ', video: '🎬 ', video_camera: '🎥 ', audio: '🎵 ', file: '📄 '})[input.name] + input.files[0].name;
+			// несколько файлов одного вида — первый и «+ ещё сколько»; ✕ убирает все
+			chip.textContent = ({image: '🖼 ', image_camera: '📷 ', video: '🎬 ', video_camera: '🎥 ', audio: '🎵 ', file: '📄 '})[input.name] + input.files[0].name
+				+ (input.files.length > 1 ? ' +' + (input.files.length - 1) : '');
 			var x = document.createElement('button');
 			x.type = 'button';
 			x.textContent = '✕';
@@ -985,22 +987,26 @@
 	});
 	// длительность выбранного видео или звука — браузер читает её из файла; сервер держит по ней терминал
 	// и окно на устройстве (в записях из браузера её часто нет в самом файле, а ffmpeg есть не везде)
+	// (у каждого выбранного файла — своя)
 	function tmProbeDuration(input) {
-		input.tmDuration = 0;
-		var f = input.files && input.files[0];
-		if (!f || !/^(video_camera|video|audio)$/.test(input.name) || !window.URL || !URL.createObjectURL) return;
-		var el = document.createElement(input.name == 'audio' ? 'audio' : 'video');
-		var url = URL.createObjectURL(f);
-		el.preload = 'metadata';
-		el.onloadedmetadata = function () {
-			if (input.files && input.files[0] === f && isFinite(el.duration) && el.duration > 0) input.tmDuration = el.duration;
-			URL.revokeObjectURL(url);
-		};
-		el.onerror = function () { URL.revokeObjectURL(url); };
-		el.src = url;
+		input.tmDurations = [];
+		if (!input.files || !/^(video_camera|video|audio)$/.test(input.name) || !window.URL || !URL.createObjectURL) return;
+		Array.prototype.forEach.call(input.files, function (f, n) {
+			var el = document.createElement(input.name == 'audio' ? 'audio' : 'video');
+			var url = URL.createObjectURL(f);
+			el.preload = 'metadata';
+			el.onloadedmetadata = function () {
+				if (input.files && input.files[n] === f && isFinite(el.duration) && el.duration > 0) input.tmDurations[n] = el.duration;
+				URL.revokeObjectURL(url);
+			};
+			el.onerror = function () { URL.revokeObjectURL(url); };
+			el.src = url;
+		});
 	}
-	function tmFileDuration(input) {
-		return (input.files && input.files.length && input.tmDuration) ? input.tmDuration : 0;
+	// длительность n-го выбранного файла поля (0 — не узнали)
+	function tmFileDuration(input, n) {
+		n = n || 0;
+		return (input.files && input.files[n] && input.tmDurations && input.tmDurations[n]) ? input.tmDurations[n] : 0;
 	}
 	function tmHasFiles() {
 		return tmInputs().some(function (input) { return input.files && input.files.length; });
@@ -1273,61 +1279,88 @@
 	});
 
 	// отправка: текст, вложения и записанное голосовое (voice = {blob, name, duration})
+	// переписка — в самый низ (после отправки); картинки и видео догружаются — ещё раз, когда загрузятся
+	function tmScrollEnd() {
+		var box = document.getElementById('tm_list');
+		box.scrollTop = box.scrollHeight;
+		Array.prototype.forEach.call(box.querySelectorAll('img, video'), function (el) {
+			if (el.tagName == 'IMG' ? el.complete : el.readyState >= 1) return;
+			el.addEventListener(el.tagName == 'IMG' ? 'load' : 'loadedmetadata', function () { box.scrollTop = box.scrollHeight; }, {once: true});
+		});
+	}
+	// Отправка. Несколько файлов одного вида — отдельными сообщениями по очереди: n-е сообщение несёт
+	// n-й файл каждого поля; текст и голосовое — с первым
 	function tmSend(voice) {
 		var status = document.getElementById('tm_status');
 		// размер проверяем до отправки: иначе сервер отбросит запрос целиком
-		var tooBig = '';
+		var tooBig = '', count = 1;
 		[[tmForm.image, tmMaxMedia], [tmForm.image_camera, tmMaxMedia], [tmForm.audio, tmMaxMedia], [tmForm.file, tmMaxFile],
 			[tmForm.video, tmMaxFile], [tmForm.video_camera, tmMaxFile]].forEach(function (item) {
-			var f = item[0].files && item[0].files[0];
-			if (f && f.size > item[1] * 1048576) tooBig = tmText.tooBig.replace('%s', item[1]);
+			Array.prototype.forEach.call(item[0].files || [], function (f) {
+				if (f.size > item[1] * 1048576) tooBig = tmText.tooBig.replace('%s', item[1]);
+			});
+			count = Math.max(count, item[0].files ? item[0].files.length : 0);
 		});
 		if (voice && voice.blob.size > tmMaxMedia * 1048576) tooBig = tmText.tooBig.replace('%s', tmMaxMedia);
 		if (tooBig) { status.textContent = tooBig; return; }
-		var data = new FormData(tmForm);
-		data.append('from', tmMe());
-		if (voice) data.set('audio', voice.blob, voice.name);
-		var audioSec = voice ? voice.duration : tmFileDuration(tmForm.audio);
-		var videoSec = tmFileDuration(tmForm.video) || tmFileDuration(tmForm.video_camera);
-		if (audioSec) data.append('audio_duration', audioSec.toFixed(2));
-		if (videoSec) data.append('video_duration', videoSec.toFixed(2));
-		status.textContent = tmText.sending;
+		var parts = [];
+		for (var n = 0; n < count; n++) {
+			var data = new FormData(tmForm);
+			data.append('from', tmMe());
+			if (n > 0) data.set('message', '');
+			tmInputs().forEach(function (input) {
+				data.delete(input.name);
+				var f = input.files && input.files[n];
+				if (f) data.append(input.name, f, f.name);
+			});
+			if (voice && n == 0) data.set('audio', voice.blob, voice.name);
+			var audioSec = (voice && n == 0) ? voice.duration : tmFileDuration(tmForm.audio, n);
+			var videoSec = tmFileDuration(tmForm.video, n) || tmFileDuration(tmForm.video_camera, n);
+			if (audioSec) data.append('audio_duration', audioSec.toFixed(2));
+			if (videoSec) data.append('video_duration', videoSec.toFixed(2));
+			parts.push(data);
+		}
 		tmSendBtn.disabled = true;
 		// поле очищается сразу (как в мессенджерах); не отправилось — текст вернётся
 		var hadFocus = document.activeElement === tmInput;
 		var sentText = tmInput.value;
 		tmInput.value = '';
 		tmGrow();
-		fetch(location.pathname, {method: 'POST', body: data, credentials: 'same-origin'})
-			.then(function (r) { return r.json(); })
-			.then(function (res) {
-				var errors = {too_big: tmText.tooBig.replace('%s', tmMaxFile), type: tmText.badType, upload: tmText.uploadError};
-				status.textContent = res.sent ? '' : (errors[res.error] || tmText.notSent);
-				if (!res.sent && !tmInput.value) { tmInput.value = sentText; tmGrow(); }
-				if (res.sent) {
-					tmInputs().forEach(function (input) { input.value = ''; });
-					tmFiles();
-					tmRefresh(function () { tmOpen(tmCurrent, true); });
-					// общий чат: ответ дома приходит не сразу — проверить ещё пару раз
-					var sentChat = tmChat(tmCurrent);
-					if (sentChat && sentChat.type == 'house') {
-						setTimeout(tmRefresh, 2000);
-						setTimeout(tmRefresh, 6000);
-					}
-				} else if (res.error == 'login') {
-					status.textContent = tmText.login;
+		tmScrollEnd();
+		var errors = {too_big: tmText.tooBig.replace('%s', tmMaxFile), type: tmText.badType, upload: tmText.uploadError};
+		var sent = 0;
+		var finish = function (error) {
+			status.textContent = error;
+			if (!sent && !tmInput.value) { tmInput.value = sentText; tmGrow(); }
+			if (sent) {
+				// отправленное (хотя бы часть) — вложения убрать, переписку обновить и показать низ
+				tmInputs().forEach(function (input) { input.value = ''; });
+				tmFiles();
+				tmRefresh(function () { tmOpen(tmCurrent, true); tmScrollEnd(); });
+				// общий чат: ответ дома приходит не сразу — проверить ещё пару раз
+				var sentChat = tmChat(tmCurrent);
+				if (sentChat && sentChat.type == 'house') {
+					setTimeout(tmRefresh, 2000);
+					setTimeout(tmRefresh, 6000);
 				}
-			})
-			.catch(function () {
-				status.textContent = tmText.sendError;
-				if (!tmInput.value) { tmInput.value = sentText; tmGrow(); }
-			})
-			.then(function () {
-				tmSendBtn.disabled = false;
-				tmSendIcon();
-				// фокус возвращаем, только если он был в поле, — не открывать клавиатуру зря
-				if (hadFocus && document.activeElement !== tmInput) tmInput.focus();
-			});
+			}
+			tmSendBtn.disabled = false;
+			tmSendIcon();
+			// фокус возвращаем, только если он был в поле, — не открывать клавиатуру зря
+			if (hadFocus && document.activeElement !== tmInput) tmInput.focus();
+		};
+		var next = function () {
+			if (sent >= parts.length) { finish(''); return; }
+			status.textContent = tmText.sending + (parts.length > 1 ? ' ' + (sent + 1) + '/' + parts.length : '');
+			fetch(location.pathname, {method: 'POST', body: parts[sent], credentials: 'same-origin'})
+				.then(function (r) { return r.json(); })
+				.then(function (res) {
+					if (res.sent) { sent++; next(); return; }
+					finish(res.error == 'login' ? tmText.login : (errors[res.error] || tmText.notSent));
+				})
+				.catch(function () { finish(tmText.sendError); });
+		};
+		next();
 	}
 
 	// своя группа: диалог создания и изменения

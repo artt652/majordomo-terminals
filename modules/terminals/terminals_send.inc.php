@@ -198,7 +198,7 @@ function terminalsSend($to, $message, $options = array())
             include_once(DIR_MODULES . 'terminals/terminals.class.php');
             $terminals = new terminals();
             $label = ($file != '') ? terminalsLang('TERMINALS_FILE') . ': ' . $file_name : terminalsLang('TERMINALS_VIDEO');
-            $terminals->terminalSay($terminal_rec, $label, $level, '', $sender_title, $message_id);
+            $terminals->terminalSay($terminal_rec, $label, $level, '', $sender_title, $message_id, true);
         }
         if ($speaks && ($message != '' || $image != '')) {
             if ($voice && $message != '') {
@@ -208,7 +208,8 @@ function terminalsSend($to, $message, $options = array())
             } else {
                 include_once(DIR_MODULES . 'terminals/terminals.class.php');
                 $terminals = new terminals();
-                $terminals->terminalSay($terminal_rec, $message, $level, $image, $sender_title, $message_id);
+                // без озвучки (текст, картинка): в очереди не задерживает голос
+                $terminals->terminalSay($terminal_rec, $message, $level, $image, $sender_title, $message_id, true);
             }
         }
     }

@@ -20,6 +20,9 @@
  *   есть isPlaying() и плеер к этому времени ещё играет сообщение, ожидание продлевается по 2 с,
  *   не больше terminals::QUEUE_PLAYING_CHECKS раз. Нет isPlaying() или плеер не ответил —
  *   остаётся расчётное время.
+ * - текст без озвучки и картинка (kind text: страница «Сообщения», голос выключен) голос не задерживают: окно висит
+ *   своё время (на чтение), но следующие сообщения идут сразу, не дожидаясь его; очередь возвращает то, что
+ *   было до сообщений (и гасит экран pipup), только когда и это окно отвисело;
  * - вызовы методов дополнения (terminalsQueueCall(): sendImage, sendSound, sendWebImage, sendVideo
  *   у pipup) встают в ту же очередь: ждут конца текущего сообщения, звук и видео держат терминал своё
  *   время, картинка — нет (только порядок). Видеопотоки (камеры) в очередь не ставятся — их окно
@@ -93,7 +96,7 @@ function terminalsQueueUsed($tts)
     return is_object($tts) && method_exists($tts, 'useQueue') && $tts->useQueue();
 }
 
-// $kind: say, ask, cached (голос фразы), sound (звуковой файл — terminalsSend), call (метод дополнения —
+// $kind: say, ask, text (текст или картинка без озвучки — терминал не занимает), cached (голос фразы), sound (звуковой файл — terminalsSend), call (метод дополнения —
 // terminalsQueueCall(), $message — массив method/args/busy); $sender — от кого (заголовок окна);
 // $message_ids — номера сообщений страницы «Сообщения» (через запятую): когда запись отдана устройству — «доставлено»;
 // $duration — длительность звукового файла, если известна заранее (страница «Сообщения» присылает её для записей
@@ -118,9 +121,10 @@ function terminalsQueueAdd($terminal_rec, $kind, $message, $level, $file, $image
     } else {
         $key = json_encode(($kind == 'sound') ? 'sound:' . $file : (string)$message);
     }
-    $current = SQLSelectOne("SELECT * FROM terminals_queue WHERE TERMINAL_ID=$tid AND STARTED>0 ORDER BY STARTED DESC, ID DESC LIMIT 1");
-    $busy = !empty($current['ID']) && (int)$current['FINISH'] > $now;
-    if (!$busy && !empty($current['ID']) && $now < (int)$current['FINISH'] + 2 * terminals::QUEUE_PLAYING_CHECKS
+    // текущее — то, что держит терминал; окно текста без озвучки (text) его не держит
+    $current = SQLSelectOne("SELECT * FROM terminals_queue WHERE TERMINAL_ID=$tid AND STARTED>0 ORDER BY (KIND='text'), STARTED DESC, ID DESC LIMIT 1");
+    $busy = !empty($current['ID']) && (int)$current['FINISH'] > $now && $current['KIND'] != 'text';
+    if (!$busy && !empty($current['ID']) && $current['KIND'] != 'text' && $now < (int)$current['FINISH'] + 2 * terminals::QUEUE_PLAYING_CHECKS
         && terminalsQueueIsPlaying($terminal_rec)) {
         // расчётное время вышло, но плеер ещё играет сообщение
         $current['FINISH'] = $now + 2;
@@ -259,9 +263,11 @@ function terminalsQueueNext($tid, $check = 0)
         return;
     }
     $now = time();
-    $current = SQLSelectOne("SELECT * FROM terminals_queue WHERE TERMINAL_ID=$tid AND STARTED>0 ORDER BY STARTED DESC, ID DESC LIMIT 1");
-    if (!empty($current['ID']) && (int)$current['FINISH'] > $now) {
-        // текущее продлили (пришёл голос) — ждём его конца
+    $current = SQLSelectOne("SELECT * FROM terminals_queue WHERE TERMINAL_ID=$tid AND STARTED>0 ORDER BY (KIND='text'), STARTED DESC, ID DESC LIMIT 1");
+    $waiting = SQLSelectOne("SELECT ID FROM terminals_queue WHERE TERMINAL_ID=$tid AND STARTED=0 LIMIT 1");
+    if (!empty($current['ID']) && (int)$current['FINISH'] > $now && ($current['KIND'] != 'text' || empty($waiting['ID']))) {
+        // текущее продлили (пришёл голос) — ждём его конца; окно текста без озвучки ждём, только если
+        // больше ничего нет (потом — вернуть то, что было до сообщений)
         terminalsQueueSchedule($tid, (int)$current['FINISH'] - $now);
         terminalsQueueUnlock($tid);
         return;
@@ -273,7 +279,7 @@ function terminalsQueueNext($tid, $check = 0)
         terminalsQueueUnlock($tid);
         return;
     }
-    if (!empty($current['ID']) && $check < terminals::QUEUE_PLAYING_CHECKS && terminalsQueueIsPlaying($terminal_rec)) {
+    if (!empty($current['ID']) && $current['KIND'] != 'text' && $check < terminals::QUEUE_PLAYING_CHECKS && terminalsQueueIsPlaying($terminal_rec)) {
         // расчётное время вышло, но плеер ещё играет сообщение — проверим снова через 2 с
         $current['FINISH'] = $now + 2;
         SQLUpdate('terminals_queue', $current);
@@ -281,7 +287,8 @@ function terminalsQueueNext($tid, $check = 0)
         terminalsQueueUnlock($tid);
         return;
     }
-    SQLExec("DELETE FROM terminals_queue WHERE TERMINAL_ID=$tid AND STARTED>0");
+    // отыгравшие убрать; окна текста без озвучки, которые ещё висят, — оставить (по ним ждём до возврата)
+    SQLExec("DELETE FROM terminals_queue WHERE TERMINAL_ID=$tid AND STARTED>0 AND (KIND!='text' OR FINISH<=$now)");
     terminalsQueueExpire($tid);
     if (empty($current['ID'])) {
         // серия начинается заново (после сброса или сторожа)
@@ -303,6 +310,10 @@ function terminalsQueueNext($tid, $check = 0)
         $next['STARTED'] = $now;
         $next['FINISH'] = $now + $played[1];
         SQLUpdate('terminals_queue', $next);
+        if ($played[1] > 0 && $next['KIND'] == 'text') {
+            // текст без озвучки: окно висит, а следующее — сразу
+            continue;
+        }
         if ($played[1] > 0) {
             terminalsQueueScheduleAfter($tid, $played[1]);
             terminalsQueueUnlock($tid);
@@ -310,6 +321,13 @@ function terminalsQueueNext($tid, $check = 0)
         }
         // дополнение ничего не проиграло — терминал свободен, сразу следующее
         SQLExec("DELETE FROM terminals_queue WHERE ID=" . (int)$next['ID']);
+    }
+    // очередь пуста; окно текста без озвучки ещё висит — вернуть то, что было, после него
+    $showing = SQLSelectOne("SELECT MAX(FINISH) AS FINISH FROM terminals_queue WHERE TERMINAL_ID=$tid AND STARTED>0 AND KIND='text'");
+    if (!empty($showing['FINISH']) && (int)$showing['FINISH'] > time()) {
+        terminalsQueueScheduleAfter($tid, (int)$showing['FINISH'] - time());
+        terminalsQueueUnlock($tid);
+        return;
     }
     // очередь пуста — вернуть то, что играло до сообщений
     terminalsQueueRestoreState($terminal_rec);
@@ -376,7 +394,7 @@ function terminalsQueuePlay($terminal_rec, $kind, $message, $level, $file, $imag
         }
         return array($result, $busy);
     }
-    if ($kind == 'say' || $kind == 'ask') {
+    if ($kind == 'say' || $kind == 'ask' || $kind == 'text') {
         DebMes("Saying to " . $terminal_rec['TITLE'] . ' (level ' . $level . '): ' . $message, 'terminals');
         if ($kind == 'ask') {
             $result = $tts->ask($message, 9999);
