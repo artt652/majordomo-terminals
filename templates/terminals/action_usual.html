@@ -2051,8 +2051,11 @@
 		tmGalleryAt = -1;
 		if (kind == 'image') {
 			tmGallery = tmMessages(tmCurrent).filter(function (x) { return x.image && !x.video; });
+			// по номеру сообщения, а не по объекту: обновление переписки заменяет объекты, а сообщения
+			// на экране (если ничего не изменилось) остаются прежними
 			for (var g = tmGallery.length - 1; g >= 0; g--) {
-				if (msg ? tmGallery[g] === msg : tmGallery[g].image == src) { tmGalleryAt = g; break; }
+				var x = tmGallery[g];
+				if (msg && msg.id ? (x.id == msg.id && (x.kind || '') == (msg.kind || '') && x.image == msg.image) : x.image == src) { tmGalleryAt = g; break; }
 			}
 			if (tmGalleryAt < 0) { tmGallery = msg ? [msg] : [{image: src}]; tmGalleryAt = 0; }
 		}
