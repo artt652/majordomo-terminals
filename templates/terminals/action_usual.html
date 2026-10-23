@@ -198,9 +198,13 @@
 	.tg-msg video { display: block; max-width: 100%; max-height: 360px; border-radius: 8px; margin: 2px 0 4px; background: #000; }
 	/* фото, идущие подряд от одного отправителя, — одним сообщением: сетка из 6 долей (по 2, 3 или 6 на снимок) */
 	.tg-album { display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px; width: 340px; max-width: 100%; border-radius: 8px; overflow: hidden; margin: 2px 0 4px; }
-	.tg-msg .tg-album img { width: 100%; height: 100px; max-height: none; object-fit: cover; margin: 0; border-radius: 0; grid-column: span 2; }
-	.tg-msg .tg-album img.tg-a3 { grid-column: span 3; height: 140px; }
-	.tg-msg .tg-album img.tg-a6 { grid-column: span 6; height: 200px; }
+	.tg-album-cell { position: relative; grid-column: span 2; height: 100px; cursor: pointer; }
+	.tg-album-cell.tg-a3 { grid-column: span 3; height: 140px; }
+	.tg-album-cell.tg-a6 { grid-column: span 6; height: 200px; }
+	.tg-msg .tg-album img { width: 100%; height: 100%; max-height: none; object-fit: cover; margin: 0; border-radius: 0; }
+	/* длинная серия свёрнута: на последней показанной клетке — сколько ещё фото */
+	.tg-album-more { position: absolute; inset: 0; background: rgba(0,0,0,.5); color: #fff; font-size: 24px; font-weight: 600;
+		display: flex; align-items: center; justify-content: center; pointer-events: none; }
 	/* видео в сообщении: кнопка «развернуть» в углу */
 	.tg-video-wrap { position: relative; }
 	.tg-expand { position: absolute; top: 8px; right: 8px; width: 34px; height: 34px; border-radius: 50%; border: 0; padding: 0; cursor: pointer;
@@ -1222,9 +1226,12 @@
 		items.forEach(function (x) {
 			var last = units[units.length - 1];
 			var prev = last ? (last.album ? last.album[last.album.length - 1] : last.m) : null;
-			if (onlyPic(x) && !x.text && onlyPic(prev) && prev.incoming == x.incoming && prev.other == x.other
-				&& prev.other_title == x.other_title && (prev.kind || '') == (x.kind || '') && (prev.forwarded || '') == (x.forwarded || '')
-				&& Math.abs((x.ts || 0) - (prev.ts || 0)) <= 120 && (prev.time || '').split(' ')[0] == (x.time || '').split(' ')[0]) {
+			// отправитель сравнивается только у входящих: у своих сообщений в групповом чате «собеседник» —
+			// один из получателей, у соседних фото он может быть разным
+			if (onlyPic(x) && !x.text && onlyPic(prev) && prev.incoming == x.incoming
+				&& (!x.incoming || (prev.other == x.other && prev.other_title == x.other_title))
+				&& (prev.kind || '') == (x.kind || '') && (prev.forwarded || '') == (x.forwarded || '')
+				&& Math.abs((x.ts || 0) - (prev.ts || 0)) <= 300 && (prev.time || '').split(' ')[0] == (x.time || '').split(' ')[0]) {
 				if (!last.album) last.album = [last.m];
 				last.album.push(x);
 				return;
@@ -1268,16 +1275,22 @@
 			}
 			if (album) {
 				// сетка: 2 — по половине, 3 — первое во всю ширину, 4 — 2×2, больше — по три в ряд,
-				// остаток — первые шире (1 — во всю ширину, 2 — по половине)
+				// остаток — первые шире (1 — во всю ширину, 2 — по половине).
+				// Больше 6 — показываются 6, на шестой — «+сколько ещё»; все листаются в просмотре
 				var grid = document.createElement('div');
 				grid.className = 'tg-album';
-				var n = album.length, rest = n % 3;
-				album.forEach(function (a, i) {
-					var cell = document.createElement('img');
-					cell.src = a.image;
-					cell.alt = '';
-					if (n == 2 || n == 4 || (n == 3 && i > 0) || (n > 4 && rest == 2 && i < 2)) cell.className = 'tg-a3';
-					if ((n == 3 && i == 0) || (n > 4 && rest == 1 && i == 0)) cell.className = 'tg-a6';
+				var total = album.length, n = Math.min(total, 6), rest = n % 3;
+				album.slice(0, n).forEach(function (a, i) {
+					var cell = document.createElement('div');
+					cell.className = 'tg-album-cell';
+					if (n == 2 || n == 4 || (n == 3 && i > 0) || (n > 4 && rest == 2 && i < 2)) cell.classList.add('tg-a3');
+					if ((n == 3 && i == 0) || (n > 4 && rest == 1 && i == 0)) cell.classList.add('tg-a6');
+					var pic = document.createElement('img');
+					pic.src = a.image;
+					pic.alt = '';
+					pic.loading = 'lazy';
+					cell.appendChild(pic);
+					if (i == n - 1 && total > n) cell.appendChild(tmEl('div', 'tg-album-more', '+' + (total - n)));
 					cell.addEventListener('click', function () { tmViewer('image', a.image, 0, false, a); });
 					grid.appendChild(cell);
 				});
