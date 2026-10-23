@@ -178,7 +178,9 @@
 	.tg-out .tg-fwd-btn { left: -40px; }
 	.tg-msg:hover .tg-fwd-btn, .tg-msg.tg-actions .tg-fwd-btn { opacity: 1; pointer-events: auto; }
 	/* мостик от сообщения до кнопки: курсор по дороге к ней не уходит с сообщения, кнопка не прячется */
-	.tg-msg.tg-has-fwd::after { content: ''; position: absolute; top: 0; bottom: 0; width: 44px; }
+	/* (мостик — под кнопкой: иначе он, как более поздний слой, перехватывает нажатие) */
+	.tg-msg.tg-has-fwd::after { content: ''; position: absolute; top: 0; bottom: 0; width: 44px; z-index: 0; }
+	.tg-has-fwd .tg-fwd-btn { z-index: 1; }
 	.tg-in.tg-has-fwd::after { right: -44px; }
 	.tg-out.tg-has-fwd::after { left: -44px; }
 	.tg-fwd-from { font-size: 13px; color: var(--tg-accent); margin-bottom: 2px; white-space: normal; }
