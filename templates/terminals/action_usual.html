@@ -133,6 +133,7 @@
 	.tg-lock-icon { font-size: 40px; margin-bottom: 10px; }
 	.tg-me { display: flex; align-items: center; gap: 10px; min-width: 0; }
 	.tg-me .tg-title { min-width: 0; }
+	.tg-me-text { min-width: 0; line-height: 1.25; }
 	/* индикатор вебсокета */
 	.tg-ws { width: 9px; height: 9px; border-radius: 50%; background: #9aa0a6; flex: none; margin-right: 2px; }
 	.tg-ws.tg-ws-on { background: #4fce5d; }
@@ -266,11 +267,19 @@
 		<div class="tg-head">
 			<div class="tg-grow">
 				[#if ME_NAME!=""#]
-				<!-- этот терминал: аватарка и имя, как в списке чатов; нажатие — его карточка -->
+				<!-- этот терминал: аватарка и имя, как в списке чатов; нажатие — его карточка.
+				     Узнан пользователь (пишет от своего имени) — его аватарка и имя, терминал — строкой ниже -->
 				<div class="tg-me">
 					<div class="tg-me tg-clickable" id="tm_me_title" title="<#LANG_TERMINALS_INFO#>">
 						<div class="tg-avatar" id="tm_me_avatar"></div>
+						[#if ME_USER_KEY!=""#]
+						<div class="tg-me-text">
+							<div class="tg-title">[#USER_TITLE#]</div>
+							<div class="tg-sub">[#ME_TITLE#]</div>
+						</div>
+						[#else ME_USER_KEY#]
 						<div class="tg-title">[#ME_TITLE#]</div>
+						[#endif ME_USER_KEY#]
 					</div>
 					[#if AS_ADMIN="1"#]
 					<!-- вход из панели управления (без ключа): от имени какого терминала — список под стрелкой -->
@@ -773,8 +782,9 @@
 	// аватарка этого терминала в шапке списка (эмодзи, цвет, «в сети» — как у него в списках других)
 	function tmMeAvatar() {
 		var el = document.getElementById('tm_me_avatar');
-		if (el && tmMe()) tmAvatar(el, {key: 'term:' + tmMe(), type: 'term', title: tmTitle(tmMe())});
-		else if (el && tmMeUser) tmAvatar(el, {key: tmMeUser, type: 'user', title: tmTitle(tmMeUser)});
+		// пишет пользователь — его аватарка, иначе — терминала
+		if (el && tmMeUser) tmAvatar(el, {key: tmMeUser, type: 'user', title: tmTitle(tmMeUser)});
+		else if (el && tmMe()) tmAvatar(el, {key: 'term:' + tmMe(), type: 'term', title: tmTitle(tmMe())});
 	}
 	// список чатов: с перепиской — по последнему сообщению, остальные — в исходном порядке
 	function tmRenderChats() {
@@ -1717,6 +1727,22 @@
 			tmInfoRow(us, tmText.name, chat.title);
 			if (chat.username) tmInfoRow(us, tmText.username, chat.username);
 			us.appendChild(tmEl('div', 'tg-note', tmText.descUser));
+			// своя карточка на терминале: этот терминал — нажатие открывает его карточку
+			if (key == tmMeUser && tmMe()) {
+				var ts = tmInfoSection(tmText.thisTerminal);
+				var trow = tmEl('div', 'tg-member tg-clickable');
+				var tav = tmEl('div', 'tg-avatar');
+				tmAvatar(tav, {key: 'term:' + tmMe(), type: 'term', title: tmTitle(tmMe())});
+				var tbox = tmEl('div', 'tg-grow');
+				tbox.appendChild(tmEl('div', '', tmTitle(tmMe())));
+				var tst = tmEl('div', 'tg-sub', tmStatusText(tmMe()));
+				if (tmStatus[tmMe()] && tmStatus[tmMe()].online) tst.classList.add('tg-online-text');
+				tbox.appendChild(tst);
+				trow.appendChild(tav);
+				trow.appendChild(tbox);
+				trow.addEventListener('click', function () { tmInfo('term:' + tmMe()); });
+				ts.appendChild(trow);
+			}
 			tmInfoPalette(key);
 			if (tmUserByKey && key == tmMeUser) tmInfoLogout('user');
 		} else if (chat.type == 'house' || chat.type == 'shoutroom') {
@@ -1749,7 +1775,7 @@
 	}
 	document.getElementById('tm_chat_avatar').addEventListener('click', function () { tmInfo(tmCurrent); });
 	document.getElementById('tm_chat_head').addEventListener('click', function () { tmInfo(tmCurrent); });
-	document.getElementById('tm_me_title').addEventListener('click', function () { if (tmMe()) tmInfo('term:' + tmMe()); else if (tmMeUser) tmInfo(tmMeUser); });
+	document.getElementById('tm_me_title').addEventListener('click', function () { if (tmMeUser) tmInfo(tmMeUser); else if (tmMe()) tmInfo('term:' + tmMe()); });
 	document.getElementById('tm_info_close').addEventListener('click', tmInfoClose);
 	tmInfoModal.addEventListener('click', function (e) { if (e.target == tmInfoModal) tmInfoClose(); });
 	document.addEventListener('keydown', function (e) { if (e.key == 'Escape') tmInfoClose(); });
