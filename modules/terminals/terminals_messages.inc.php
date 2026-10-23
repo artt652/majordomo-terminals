@@ -817,7 +817,13 @@ if (gr('mode') == 'cam_show' || gr('mode') == 'cam_photo') {
         $options['chat'] = $chat['key'];
         $options['chat_title'] = $chat['title'];
     }
-    $options['after_record'] = $answer_after_record(array('chat' => $chat['key']));
+    // камера недавно не ответила — сразу ошибка; иначе ответ браузеру сейчас: снимок (до нескольких секунд)
+    // и доставка на устройства идут уже без него, сообщение придёт на страницу через вебсокет
+    if (terminalsGo2rtcDown($name)) {
+        $json_out(array('sent' => 0, 'error' => 'camera'));
+    }
+    $responded = true;
+    $respond_now(array('sent' => count($to), 'error' => '', 'chat' => $chat['key']));
     if (gr('mode') == 'cam_show') {
         $options['stream'] = $name;
         $options['stream_duration'] = max(10, min(600, gr('duration', 'int') ? gr('duration', 'int') : 60));
