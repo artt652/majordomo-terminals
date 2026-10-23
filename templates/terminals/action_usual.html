@@ -1379,7 +1379,11 @@
 			});
 			box.appendChild(div);
 		});
-		if (toBottom || nearBottom) box.scrollTop = box.scrollHeight;
+		if (toBottom || nearBottom) {
+			box.scrollTop = box.scrollHeight;
+			// картинки и видео догружаются и раздвигают переписку — держаться низа, пока его не покинули
+			tmStick = true;
+		}
 		tmMarkRead(tmCurrent);
 	}
 
@@ -1429,11 +1433,22 @@
 	function tmScrollEnd() {
 		var box = document.getElementById('tm_list');
 		box.scrollTop = box.scrollHeight;
-		Array.prototype.forEach.call(box.querySelectorAll('img, video'), function (el) {
-			if (el.tagName == 'IMG' ? el.complete : el.readyState >= 1) return;
-			el.addEventListener(el.tagName == 'IMG' ? 'load' : 'loadedmetadata', function () { box.scrollTop = box.scrollHeight; }, {once: true});
-		});
+		tmStick = true;
 	}
+	// «Держаться низа»: переписка открыта или прокручена в самый низ. Пока так, догрузившаяся картинка или видео
+	// (их высота известна только после загрузки) не оставляет экран посередине — переписка снова в самом низу.
+	// Рост содержимого прокрутку не вызывает; прокрутил вверх сам — низа больше не держим
+	var tmStick = false;
+	(function () {
+		var box = document.getElementById('tm_list');
+		box.addEventListener('scroll', function () {
+			tmStick = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+		});
+		var keep = function () { if (tmStick) box.scrollTop = box.scrollHeight; };
+		// load и loadedmetadata не всплывают — ловим на погружении
+		box.addEventListener('load', keep, true);
+		box.addEventListener('loadedmetadata', keep, true);
+	})();
 	// Отправка. Несколько файлов одного вида — отдельными сообщениями по очереди: n-е сообщение несёт
 	// n-й файл каждого поля; текст и голосовое — с первым
 	function tmSend(voice) {
