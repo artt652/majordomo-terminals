@@ -1238,6 +1238,13 @@
 		var chat = tmChat(tmCurrent);
 		if (!chat) return;
 		var items = tmMessages(tmCurrent);
+		// включённые видео и звук переживают перерисовку: их элементы переносятся в новую переписку как есть
+		// (перенос в том же шаге не останавливает воспроизведение); остальное строится заново
+		var keep = {};
+		Array.prototype.forEach.call(box.querySelectorAll('[data-keep]'), function (el) {
+			var media = el.tmMedia;
+			if (media && (!media.paused || media.currentTime > 0)) keep[el.getAttribute('data-keep')] = el;
+		});
 		box.innerHTML = '';
 		if (tmHasMore(tmCurrent)) {
 			// длинный чат: загружены последние сообщения — кнопка догружает более ранние
@@ -1349,55 +1356,62 @@
 				div.appendChild(img);
 			}
 			if (m.video) {
-				var vw = document.createElement('div');
-				vw.className = 'tg-video-wrap';
-				// превью: ролик не грузится, пока его не включили (нажатие — плеер на этом месте, сразу играет)
-				var thumb = document.createElement('div');
-				thumb.className = 'tg-video-thumb';
-				thumb.title = tmText.play;
-				if (m.video_poster) {
-					var poster = document.createElement('img');
-					poster.src = m.video_poster;
-					poster.alt = '';
-					poster.loading = 'lazy';
-					thumb.appendChild(poster);
+				var keptVideo = keep['v:' + (m.kind || '') + ':' + m.id];
+				if (keptVideo) {
+					div.appendChild(keptVideo);
+				} else {
+					var vw = document.createElement('div');
+					vw.className = 'tg-video-wrap';
+					// превью: ролик не грузится, пока его не включили (нажатие — плеер на этом месте, сразу играет)
+					var thumb = document.createElement('div');
+					thumb.className = 'tg-video-thumb';
+					thumb.title = tmText.play;
+					if (m.video_poster) {
+						var poster = document.createElement('img');
+						poster.src = m.video_poster;
+						poster.alt = '';
+						poster.loading = 'lazy';
+						thumb.appendChild(poster);
+					}
+					var playIcon = document.createElement('div');
+					playIcon.className = 'tg-video-play';
+					playIcon.innerHTML = '<svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>';
+					thumb.appendChild(playIcon);
+					vw.appendChild(thumb);
+					var v = null;
+					(function (vw, thumb) {
+						thumb.addEventListener('click', function (e) {
+							e.stopPropagation();
+							var player = document.createElement('video');
+							player.controls = true;
+							player.autoplay = true;
+							player.setAttribute('playsinline', '');
+							if (m.video_poster) player.poster = m.video_poster;
+							player.src = m.video;
+							vw.replaceChild(player, thumb);
+							vw.tmPlayer = player;
+						vw.tmMedia = player;
+						});
+					})(vw, thumb);
+					// развернуть: видео — в окно просмотра на весь экран чата, с того же места
+					var ex = document.createElement('button');
+					ex.type = 'button';
+					ex.className = 'tg-expand';
+					ex.title = tmText.fullscreen;
+					ex.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+					(function (vw) {
+						ex.addEventListener('click', function (e) {
+							e.stopPropagation();
+							// уже включённый плеер — с того же места; превью — с начала, сразу играет
+							var player = vw.tmPlayer, at = player ? player.currentTime : 0, playing = player ? !player.paused : true;
+							if (player) player.pause();
+							tmViewer('video', m.video, at, playing);
+						});
+					})(vw);
+					vw.appendChild(ex);
+					vw.setAttribute('data-keep', 'v:' + (m.kind || '') + ':' + m.id);
+					div.appendChild(vw);
 				}
-				var playIcon = document.createElement('div');
-				playIcon.className = 'tg-video-play';
-				playIcon.innerHTML = '<svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>';
-				thumb.appendChild(playIcon);
-				vw.appendChild(thumb);
-				var v = null;
-				(function (vw, thumb) {
-					thumb.addEventListener('click', function (e) {
-						e.stopPropagation();
-						var player = document.createElement('video');
-						player.controls = true;
-						player.autoplay = true;
-						player.setAttribute('playsinline', '');
-						if (m.video_poster) player.poster = m.video_poster;
-						player.src = m.video;
-						vw.replaceChild(player, thumb);
-						vw.tmPlayer = player;
-					});
-				})(vw, thumb);
-				// развернуть: видео — в окно просмотра на весь экран чата, с того же места
-				var ex = document.createElement('button');
-				ex.type = 'button';
-				ex.className = 'tg-expand';
-				ex.title = tmText.fullscreen;
-				ex.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-				(function (vw) {
-					ex.addEventListener('click', function (e) {
-						e.stopPropagation();
-						// уже включённый плеер — с того же места; превью — с начала, сразу играет
-						var player = vw.tmPlayer, at = player ? player.currentTime : 0, playing = player ? !player.paused : true;
-						if (player) player.pause();
-						tmViewer('video', m.video, at, playing);
-					});
-				})(vw);
-				vw.appendChild(ex);
-				div.appendChild(vw);
 			}
 			if (m.file) {
 				var link = document.createElement('a');
@@ -1422,7 +1436,10 @@
 				div.appendChild(link);
 			}
 			if (m.sound) {
-				div.appendChild(tmAudio(m.sound));
+				var audioKey = 'a:' + (m.kind || '') + ':' + m.id;
+				var audioBox = keep[audioKey] || tmAudio(m.sound);
+				audioBox.setAttribute('data-keep', audioKey);
+				div.appendChild(audioBox);
 			}
 			var t = document.createElement('span');
 			t.className = 'tg-time';
@@ -1936,6 +1953,7 @@
 		box.appendChild(btn);
 		box.appendChild(info);
 		var audio = new Audio();
+		box.tmMedia = audio;
 		audio.preload = 'metadata';
 		audio.src = src;
 		tmWaveLoad(src, function (peaks, url) {
