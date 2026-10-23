@@ -90,6 +90,49 @@ function terminalsQueueAddon($terminal_rec)
     return new $terminal_rec['TTS_TYPE']($terminal_rec);
 }
 
+// Отвечает ли устройство терминала. Выключенное устройство не ждём: дополнения ждут соединения
+// по 2–10 с на каждый запрос (у app_player — свои ожидания), и отправка во «Все терминалы» складывала бы их.
+// Проверка — соединение с портом устройства, не дольше 1 с; не ответило — следующие 60 с к нему не
+// обращаемся (cms/cached/terminals_unreachable.json), сообщение остаётся в переписке без «доставлено».
+// Адрес даёт дополнение (deviceAddress(): хост и порт); нет такого метода, нет адреса или устройство
+// на самом сервере — считается доступным
+function terminalsReachable($terminal_rec, $tts = null)
+{
+    if (!is_object($tts) || !method_exists($tts, 'deviceAddress')) {
+        return true;
+    }
+    list($host, $port) = $tts->deviceAddress();
+    $host = trim((string)$host);
+    if ($host == '' || (int)$port <= 0 || in_array(strtolower($host), array('127.0.0.1', 'localhost', '::1'), true)) {
+        return true;
+    }
+    $key = $host . ':' . (int)$port;
+    $file = ROOT . 'cms/cached/terminals_unreachable.json';
+    $down = is_file($file) ? json_decode((string)@file_get_contents($file), true) : array();
+    $down = is_array($down) ? $down : array();
+    if (isset($down[$key]) && $down[$key] > time() - 60) {
+        return false;
+    }
+    $fp = @fsockopen($host, (int)$port, $errno, $errstr, 1);
+    if ($fp) {
+        fclose($fp);
+        if (isset($down[$key])) {
+            unset($down[$key]);
+            @file_put_contents($file, json_encode($down));
+        }
+        return true;
+    }
+    $down[$key] = time();
+    foreach ($down as $k => $time) {
+        if ($time < time() - 60) {
+            unset($down[$k]);
+        }
+    }
+    @file_put_contents($file, json_encode($down));
+    DebMes('Terminal ' . $terminal_rec['TITLE'] . ' (' . $key . ') is not reachable — skipped for 60 s', 'terminals');
+    return false;
+}
+
 // Просит ли дополнение очередь
 function terminalsQueueUsed($tts)
 {
@@ -356,7 +399,7 @@ function terminalsQueuePlay($terminal_rec, $kind, $message, $level, $file, $imag
     $result = false;
     $busy = 0;
     $tts = terminalsQueueAddon($terminal_rec);
-    if (!is_object($tts)) {
+    if (!is_object($tts) || !terminalsReachable($terminal_rec, $tts)) {
         return array($result, $busy);
     }
     if ($kind == 'call') {

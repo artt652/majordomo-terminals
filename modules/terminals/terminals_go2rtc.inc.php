@@ -263,6 +263,9 @@ function terminalsGo2rtcShow($terminal_rec, $name, $duration = 60, $title = '', 
     $duration = max(5, min(3600, (int)$duration));
     $title = ($title != '') ? $title : terminalsLang('TERMINALS_CAMERA_TITLE') . ': ' . $name;
     $tts = ($terminal_rec['CANTTS'] && $terminal_rec['TTS_TYPE'] != '') ? terminalsQueueAddon($terminal_rec) : null;
+    if (is_object($tts) && !terminalsReachable($terminal_rec, $tts)) {
+        return false;
+    }
     if (is_object($tts) && method_exists($tts, 'cameraFormat')) {
         // pipup: окно потока сразу, поверх (потоки в очередь не ставятся — окно продлевается по тому же id)
         $format = $tts->cameraFormat();

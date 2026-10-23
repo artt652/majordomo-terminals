@@ -198,6 +198,10 @@ function terminalsSend($to, $message, $options = array())
         DebMes('terminalsSend to ' . $terminal_rec['TITLE'] . ($sender != '' ? " from $sender" : '') . " (level $level): $message"
             . ($image != '' ? " (image: $image)" : '') . ($sound != '' ? " (sound: $sound)" : '') . ($speaks ? '' : ' (page only)'), 'terminals');
         $tts = $speaks ? terminalsQueueAddon($terminal_rec) : null;
+        // устройство выключено — не ждём его (terminalsReachable): сообщение остаётся в переписке
+        if (is_object($tts) && !terminalsReachable($terminal_rec, $tts)) {
+            continue;
+        }
         // звук перед сообщением
         if ($sound != '' && is_object($tts) && method_exists($tts, 'playFile')) {
             if (terminalsQueueUsed($tts)) {

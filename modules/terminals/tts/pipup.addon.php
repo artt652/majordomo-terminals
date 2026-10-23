@@ -856,6 +856,13 @@ class pipup extends tts_addon
         return $host . ':' . (($port > 0 && $port < 65536) ? $port : self::DEFAULT_PORT);
     }
 
+    // Хост и порт PiPup — проверка, что устройство на связи (terminalsReachable)
+    function deviceAddress()
+    {
+        $parts = explode(':', $this->hostPort());
+        return array($parts[0], isset($parts[1]) ? (int)$parts[1] : 0);
+    }
+
     // Адрес PiPup для пути $path, false — нет HOST или curl
     private function notifyUrl($path)
     {

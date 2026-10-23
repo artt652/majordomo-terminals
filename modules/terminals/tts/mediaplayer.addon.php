@@ -33,6 +33,19 @@ class mediaplayer extends tts_addon
         return strtolower(isset($this->terminal['PLAYER_TYPE']) ? (string)$this->terminal['PLAYER_TYPE'] : '');
     }
 
+    // Хост и порт плеера — проверка, что устройство на связи (terminalsReachable). Порт — из настроек плеера,
+    // иначе обычный для типа (vlcweb, kodi — 8080, mpd — 6600, chromecast — 8009); не знаем порт — 0 (без проверки)
+    function deviceAddress()
+    {
+        $host = preg_replace('/:\d*$/', '', trim(isset($this->terminal['HOST']) ? (string)$this->terminal['HOST'] : ''));
+        $port = !empty($this->terminal['PLAYER_PORT']) ? (int)$this->terminal['PLAYER_PORT'] : 0;
+        if ($port <= 0) {
+            $defaults = array('vlcweb' => 8080, 'kodi' => 8080, 'mpd' => 6600, 'chromecast' => 8009);
+            $port = isset($defaults[$this->playerType()]) ? $defaults[$this->playerType()] : 0;
+        }
+        return array($host, $port);
+    }
+
     // Плееры, у которых play() заменяет плейлист: сообщение — в конец плейлиста
     protected function messageInPlaylist()
     {
