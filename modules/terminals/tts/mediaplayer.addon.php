@@ -114,7 +114,54 @@ class mediaplayer extends tts_addon
             array('NAME' => 'MESSAGE_VOLUME', 'TITLE' => terminalsLang('TERMINALS_MESSAGE_VOLUME'), 'TYPE' => 'number',
                 'HINT' => terminalsLang('TERMINALS_MESSAGE_VOLUME_HINT')),
             terminalsSignalField(),
+            array('NAME' => 'SHOW_VIDEO', 'TITLE' => terminalsLang('TERMINALS_SHOW_VIDEO'), 'TYPE' => 'checkbox',
+                'DEFAULT' => $this->showVideoDefault() ? '1' : '0'),
         );
+    }
+
+    // Плееры с экраном (у остальных — только звук: mpd, lms, ghn, foobar)
+    protected function videoPlayer()
+    {
+        return in_array($this->playerType(), array('vlcweb', 'vlc', 'kodi', 'chromecast', 'dnla'), true);
+    }
+
+    // «Показывать видео из сообщений» по умолчанию: у плееров с экраном, кроме MAIN (его плеер обычно
+    // на самом сервере — окно ролика там вряд ли нужно)
+    protected function showVideoDefault()
+    {
+        return $this->videoPlayer() && strcasecmp(isset($this->terminal['NAME']) ? (string)$this->terminal['NAME'] : '', 'MAIN') != 0;
+    }
+
+    // Показывает ли терминал видео (terminalsSend, карточка терминала): плеер с экраном и галочка в настройках
+    public function canShowVideo()
+    {
+        if (!$this->videoPlayer()) {
+            return false;
+        }
+        $settings = function_exists('terminalsAddonSettings') ? terminalsAddonSettings($this->terminal, 'tts', 'mediaplayer') : array();
+        return isset($settings['SHOW_VIDEO']) ? $settings['SHOW_VIDEO'] == '1' : $this->showVideoDefault();
+    }
+
+    // Видео из сообщений и сценариев — плеером терминала, через очередь модуля terminals (как файл голоса:
+    // перед роликом сохраняется, что играло, после — возвращается). Аргументы — как у pipup::sendVideo():
+    // файл в веб-корне, http(s)- или rtsp/rtmp-ссылка; $text, $title, $type, $options не нужны плееру.
+    // DLNA — только mp4: webm многие телевизоры не играют
+    public function sendVideo($uri, $text = '', $title = '', $type = 'video', $options = array())
+    {
+        if (!$this->canShowVideo()) {
+            return false;
+        }
+        $uri = (string)$uri;
+        if ($this->playerType() == 'dnla' && !in_array(strtolower(pathinfo((string)parse_url($uri, PHP_URL_PATH), PATHINFO_EXTENSION)), array('mp4', 'm4v'), true)) {
+            return false;
+        }
+        $url = preg_match('/^(rtsp|rtsps|rtmp|rtmps):\/\//i', $uri) ? $uri : $this->messageUrl($uri);
+        if ($url == '') {
+            return false;
+        }
+        $this->applyMessageVolume();
+        playMedia($url, $this->terminal['TITLE']);
+        return true;
     }
 
     // Громкость сообщений из настроек (1–100) или 0, если не задана

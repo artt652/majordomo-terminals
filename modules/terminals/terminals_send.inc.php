@@ -176,7 +176,9 @@ function terminalsSend($to, $message, $options = array())
         // видео: окно видео на устройстве, если дополнение умеет (pipup: sendVideo по ссылке, со звуком).
         // Через очередь: ждёт конца текущего сообщения и держит терминал на время ролика (срочные прерывают)
         $video_shown = false;
-        if ($speaks && $video != '' && is_object($tts) && method_exists($tts, 'sendVideo')) {
+        // (у дополнений с canShowVideo() — только если оно разрешает: mediaplayer — плеер с экраном и галочка)
+        if ($speaks && $video != '' && is_object($tts) && method_exists($tts, 'sendVideo')
+            && (!method_exists($tts, 'canShowVideo') || $tts->canShowVideo())) {
             $url = method_exists($tts, 'fileUrl') ? $tts->fileUrl($video) : $video;
             // длительность: от страницы «Сообщения» (браузер знает её при выборе файла), иначе из файла, иначе 60 с
             $seconds = !empty($options['video_duration']) ? (int)ceil((float)$options['video_duration']) : terminalsQueueFileSeconds($video);

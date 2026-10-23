@@ -262,6 +262,10 @@ function terminalsInfo($terminal_rec)
                     if ($method == 'restoreState' && method_exists($addon, 'screenState')) {
                         continue;
                     }
+                    // видео — если дополнение его сейчас показывает (mediaplayer: плеер с экраном и галочка)
+                    if ($method == 'sendVideo' && method_exists($addon, 'canShowVideo') && !$addon->canShowVideo()) {
+                        continue;
+                    }
                     if (method_exists($addon, $method) && ($method != 'useQueue' || $addon->useQueue())) {
                         $tts['capabilities'][] = terminalsLang($key);
                     }

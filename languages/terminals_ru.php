@@ -205,6 +205,7 @@ $dictionary = array(
 	'TERMINALS_UPLOAD_ERROR'              => 'Не удалось загрузить файл',
 	'TERMINALS_MIC_HTTPS'                 => 'Запись голоса браузер разрешает только по HTTPS (или в Chrome с флагом «Insecure origins treated as secure») — выберите файл записи.',
 	'TERMINALS_MIC_DENIED'                => 'Нет доступа к микрофону',
+	'TERMINALS_SHOW_VIDEO'                => 'Показывать видео из сообщений (плееры с экраном: VLC, Kodi, Chromecast, DLNA — только mp4)',
 	'TERMINALS_CAM_HTTPS'                 => 'Камеру браузер даёт только по HTTPS (или на localhost) — выберите файл.',
 	'TERMINALS_CAM_DENIED'                => 'Нет доступа к камере',
 	'TERMINALS_CAM_SHOT'                  => 'Снять',

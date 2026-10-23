@@ -205,6 +205,7 @@ $dictionary = array(
 	'TERMINALS_UPLOAD_ERROR'              => 'The file could not be uploaded',
 	'TERMINALS_MIC_HTTPS'                 => 'The browser allows voice recording only over HTTPS (or in Chrome with the flag “Insecure origins treated as secure”) — choose a recording file instead.',
 	'TERMINALS_MIC_DENIED'                => 'No access to the microphone',
+	'TERMINALS_SHOW_VIDEO'                => 'Show video from messages (players with a screen: VLC, Kodi, Chromecast, DLNA — mp4 only)',
 	'TERMINALS_CAM_HTTPS'                 => 'The browser gives access to the camera only over HTTPS (or on localhost) — choose a file instead.',
 	'TERMINALS_CAM_DENIED'                => 'No access to the camera',
 	'TERMINALS_CAM_SHOT'                  => 'Take a photo',
