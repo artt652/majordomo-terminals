@@ -20,13 +20,18 @@
  *       'chat_title' => 'Кухня',                // название чата — добавляется к отправителю в заголовке окна
  *       'forwarded' => 'Кухня',                 // пересланное сообщение: от кого оно было (на странице — «Переслано от …»)
  *       'shout' => true,                        // записать копию в общий чат MajorDoMo (для chat => 'all' — всегда)
+ *       'stream' => 'door',                     // камера: имя потока go2rtc (terminals_go2rtc.inc.php) — устройства
+ *                                               // показывают поток, в переписку — снимок; без видео — снимок с текстом
+ *       'stream_duration' => 60,                // сколько секунд показывать поток (по умолчанию 60)
+ *       'snapshot' => false,                    // без снимка потока (по умолчанию — снимок в сообщение)
+ *       'history' => false,                     // только на устройства, без записи в переписку
  *   ));
  *
  * Куда: имя, название или адрес терминала или пользователь 'user:ID' (только в переписку); можно массив.
  * Текст с озвучкой идёт как sayTo(): событие SAYTO, генераторы речи делают голос для получателя.
  * Без озвучки (voice => false) — только текст, сразу в очередь получателя.
  * Картинку и отправителя показывают дополнения с showMessage() (pipup: картинка в окне,
- * отправитель в заголовке), звук играют дополнения с playFile() (mediaplayer, *_tts, pipup).
+ * отправитель в заголовке), звук играют дополнения с playFile() (mediaplayer, pipup).
  * Остальные получают текст, как обычно.
  * В общий чат MajorDoMo (shouts) пишется только сообщение всем терминалам (chat => 'all')
  * или с 'shout' => true — с именем отправителя: «Кухня: текст». Личные и групповые туда не попадают.
@@ -48,7 +53,19 @@ function terminalsSend($to, $message, $options = array())
     if ($file != '' && $file_name == '') {
         $file_name = basename($file);
     }
-    if ($message == '' && $image == '' && $sound == '' && $file == '' && $video == '') {
+    // камера go2rtc: имя потока из списка go2rtc; снимок — картинкой сообщения (если картинки нет)
+    $stream = isset($options['stream']) ? trim((string)$options['stream']) : '';
+    if ($stream != '' && !terminalsGo2rtcHas($stream)) {
+        DebMes('terminalsSend: go2rtc stream not found: ' . $stream, 'terminals');
+        $stream = '';
+    }
+    $stream_duration = !empty($options['stream_duration']) ? (int)$options['stream_duration'] : 60;
+    if ($stream != '' && $image == '' && (!isset($options['snapshot']) || $options['snapshot'])) {
+        $image = terminalsGo2rtcSnapshot($stream);
+    }
+    // history => false — только на устройства, в переписку не пишется
+    $history = !isset($options['history']) || $options['history'];
+    if ($message == '' && $image == '' && $sound == '' && $file == '' && $video == '' && $stream == '') {
         return 0;
     }
     // отправитель: название терминала, если это терминал, иначе как есть
@@ -112,7 +129,7 @@ function terminalsSend($to, $message, $options = array())
         // пользователь MajorDoMo (user:ID): только в переписку — на страницы «Сообщения», где он вошёл
         if (is_string($destination) && preg_match('/^user:(\d+)$/', $destination, $m)) {
             $user = SQLSelectOne("SELECT ID, NAME, USERNAME FROM users WHERE ID=" . (int)$m[1]);
-            if (empty($user['ID'])) {
+            if (empty($user['ID']) || !$history) {
                 continue;
             }
             $rec = array(
@@ -122,7 +139,7 @@ function terminalsSend($to, $message, $options = array())
                 'MESSAGE' => json_encode($message), 'IMAGE' => $image, 'SOUND' => $sound, 'FILE' => $file, 'VIDEO' => $video,
                 'FILE_NAME' => $file_name,
                 'FORWARDED' => isset($options['forwarded']) ? mb_substr(trim((string)$options['forwarded']), 0, 255, 'UTF-8') : '',
-                'ADDED' => time(), 'CHAT' => $chat, 'SEND_ID' => $send_id,
+                'ADDED' => time(), 'CHAT' => $chat, 'SEND_ID' => $send_id, 'STREAM' => $stream,
             );
             SQLInsert('terminals_messages', $rec);
             $recipients[] = 'user:' . (int)$user['ID'];
@@ -152,8 +169,9 @@ function terminalsSend($to, $message, $options = array())
             'ADDED' => time(),
             'CHAT' => $chat,
             'SEND_ID' => $send_id,
+            'STREAM' => $stream,
         );
-        $rec['ID'] = SQLInsert('terminals_messages', $rec);
+        $rec['ID'] = $history ? SQLInsert('terminals_messages', $rec) : 0;
         $message_id = (int)$rec['ID'];
         $recipients[] = $terminal_rec['NAME'];
         $sent++;
@@ -194,6 +212,14 @@ function terminalsSend($to, $message, $options = array())
                 }
             }
         }
+        // камера: окно потока на устройстве; показано — снимок устройству не нужен (он в переписке),
+        // не показано (устройство без видео) — снимок с текстом, как картинка
+        $device_image = $image;
+        if ($speaks && $stream != '' && terminalsGo2rtcShow($terminal_rec, $stream, $stream_duration,
+            ($sender_title != '' ? $sender_title . ' · ' : '') . terminalsLang('TERMINALS_CAMERA_TITLE') . ': ' . $stream, $level)) {
+            terminalsMessagesDelivered($message_id);
+            $device_image = '';
+        }
         // только файл или видео, которое устройство не покажет: на устройство — текст без озвучки
         // («Файл: имя», «Видео»), сам файл — на странице «Сообщения»
         if ($speaks && $message == '' && $image == '' && $sound == '' && ($file != '' || ($video != '' && !$video_shown))) {
@@ -202,16 +228,16 @@ function terminalsSend($to, $message, $options = array())
             $label = ($file != '') ? terminalsLang('TERMINALS_FILE') . ': ' . $file_name : terminalsLang('TERMINALS_VIDEO');
             $terminals->terminalSay($terminal_rec, $label, $level, '', $sender_title, $message_id, true);
         }
-        if ($speaks && ($message != '' || $image != '')) {
+        if ($speaks && ($message != '' || $device_image != '')) {
             if ($voice && $message != '') {
                 // как sayTo(): терминалы и генераторы речи получают событие SAYTO
                 processSubscriptionsSafe('SAYTO', array('level' => $level, 'message' => $message,
-                    'destination' => $terminal_rec['NAME'], 'image' => $image, 'from' => $sender_title, 'message_id' => $message_id));
+                    'destination' => $terminal_rec['NAME'], 'image' => $device_image, 'from' => $sender_title, 'message_id' => $message_id));
             } else {
                 include_once(DIR_MODULES . 'terminals/terminals.class.php');
                 $terminals = new terminals();
                 // без озвучки (текст, картинка): в очереди не задерживает голос
-                $terminals->terminalSay($terminal_rec, $message, $level, $image, $sender_title, $message_id, true);
+                $terminals->terminalSay($terminal_rec, $message, $level, $device_image, $sender_title, $message_id, true);
             }
         }
     }

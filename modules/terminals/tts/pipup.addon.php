@@ -47,7 +47,18 @@ class pipup extends tts_addon
             array('NAME' => 'WAKE_LEVEL', 'TITLE' => terminalsLang('TERMINALS_PIPUP_WAKE_LEVEL'), 'TYPE' => 'number',
                 'HINT' => terminalsLang('TERMINALS_PIPUP_WAKE_LEVEL_HINT')),
             array('NAME' => 'SLEEP_AFTER', 'TITLE' => terminalsLang('TERMINALS_PIPUP_SLEEP_AFTER'), 'TYPE' => 'checkbox'),
+            // камеры go2rtc (terminals_go2rtc.inc.php): RTSP — плеером ExoPlayer; WebRTC — меньше задержка,
+            // нужен форк 0.25+, согласование — через сервер MajorDoMo
+            array('NAME' => 'CAMERA_FORMAT', 'TITLE' => terminalsLang('TERMINALS_PIPUP_CAMERA_FORMAT'), 'TYPE' => 'select',
+                'OPTIONS' => array('rtsp' => 'RTSP', 'webrtc' => terminalsLang('TERMINALS_PIPUP_CAMERA_WEBRTC'))),
         );
+    }
+
+    // Как показывать камеры go2rtc: rtsp или webrtc (поле «Камеры»)
+    function cameraFormat()
+    {
+        $settings = function_exists('terminalsAddonSettings') ? terminalsAddonSettings($this->terminal, 'tts', 'pipup') : array();
+        return (isset($settings['CAMERA_FORMAT']) && $settings['CAMERA_FORMAT'] == 'webrtc') ? 'webrtc' : 'rtsp';
     }
 
     // --- Экран устройства (форк PiPup >= 0.28) ---

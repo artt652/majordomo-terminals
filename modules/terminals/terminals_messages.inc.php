@@ -412,6 +412,21 @@ foreach ($shout_rooms as $room) {
         'readonly' => $user_id ? 0 : 1, 'text_only' => 1,
         'created_by' => (string)$room['USER_NAME'], 'created' => $created);
 }
+// «Камеры» (go2rtc, terminals_go2rtc.inc.php): потоки, видимые этому терминалу или пользователю (права —
+// в настройках «Сообщений»; администратор видит все). Чат — пульт: сетка снимков, просмотр, показ на терминалах,
+// снимок в чат, ссылка для внешнего просмотра (WebTorrent)
+$cam_admin = $as_admin || (!empty($me_user['IS_ADMIN']));
+$my_cameras = ($can_write && terminalsGo2rtcEnabled()) ? terminalsCamerasFor($me_name, $user_id, $cam_admin) : array();
+if (count($my_cameras)) {
+    $go2rtc_cfg = terminalsGo2rtcConfig();
+    $shares = terminalsGo2rtcShares();
+    $cameras = array();
+    foreach ($my_cameras as $name) {
+        $cameras[] = array('name' => $name, 'shared' => isset($shares[$name]) ? (int)$shares[$name] : 0);
+    }
+    $chats[] = array('key' => 'cameras', 'type' => 'cameras', 'title' => terminalsLang('TERMINALS_CAMERAS'), 'members' => array(),
+        'readonly' => 1, 'cameras' => $cameras, 'webtorrent' => $go2rtc_cfg['webtorrent'] ? 1 : 0);
+}
 // комнаты, к которым привязаны терминалы: участники — терминалы комнаты
 $rooms = SQLSelect("SELECT ID, TITLE FROM locations ORDER BY PRIORITY DESC, TITLE");
 foreach ($rooms as $room) {
@@ -687,6 +702,91 @@ $send_to_terminals = function ($chat, $to, $text, $media, $voice, $forwarded = '
     return terminalsSend($to, $text, $options);
 };
 
+// Камеры. Снимок для страницы (через сервер: браузеру не нужен доступ к go2rtc и его пароль)
+if (gr('mode') == 'cam_frame') {
+    $name = (string)gr('name');
+    $jpeg = in_array($name, $my_cameras, true) ? terminalsGo2rtcFrame($name, min(1280, max(0, gr('w', 'int')))) : '';
+    $finish_session();
+    if ($jpeg == '') {
+        header('HTTP/1.1 404 Not Found');
+        exit;
+    }
+    header('Content-Type: image/jpeg');
+    header('Cache-Control: no-store');
+    echo $jpeg;
+    exit;
+}
+// WebRTC: согласование (WHEP — предложение SDP, ответ go2rtc) через сервер — для браузера и устройств (PiPup,
+// ссылка с ключом терминала). Само видео идёт с go2rtc напрямую; пароль API go2rtc остаётся на сервере
+if (gr('mode') == 'whep') {
+    $name = (string)gr('src');
+    $finish_session();
+    // камера разрешена этому терминалу или пользователю — или показана ему (подписанная ссылка, terminalsGo2rtcUrl)
+    $signed = $by_key && !empty($me['ID']) && (int)gr('exp') > time()
+        && hash_equals(terminalsGo2rtcSign($name, $me['ID'], (int)gr('exp')), (string)gr('sig'));
+    if ((!in_array($name, $my_cameras, true) && !($signed && terminalsGo2rtcHas($name))) || $_SERVER['REQUEST_METHOD'] != 'POST') {
+        header('HTTP/1.1 404 Not Found');
+        exit;
+    }
+    $type_in = isset($_SERVER['CONTENT_TYPE']) ? (string)$_SERVER['CONTENT_TYPE'] : 'application/sdp';
+    $type_in = (stripos($type_in, 'json') !== false) ? 'application/json' : 'application/sdp';
+    $answer = terminalsGo2rtcRequest('POST', 'api/webrtc', array('src' => $name), (string)file_get_contents('php://input'),
+        $type_in, $code, 15, $type_out);
+    header('HTTP/1.1 ' . (($code >= 200 && $code < 300) ? $code . ' OK' : '502 Bad Gateway'));
+    header('Content-Type: ' . (($type_out != '') ? $type_out : $type_in));
+    echo $answer;
+    exit;
+}
+// показать камеру на терминалах чата (chat) на duration секунд; в чат — сообщение со снимком.
+// Терминал, которому эта камера не разрешена, её не получает (кроме входа администратора)
+if (gr('mode') == 'cam_show' || gr('mode') == 'cam_photo') {
+    $name = (string)gr('name');
+    $chat = $find_chat((string)gr('chat'));
+    if (!in_array($name, $my_cameras, true) || empty($chat['key']) || !empty($chat['readonly'])) {
+        $json_out(array('sent' => 0, 'error' => 'not_found'));
+    }
+    $to = array();
+    foreach (array_values(array_diff($chat['members'], array($me_name, $me_user_key))) as $member) {
+        $is_user = strpos($member, 'user:') === 0;
+        if ($cam_admin || terminalsCameraAllowed($name, $is_user ? '' : $member, $is_user ? (int)substr($member, 5) : 0, false)) {
+            $to[] = $member;
+        }
+    }
+    if (!count($to)) {
+        $json_out(array('sent' => 0, 'error' => 'no_access'));
+    }
+    $options = array('from' => $me_name, 'voice' => false);
+    if ($user_id) {
+        $options['from_user'] = $user_id;
+    }
+    if ($chat['type'] != 'term' && $chat['type'] != 'user') {
+        $options['chat'] = $chat['key'];
+        $options['chat_title'] = $chat['title'];
+    }
+    if (gr('mode') == 'cam_show') {
+        $options['stream'] = $name;
+        $options['stream_duration'] = max(10, min(600, gr('duration', 'int') ? gr('duration', 'int') : 60));
+        $sent = terminalsSend($to, '', $options);
+    } else {
+        $snapshot = terminalsGo2rtcSnapshot($name);
+        $options['image'] = $snapshot;
+        $sent = ($snapshot != '') ? terminalsSend($to, '', $options) : 0;
+    }
+    $json_out(array('sent' => $sent, 'error' => $sent ? '' : 'camera', 'chat' => $chat['key']));
+}
+// ссылка для внешнего просмотра (WebTorrent) — создать или продлить; закрыть
+if (gr('mode') == 'cam_share' || gr('mode') == 'cam_unshare') {
+    $name = (string)gr('name');
+    if (!in_array($name, $my_cameras, true)) {
+        $json_out(array('ok' => 0));
+    }
+    if (gr('mode') == 'cam_unshare') {
+        $json_out(array('ok' => terminalsGo2rtcUnshare($name) ? 1 : 0));
+    }
+    $share = terminalsGo2rtcShare($name);
+    $json_out(!empty($share['url']) ? array('ok' => 1, 'url' => $share['url'], 'expires' => $share['expires']) : array('ok' => 0));
+}
+
 // отправка: в чат (chat=all|room:ID|group:ID|term:ИМЯ — получатели все участники, кроме себя)
 if ($this->mode == 'send_message' || gr('mode') == 'send_message') {
     $chat_key = (string)gr('chat');
@@ -921,6 +1021,8 @@ $build_messages = function ($rows, $limit) use ($me_id, $user_id, $id_names, $al
             'ts' => (int)$row['ADDED'],
             'status' => $incoming ? 0 : $state,
             'forwarded' => isset($row['FORWARDED']) ? (string)$row['FORWARDED'] : '',
+            // камера go2rtc, показанная этим сообщением (снимок — в image)
+            'stream' => isset($row['STREAM']) ? (string)$row['STREAM'] : '',
             'kind' => 'msg',
             'read' => ($incoming && !empty($row['READ_AT'])) ? 1 : 0,
         );

@@ -155,13 +155,35 @@ class mediaplayer extends tts_addon
         if ($this->playerType() == 'dnla' && !in_array(strtolower(pathinfo((string)parse_url($uri, PHP_URL_PATH), PATHINFO_EXTENSION)), array('mp4', 'm4v'), true)) {
             return false;
         }
-        $url = preg_match('/^(rtsp|rtsps|rtmp|rtmps):\/\//i', $uri) ? $uri : $this->messageUrl($uri);
+        $stream = (bool)preg_match('/^(rtsp|rtsps|rtmp|rtmps):\/\//i', $uri);
+        $url = $stream ? $uri : $this->messageUrl($uri);
         if ($url == '') {
             return false;
         }
         $this->applyMessageVolume();
         playMedia($url, $this->terminal['TITLE']);
+        // поток (камера) не кончается сам: через duration остановить, если плеер всё ещё играет его
+        // (если очередь уже вернула музыку — не трогать)
+        if ($stream && !empty($options['duration'])) {
+            setTimeOut('terminals_stream_stop_' . (int)$this->terminal['ID'],
+                'include_once(DIR_MODULES . "terminals/terminals.class.php"); include_once(DIR_MODULES . "terminals/tts_addon.class.php"); '
+                . 'include_once(DIR_MODULES . "terminals/tts/mediaplayer.addon.php"); $rec = getTerminalByID(' . (int)$this->terminal['ID'] . '); '
+                . 'if (!empty($rec["ID"])) { $mp = new mediaplayer($rec); $mp->stopStream(' . var_export($url, true) . '); }',
+                (int)$options['duration'] + 2);
+        }
         return true;
+    }
+
+    // Остановить плеер, если он играет этот поток
+    public function stopStream($url)
+    {
+        $this->playerSession();
+        $played = getPlayerStatus($this->terminal['NAME']);
+        if (is_array($played) && isset($played['state']) && $played['state'] == 'playing' && $this->currentFile($played) == $url) {
+            $this->playerCommand('stop');
+            return true;
+        }
+        return false;
     }
 
     // Громкость сообщений из настроек (1–100) или 0, если не задана

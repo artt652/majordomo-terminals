@@ -15,6 +15,7 @@ include_once(DIR_MODULES . 'terminals/terminals_queue.inc.php');
 include_once(DIR_MODULES . 'terminals/terminals_settings.inc.php');
 include_once(DIR_MODULES . 'terminals/terminals_send.inc.php');
 include_once(DIR_MODULES . 'terminals/terminals_auth.inc.php');
+include_once(DIR_MODULES . 'terminals/terminals_go2rtc.inc.php');
 
 class terminals extends module
 {
@@ -362,6 +363,8 @@ class terminals extends module
             SQLExec('UPDATE terminals SET IS_ONLINE=0 WHERE LATEST_ACTIVITY < (NOW() - INTERVAL 90 MINUTE)'); //
         } elseif ($event == 'MINUTELY') {
             terminalsQueueWatchdog();
+            // ссылки внешнего просмотра камер (WebTorrent), срок которых вышел
+            terminalsGo2rtcSharesCleanup();
             // переписка страницы «Сообщения»: чистка раз в сутки
             if (!isset($this->config['MESSAGES_CLEANUP_DAY']) || $this->config['MESSAGES_CLEANUP_DAY'] != date('Y-m-d')) {
                 $this->config['MESSAGES_CLEANUP_DAY'] = date('Y-m-d');
@@ -527,6 +530,7 @@ class terminals extends module
  terminals_messages: FORWARDED varchar(255) NOT NULL DEFAULT ''
  terminals_messages: CHAT varchar(50) NOT NULL DEFAULT ''
  terminals_messages: SEND_ID varchar(32) NOT NULL DEFAULT ''
+ terminals_messages: STREAM varchar(100) NOT NULL DEFAULT ''
  terminals_messages: DELIVERED int(10) NOT NULL DEFAULT '0'
  terminals_messages: READ_AT int(10) NOT NULL DEFAULT '0'
  terminals_messages: FROM_ID int(10) NOT NULL DEFAULT '0'

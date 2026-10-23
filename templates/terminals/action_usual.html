@@ -207,6 +207,20 @@
 	/* длинная серия свёрнута: на последней показанной клетке — сколько ещё фото */
 	.tg-album-more { position: absolute; inset: 0; background: rgba(0,0,0,.5); color: #fff; font-size: 24px; font-weight: 600;
 		display: flex; align-items: center; justify-content: center; pointer-events: none; }
+	/* «Камеры»: сетка снимков потоков go2rtc (обновляются раз в несколько секунд), нажатие — просмотр */
+	.tg-cams { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; padding: 4px 2px; }
+	@media (max-width: 520px) { .tg-cams { grid-template-columns: 1fr 1fr; gap: 6px; } }
+	.tg-cam { position: relative; background: #000; border-radius: 10px; overflow: hidden; aspect-ratio: 16 / 9; cursor: pointer; box-shadow: var(--tg-shadow); }
+	.tg-cam img { width: 100%; height: 100%; object-fit: cover; display: block; }
+	.tg-cam img:not([src]) { visibility: hidden; }
+	.tg-cam-name { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 8px 5px; color: #fff; font-size: 13px; font-weight: 600;
+		background: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,.6)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+	.tg-cam-share { position: absolute; top: 6px; right: 6px; background: rgba(0,0,0,.6); color: #fff; font-size: 11px; padding: 2px 7px; border-radius: 10px; }
+	.tg-cam-badge { display: inline-block; font-size: 13px; color: var(--tg-accent); cursor: pointer; margin: 0 0 4px; }
+	#tm_viewer .tg-cam-note { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); max-width: calc(100% - 24px); color: #fff;
+		background: rgba(0,0,0,.6); padding: 6px 12px; border-radius: 14px; font-size: 13px; text-align: center; word-break: break-all; z-index: 2; }
+	#tm_viewer .tg-cam-note a { color: #8ab4f8; }
+	#tm_viewer .tg-cam-note button { margin-left: 8px; background: none; border: 1px solid rgba(255,255,255,.5); color: #fff; border-radius: 10px; padding: 1px 8px; cursor: pointer; }
 	/* видео в сообщении: кнопка «развернуть» в углу */
 	.tg-video-wrap { position: relative; }
 	/* видео в переписке — превью (кадр от отправителя или тёмное окно) с кнопкой ▶; сам ролик грузится по нажатию */
@@ -496,8 +510,10 @@
 	<!-- переслать сообщение: выбор чата -->
 	<div class="tg-modal" id="tm_fwd_modal">
 		<div class="tg-dialog">
-			<h3><#LANG_TERMINALS_FORWARD#></h3>
+			<h3 id="tm_fwd_title"><#LANG_TERMINALS_FORWARD#></h3>
 			<div class="tg-field"><input type="text" id="tm_fwd_search" placeholder="<#LANG_TERMINALS_SEARCH#>" autocomplete="off"></div>
+			<div class="tg-field" id="tm_fwd_duration_box" style="display:none"><label style="font-size:13px;color:var(--tg-muted)"><#LANG_TERMINALS_CAM_DURATION#>
+				<select id="tm_fwd_duration"><option value="30">30 с</option><option value="60" selected>1 мин</option><option value="300">5 мин</option><option value="600">10 мин</option></select></label></div>
 			<div class="tg-fwd-list" id="tm_fwd_list"></div>
 			<div class="tg-fwd-status" id="tm_fwd_status"></div>
 			<div class="tg-buttons">
@@ -529,6 +545,9 @@
 	<div class="tg-viewer" id="tm_viewer">
 		<div class="tg-viewer-bar">
 			<span class="tg-viewer-count" id="tm_viewer_count"></span>
+			<button type="button" class="tg-viewer-btn" id="tm_viewer_cam_show" title="<#LANG_TERMINALS_CAM_SHOW#>" style="display:none"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 21h8M12 17v4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+			<button type="button" class="tg-viewer-btn" id="tm_viewer_cam_photo" title="<#LANG_TERMINALS_CAM_PHOTO#>" style="display:none"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/></svg></button>
+			<button type="button" class="tg-viewer-btn" id="tm_viewer_cam_share" title="<#LANG_TERMINALS_CAM_SHARE#>" style="display:none"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
 			<button type="button" class="tg-viewer-btn" id="tm_viewer_fwd" title="<#LANG_TERMINALS_FORWARD#>"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5l7 7-7 7M21 12H9a6 6 0 0 0-6 6v1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
 			<a class="tg-viewer-btn" id="tm_viewer_open" href="#" target="_blank" title="<#LANG_TERMINALS_OPEN_ORIGINAL#>"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
 			<button type="button" class="tg-viewer-btn" id="tm_viewer_full" title="<#LANG_TERMINALS_FULLSCREEN#>"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
@@ -583,6 +602,11 @@
 		sendError: '<#LANG_TERMINALS_SEND_ERROR#>', file: '<#LANG_TERMINALS_FILE#>', video: '<#LANG_TERMINALS_VIDEO#>', send: '<#LANG_TERMINALS_SEND#>',
 		record: '<#LANG_TERMINALS_RECORD_VOICE#>', tooBig: '<#LANG_TERMINALS_FILE_TOO_BIG#>', badType: '<#LANG_TERMINALS_FILE_TYPE#>',
 		uploadError: '<#LANG_TERMINALS_UPLOAD_ERROR#>', houseSub: '<#LANG_TERMINALS_HOUSE_CHAT#>', forward: '<#LANG_TERMINALS_FORWARD#>', forwardedFrom: '<#LANG_TERMINALS_FORWARDED_FROM#>',
+		cameras: '<#LANG_TERMINALS_CAMERAS#>', camerasSub: '<#LANG_TERMINALS_CAMERAS_SUB#>', camShow: '<#LANG_TERMINALS_CAM_SHOW#>',
+		camPhoto: '<#LANG_TERMINALS_CAM_PHOTO#>', camShare: '<#LANG_TERMINALS_CAM_SHARE#>', camShared: '<#LANG_TERMINALS_CAM_SHARED#>',
+		camUnshare: '<#LANG_TERMINALS_CAM_UNSHARE#>', camCopied: '<#LANG_TERMINALS_CAM_COPIED#>', camDuration: '<#LANG_TERMINALS_CAM_DURATION#>',
+		camNoAccess: '<#LANG_TERMINALS_CAM_NO_ACCESS#>', camFailed: '<#LANG_TERMINALS_CAM_FAILED#>', camLive: '<#LANG_TERMINALS_CAM_LIVE#>',
+		camSnapshot: '<#LANG_TERMINALS_CAM_SNAPSHOT#>',
 		fwdTextOnly: '<#LANG_TERMINALS_FORWARD_TEXT_ONLY#>', fwdNotFound: '<#LANG_TERMINALS_FORWARD_NOT_FOUND#>', emoji: '<#LANG_TERMINALS_AVATAR_EMOJI#>',
 		emojiReset: '<#LANG_TERMINALS_EMOJI_DEFAULT#>', wall_pattern: '<#LANG_TERMINALS_WALL_PATTERN#>', wall_mint: '<#LANG_TERMINALS_WALL_MINT#>',
 		wall_sunset: '<#LANG_TERMINALS_WALL_SUNSET#>', wall_ocean: '<#LANG_TERMINALS_WALL_OCEAN#>', wall_plain: '<#LANG_TERMINALS_WALL_PLAIN#>',
@@ -759,7 +783,7 @@
 		return tmColors[h % tmColors.length];
 	}
 	function tmAvatar(el, chat) {
-		var icons = {all: '📢', room: '🏠', group: '👥', house: '💬', shoutroom: '🗨️', system: '⚙️'};
+		var icons = {all: '📢', room: '🏠', group: '👥', house: '💬', shoutroom: '🗨️', system: '⚙️', cameras: '📹'};
 		var emoji = tmEmojiMap[chat.key] || '';
 		var photo = !emoji && tmUserAvatars[chat.key];
 		el.textContent = photo ? '' : (emoji || icons[chat.type] || (chat.title || '?').trim().charAt(0).toUpperCase());
@@ -966,6 +990,7 @@
 		if (chat.type == 'house') return tmText.houseSub;
 		if (chat.type == 'shoutroom') return tmText.shoutroomSub;
 		if (chat.type == 'system') return tmText.systemSub;
+		if (chat.type == 'cameras') return tmText.camerasSub + ': ' + (chat.cameras || []).length;
 		// участники — со своим терминалом (первым)
 		var me = tmMe();
 		var mine = function (n) { return n == me || (tmMeUser && n == tmMeUser); };
@@ -986,7 +1011,7 @@
 		tmAvatar(document.getElementById('tm_chat_avatar'), chat);
 		document.getElementById('tm_chat_title').textContent = chat.title;
 		var sub = tmMembersText(chat);
-		var plain = (chat.type == 'term' || chat.type == 'user' || chat.type == 'house' || chat.type == 'shoutroom' || chat.type == 'system' || chat.empty || !sub);
+		var plain = (chat.type == 'term' || chat.type == 'user' || chat.type == 'house' || chat.type == 'shoutroom' || chat.type == 'system' || chat.type == 'cameras' || chat.empty || !sub);
 		var subEl = document.getElementById('tm_chat_sub');
 		subEl.textContent = plain ? sub : tmText.members + ': ' + sub;
 		subEl.classList.remove('tg-online-text');
@@ -998,14 +1023,14 @@
 		// общий чат MajorDoMo: только текст; без входа на сайт — только чтение
 		document.getElementById('tm_compose').classList.toggle('tg-text-only', !!chat.text_only);
 		document.getElementById('tm_compose').style.display = chat.readonly ? 'none' : '';
-		document.getElementById('tm_readonly').style.display = chat.readonly ? 'block' : 'none';
+		document.getElementById('tm_readonly').style.display = (chat.readonly && chat.type != 'cameras') ? 'block' : 'none';
 		// почему нельзя писать: «Система» — только входящие; комната без других терминалов; не выполнен вход на сайт (общий чат)
 		document.getElementById('tm_readonly').textContent = chat.type == 'system' ? tmText.systemReadonly : (chat.empty ? tmText.roomEmpty : tmText.login);
 		if (chat.text_only && tmRec) tmRecStop(null);
 		tmSendIcon();
 		document.getElementById('tm_edit_group').style.display = (chat.type == 'group' && tmWho()) ? '' : 'none';
 		// меню ⋮ — у чатов терминалов (общий чат MajorDoMo и его комнаты ведёт ядро)
-		document.getElementById('tm_chat_menu_btn').style.display = (!tmShoutChat(key) && tmWho()) ? '' : 'none';
+		document.getElementById('tm_chat_menu_btn').style.display = (!tmShoutChat(key) && chat.type != 'cameras' && tmWho()) ? '' : 'none';
 		document.getElementById('tm_chat_menu').classList.remove('tg-show');
 		document.getElementById('tm_status').textContent = '';
 		tmRender(true);
@@ -1237,6 +1262,7 @@
 		var nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
 		var chat = tmChat(tmCurrent);
 		if (!chat) return;
+		if (chat.type == 'cameras') { tmRenderCameras(chat); return; }
 		var items = tmMessages(tmCurrent);
 		// включённые видео и звук переживают перерисовку: их элементы переносятся в новую переписку как есть
 		// (перенос в том же шаге не останавливает воспроизведение); остальное строится заново
@@ -1354,6 +1380,12 @@
 				}
 				img.addEventListener('click', function () { tmViewer('image', m.image, 0, false, m); });
 				div.appendChild(img);
+			}
+			if (m.stream) {
+				// камера go2rtc, показанная сообщением: нажатие — открыть её (если она видна этому устройству)
+				var camBadge = tmEl('div', 'tg-cam-badge', '📹 ' + m.stream);
+				camBadge.addEventListener('click', function (e) { e.stopPropagation(); if (tmCamVisible(m.stream)) tmCamOpen(m.stream); });
+				div.appendChild(camBadge);
 			}
 			if (m.video) {
 				var keptVideo = keep['v:' + (m.kind || '') + ':' + m.id];
@@ -1705,17 +1737,19 @@
 
 	// Переслать: окно выбора чата. Сюда нельзя: чаты только для чтения; в общий чат и его комнаты — только текст
 	// tmFwdList — пересылаемые сообщения (несколько — фото одним сообщением); tmFwdMsg — первое из них
-	var tmFwdModal = document.getElementById('tm_fwd_modal'), tmFwdMsg = null, tmFwdList = [];
-	function tmForwardClose() { tmFwdModal.classList.remove('tg-show'); tmFwdMsg = null; tmFwdList = []; }
+	// tmFwdCam — окно выбора чата для камеры: {action: 'cam_show'|'cam_photo', name}
+	var tmFwdModal = document.getElementById('tm_fwd_modal'), tmFwdMsg = null, tmFwdList = [], tmFwdCam = null;
+	function tmForwardClose() { tmFwdModal.classList.remove('tg-show'); tmFwdMsg = null; tmFwdList = []; tmFwdCam = null; }
 	function tmForwardList() {
 		var box = document.getElementById('tm_fwd_list');
 		var q = document.getElementById('tm_fwd_search').value.trim().toLowerCase();
 		var m = tmFwdMsg;
 		if (!m) return;
-		var media = !!(m.image || m.sound || m.video || m.file);
+		// камера: «Показать на…» / «Снимок в чат» — чаты терминалов (общий чат MajorDoMo — только текст)
+		var media = tmFwdCam ? true : !!(m.image || m.sound || m.video || m.file);
 		box.innerHTML = '';
 		tmChats.forEach(function (c) {
-			if (c.readonly) return;
+			if (c.readonly || c.type == 'cameras') return;
 			if (q && (c.title || '').toLowerCase().indexOf(q) < 0) return;
 			var blocked = !!(c.text_only && (media || !m.text));
 			var row = tmEl('div', 'tg-chat' + (blocked ? ' tg-disabled' : ''));
@@ -1734,6 +1768,9 @@
 		if (!tmWho()) { alert(tmText.chooseThis); return; }
 		tmFwdMsg = m;
 		tmFwdList = (list && list.length) ? list.slice() : [m];
+		tmFwdCam = null;
+		document.getElementById('tm_fwd_title').textContent = tmText.forward;
+		document.getElementById('tm_fwd_duration_box').style.display = 'none';
 		document.getElementById('tm_fwd_search').value = '';
 		document.getElementById('tm_fwd_status').textContent = '';
 		tmForwardList();
@@ -1741,6 +1778,21 @@
 	}
 	function tmForwardTo(key) {
 		var list = tmFwdList.slice(), status = document.getElementById('tm_fwd_status');
+		if (tmFwdCam) {
+			// камера: показать на терминалах чата или снимок в чат
+			var cam = tmFwdCam;
+			status.textContent = tmText.sending;
+			tmGroupPost({mode: cam.action, name: cam.name, chat: key, duration: document.getElementById('tm_fwd_duration').value}, function (res) {
+				if (!res.sent) {
+					status.textContent = res.error == 'no_access' ? tmText.camNoAccess : (res.error == 'camera' ? tmText.camFailed : tmText.notSent);
+					return;
+				}
+				tmForwardClose();
+				tmViewerDone();
+				tmRefresh(function () { tmOpen(res.chat || key); });
+			});
+			return;
+		}
 		if (!list.length) return;
 		var done = 0, voice = document.getElementById('tm_voice_value').value;
 		// по одному, по порядку
@@ -2137,6 +2189,180 @@
 	// Просмотр картинки или видео на весь экран чата (kind: image | video; видео — с места at).
 	// «Назад» телефона, ✕, Escape или нажатие на фон закрывают; ⤓ — открыть файл; ⛶ — на весь экран устройства
 	var tmViewerEl = document.getElementById('tm_viewer');
+	// «Камеры» (go2rtc): сетка снимков, просмотр (дома — живое видео WebRTC, согласование через сервер;
+	// иначе — снимок, обновляется раз в 2 с), показ на терминалах, снимок в чат, ссылка для просмотра снаружи
+	var tmCamTimer = null, tmCamPc = null, tmCamName = '', tmCamSnap = null;
+	function tmCamFrameUrl(name, w) { return tmUrl('ajax=1&mode=cam_frame&name=' + encodeURIComponent(name) + '&w=' + w + '&t=' + Date.now()); }
+	function tmCamVisible(name) {
+		var chat = tmChat('cameras');
+		return !!(chat && (chat.cameras || []).some(function (c) { return c.name == name; }));
+	}
+	function tmFmtClock(ts) { var d = new Date(ts * 1000); return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
+	// картинку менять, только когда новый снимок загрузился (без мигания)
+	function tmCamRefreshImg(img, url) {
+		var next = new Image();
+		next.onload = function () { img.src = next.src; };
+		next.src = url;
+	}
+	function tmRenderCameras(chat) {
+		var box = document.getElementById('tm_list');
+		box.innerHTML = '';
+		var grid = tmEl('div', 'tg-cams');
+		(chat.cameras || []).forEach(function (c) {
+			var card = tmEl('div', 'tg-cam');
+			var img = document.createElement('img');
+			img.alt = '';
+			// снимок ставится, когда загрузился: пока камера просыпается — чёрная карточка, а не значок ошибки
+			tmCamRefreshImg(img, tmCamFrameUrl(c.name, 480));
+			img.setAttribute('data-cam', c.name);
+			card.appendChild(img);
+			card.appendChild(tmEl('div', 'tg-cam-name', c.name));
+			if (c.shared && c.shared * 1000 > Date.now()) card.appendChild(tmEl('div', 'tg-cam-share', '🔗 ' + tmFmtClock(c.shared)));
+			card.addEventListener('click', function () { tmCamOpen(c.name); });
+			grid.appendChild(card);
+		});
+		box.appendChild(grid);
+		box.scrollTop = 0;
+		// снимки обновляются, пока открыт этот чат и страница на экране
+		clearInterval(tmCamTimer);
+		tmCamTimer = setInterval(function () {
+			if (tmCurrent != 'cameras' || !document.getElementById('tm_list').contains(grid)) { clearInterval(tmCamTimer); return; }
+			if (document.visibilityState && document.visibilityState != 'visible') return;
+			if (tmViewerEl.classList.contains('tg-show')) return;
+			Array.prototype.forEach.call(grid.querySelectorAll('img[data-cam]'), function (img) {
+				tmCamRefreshImg(img, tmCamFrameUrl(img.getAttribute('data-cam'), 480));
+			});
+		}, 4000);
+	}
+	// живое видео: WebRTC (WHEP) — предложение уходит на сервер, сервер спрашивает go2rtc; видео идёт с go2rtc
+	// напрямую. Не вышло за 8 с (вне дома, нет порта 8555, кодек) — onFail
+	function tmCamLive(name, video, onFail) {
+		if (!window.RTCPeerConnection) { onFail(); return null; }
+		var pc = new RTCPeerConnection({iceServers: []}), failed = false;
+		var fail = function () { if (failed) return; failed = true; try { pc.close(); } catch (e) {} onFail(); };
+		pc.addTransceiver('video', {direction: 'recvonly'});
+		pc.addTransceiver('audio', {direction: 'recvonly'});
+		pc.ontrack = function (e) { if (!video.srcObject) video.srcObject = e.streams[0] || new MediaStream([e.track]); };
+		pc.createOffer().then(function (offer) { return pc.setLocalDescription(offer); })
+			.then(function () {
+				// кандидаты — сразу в предложении (без отдельной досылки): ждём их до 2 с
+				return new Promise(function (ok) {
+					if (pc.iceGatheringState == 'complete') { ok(); return; }
+					var t = setTimeout(ok, 2000);
+					pc.addEventListener('icegatheringstatechange', function () { if (pc.iceGatheringState == 'complete') { clearTimeout(t); ok(); } });
+				});
+			})
+			.then(function () {
+				return fetch(tmUrl('ajax=1&mode=whep&src=' + encodeURIComponent(name)),
+					{method: 'POST', body: pc.localDescription.sdp, headers: {'Content-Type': 'application/sdp'}, credentials: 'same-origin'});
+			})
+			.then(function (r) { if (!r.ok) throw new Error('whep'); return r.text(); })
+			.then(function (sdp) { return pc.setRemoteDescription({type: 'answer', sdp: sdp}); })
+			.catch(fail);
+		setTimeout(function () { if (!failed && video.readyState < 2) fail(); }, 8000);
+		return pc;
+	}
+	function tmCamStop() {
+		clearInterval(tmCamSnap);
+		tmCamSnap = null;
+		if (tmCamPc) { try { tmCamPc.close(); } catch (e) {} tmCamPc = null; }
+		tmCamName = '';
+	}
+	function tmCamNote(content) {
+		var old = document.querySelector('#tm_viewer .tg-cam-note');
+		if (old) old.parentNode.removeChild(old);
+		if (!content) return;
+		var note = tmEl('div', 'tg-cam-note');
+		if (typeof content == 'string') note.textContent = content; else note.appendChild(content);
+		document.getElementById('tm_viewer_body').parentNode.appendChild(note);
+	}
+	function tmCamOpen(name) {
+		var chat = tmChat('cameras');
+		tmGallery = [];
+		tmGalleryAt = -1;
+		tmCamStop();
+		tmCamName = name;
+		var body = document.getElementById('tm_viewer_body');
+		body.innerHTML = '';
+		var video = document.createElement('video');
+		video.autoplay = true;
+		video.muted = true;
+		video.controls = true;
+		video.setAttribute('playsinline', '');
+		var img = document.createElement('img');
+		img.alt = '';
+		img.draggable = false;
+		tmCamRefreshImg(img, tmCamFrameUrl(name, 1280));
+		video.style.display = 'none';
+		body.appendChild(img);
+		body.appendChild(video);
+		var count = document.getElementById('tm_viewer_count');
+		count.textContent = name + ' · ' + tmText.camSnapshot;
+		// пока нет живого видео — снимок раз в 2 с
+		tmCamSnap = setInterval(function () { if (tmCamName == name && img.style.display != 'none') tmCamRefreshImg(img, tmCamFrameUrl(name, 1280)); }, 2000);
+		video.addEventListener('playing', function () {
+			if (tmCamName != name) return;
+			img.style.display = 'none';
+			video.style.display = '';
+			count.textContent = name + ' · ' + tmText.camLive;
+		});
+		tmCamPc = tmCamLive(name, video, function () { if (tmCamName == name) tmCamPc = null; });
+		document.getElementById('tm_viewer_open').style.display = 'none';
+		document.getElementById('tm_viewer_fwd').style.display = 'none';
+		document.getElementById('tm_viewer_prev').hidden = true;
+		document.getElementById('tm_viewer_next').hidden = true;
+		document.getElementById('tm_viewer_full').style.display = (tmViewerEl.requestFullscreen || tmViewerEl.webkitRequestFullscreen) && (document.fullscreenEnabled || document.webkitFullscreenEnabled) ? '' : 'none';
+		document.getElementById('tm_viewer_cam_show').style.display = '';
+		document.getElementById('tm_viewer_cam_photo').style.display = '';
+		document.getElementById('tm_viewer_cam_share').style.display = (chat && chat.webtorrent) ? '' : 'none';
+		tmCamNote('');
+		tmViewerEl.classList.add('tg-show');
+		if (!tmViewHistory && window.history && history.pushState) {
+			try { history.pushState({tmView: 1}, document.title, location.href); tmViewHistory = true; } catch (e) {}
+		}
+	}
+	// выбор чата для камеры: показать на терминалах чата / снимок в чат
+	function tmCamPick(action) {
+		if (!tmCamName) return;
+		tmFwdMsg = {image: '1'};
+		tmFwdList = [];
+		tmFwdCam = {action: action, name: tmCamName};
+		document.getElementById('tm_fwd_title').textContent = action == 'cam_show' ? tmText.camShow : tmText.camPhoto;
+		document.getElementById('tm_fwd_duration_box').style.display = action == 'cam_show' ? '' : 'none';
+		document.getElementById('tm_fwd_search').value = '';
+		document.getElementById('tm_fwd_status').textContent = '';
+		tmForwardList();
+		tmFwdModal.classList.add('tg-show');
+	}
+	document.getElementById('tm_viewer_cam_show').addEventListener('click', function () { tmCamPick('cam_show'); });
+	document.getElementById('tm_viewer_cam_photo').addEventListener('click', function () { tmCamPick('cam_photo'); });
+	// ссылка для просмотра снаружи (WebTorrent): создать или продлить, скопировать; «Закрыть ссылку» — у всех
+	document.getElementById('tm_viewer_cam_share').addEventListener('click', function () {
+		var name = tmCamName;
+		if (!name) return;
+		tmGroupPost({mode: 'cam_share', name: name}, function (res) {
+			if (!res.ok || !res.url) { tmCamNote(tmText.camFailed); return; }
+			if (navigator.clipboard) navigator.clipboard.writeText(res.url).catch(function () {});
+			var wrap = document.createElement('span');
+			wrap.appendChild(document.createTextNode(tmText.camCopied.replace('%s', tmFmtClock(res.expires)) + ' '));
+			var a = document.createElement('a');
+			a.href = res.url;
+			a.target = '_blank';
+			a.rel = 'noopener';
+			a.textContent = res.url;
+			wrap.appendChild(a);
+			var close = document.createElement('button');
+			close.type = 'button';
+			close.textContent = tmText.camUnshare;
+			close.addEventListener('click', function () {
+				tmGroupPost({mode: 'cam_unshare', name: name}, function () { tmCamNote(''); tmRefresh(); });
+			});
+			wrap.appendChild(close);
+			tmCamNote(wrap);
+			tmRefresh();
+		});
+	});
+
 	// Фото — с листанием по всем фото открытого чата (msg — сообщение снимка: по нему место в списке и «Переслать»)
 	var tmGallery = [], tmGalleryAt = -1;
 	function tmViewer(kind, src, at, play, msg) {
@@ -2195,6 +2421,8 @@
 		document.getElementById('tm_viewer_next').hidden = !many || tmGalleryAt >= tmGallery.length - 1;
 		var cur = tmGallery[tmGalleryAt];
 		document.getElementById('tm_viewer_fwd').style.display = (kind == 'image' && cur && cur.id) ? '' : 'none';
+		['tm_viewer_cam_show', 'tm_viewer_cam_photo', 'tm_viewer_cam_share'].forEach(function (id) { document.getElementById(id).style.display = 'none'; });
+		document.getElementById('tm_viewer_open').style.display = '';
 	}
 	document.getElementById('tm_viewer_prev').addEventListener('click', function () { tmViewerGo(-1); });
 	document.getElementById('tm_viewer_next').addEventListener('click', function () { tmViewerGo(1); });
@@ -2227,6 +2455,7 @@
 	});
 	function tmViewerClose() {
 		if (!tmViewerEl.classList.contains('tg-show')) return;
+		tmCamStop();
 		if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(function () {});
 		tmViewerEl.classList.remove('tg-show');
 		document.getElementById('tm_viewer_body').innerHTML = '';
