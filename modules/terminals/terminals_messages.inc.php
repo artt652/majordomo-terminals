@@ -4,7 +4,8 @@
  * Открывается на устройстве-терминале как приложение app_messages: /popup/app_messages.html
  * (или /module/terminals.html), на странице меню — [#module name="terminals" action="messages"#].
  *
- * Отправитель — терминал, с которого открыта страница: по ключу, из панели управления или как прежде (ниже).
+ * Отправитель — терминал, с которого открыта страница (по ключу, из панели управления или как прежде), и (или)
+ * пользователь MajorDoMo (ключ пользователя или вход на сайт); без терминала — от пользователя (ниже).
  * Чаты как в мессенджере: «Все терминалы», комнаты MajorDoMo (терминал, привязанный к комнате,
  * сам состоит в её чате), свои группы терминалов и личные чаты с каждым терминалом.
  * Можно отправить текст (с озвучкой на терминале-получателе или без), фото, видео, музыку, файл
@@ -49,7 +50,8 @@ $max_media = $limit(15 * 1024 * 1024);
 $max_file = $limit(50 * 1024 * 1024);
 $upload_error = '';
 
-// Терминал этого устройства.
+// Кто открыл страницу: терминал этого устройства и (или) пользователь MajorDoMo.
+// Терминал:
 // 1) Ключ (terminals_auth.inc.php): ?token=… (ссылка из карточки терминала, API) или cookie tmmsg_key —
 //    страница открывается как терминал ключа, с любого адреса; адрес, сессия, ?terminal= и from= не смотрятся.
 // 2) Вход в панель управления в этом браузере (AUTHORIZED в общей сессии ядра, modules/panel.class.php) —
@@ -58,35 +60,66 @@ $upload_error = '';
 //    устройства; не узнан — выбирается на странице. Терминал с галочкой «Только по ключу» так не открывается
 //    и в выборе его нет — это закрывает подмену по адресу (обратный прокси), сессии и ?terminal=.
 // Затем «Контроль доступа» (правила безопасности) своего терминала: не пускает — страница закрыта.
+// Пользователь — пишет от своего имени:
+// 1) ключ пользователя (настройки «Сообщений»): ?token=… или cookie tmmsg_user;
+// 2) вход на сайт MajorDoMo в этом браузере (SITE_USER_ID) — если у пользователя есть пароль
+//    или открыта панель управления (без пароля ядро входит пользователем само, это ничего не доказывает).
+// Пользователь узнан, а терминал — нет (или он «Только по ключу», или закрыт правилами): страница открывается
+// от пользователя, без терминала — его личные чаты, группы, комнаты, чаты MajorDoMo.
 $me = array();
+$me_user = array();
 $by_key = false;
+$user_by_key = false;
 $as_admin = false;
 $lock = '';
-$key = trim((string)gr('token'));
-$key_from_url = ($key != '');
-if (!$key_from_url && !empty($_COOKIE['tmmsg_key'])) {
-    $key = (string)$_COOKIE['tmmsg_key'];
-}
-if ($key != '') {
-    $me = terminalsTokenFind($key);
+$url_key = strtolower(trim((string)gr('token')));
+$terminal_cookie = !empty($_COOKIE['tmmsg_key']) ? (string)$_COOKIE['tmmsg_key'] : '';
+$user_cookie = !empty($_COOKIE['tmmsg_user']) ? (string)$_COOKIE['tmmsg_user'] : '';
+if ($url_key != '') {
+    // ссылка с ключом терминала или пользователя: ключ — в свою cookie
+    $me = terminalsTokenFind($url_key);
     if (!empty($me['ID'])) {
         $by_key = true;
-        if ($key_from_url) {
-            terminalsTokenCookie(strtolower($key));
-            // страница по ссылке с ключом: ключ — в cookie, из адресной строки и истории — убрать
-            if (!gr('ajax') && gr('mode') == '' && !headers_sent()) {
-                $query = $_GET;
-                unset($query['token']);
-                $uri = strtok((string)$_SERVER['REQUEST_URI'], '?');
-                header('Location: ' . $uri . (count($query) ? '?' . http_build_query($query) : ''));
-                exit;
-            }
-        }
-    } elseif ($key_from_url) {
-        $lock = 'bad_key';
+        terminalsTokenCookie($url_key);
     } else {
-        // ключ в cookie больше не действует (пересоздан, терминал удалён): убрать, дальше — как без ключа
+        $me_user = terminalsUserTokenFind($url_key);
+        if (!empty($me_user['ID'])) {
+            $user_by_key = true;
+            terminalsTokenCookie($url_key, 'tmmsg_user');
+        } else {
+            $lock = 'bad_key';
+        }
+    }
+    // страница по ссылке с ключом: ключ — в cookie, из адресной строки и истории — убрать
+    if ($lock == '' && !gr('ajax') && gr('mode') == '' && !headers_sent()) {
+        $query = $_GET;
+        unset($query['token']);
+        $uri = strtok((string)$_SERVER['REQUEST_URI'], '?');
+        header('Location: ' . $uri . (count($query) ? '?' . http_build_query($query) : ''));
+        exit;
+    }
+}
+// ключ в cookie больше не действует (пересоздан, терминал или пользователь удалён): убрать, дальше — как без ключа
+if (!$by_key && $lock == '' && $terminal_cookie != '') {
+    $me = terminalsTokenFind($terminal_cookie);
+    if (!empty($me['ID'])) {
+        $by_key = true;
+    } else {
         terminalsTokenCookie('');
+    }
+}
+if (!$user_by_key && $lock == '' && $user_cookie != '') {
+    $me_user = terminalsUserTokenFind($user_cookie);
+    if (!empty($me_user['ID'])) {
+        $user_by_key = true;
+    } else {
+        terminalsTokenCookie('', 'tmmsg_user');
+    }
+}
+if (empty($me_user['ID']) && $lock == '' && is_object($session) && !empty($session->data['SITE_USER_ID'])) {
+    $site_user = SQLSelectOne("SELECT * FROM users WHERE ID=" . (int)$session->data['SITE_USER_ID']);
+    if (!empty($site_user['ID']) && (terminalsUserHasPassword($site_user) || !empty($session->data['AUTHORIZED']))) {
+        $me_user = $site_user;
     }
 }
 if (!$by_key && $lock == '') {
@@ -111,43 +144,74 @@ if (!$by_key && $lock == '') {
             $me = !empty($list[0]['ID']) ? $list[0] : SQLSelectOne("SELECT * FROM terminals ORDER BY ID LIMIT 1");
         }
     } elseif (!empty($found['ID']) && terminalsTokenRequired($found['ID'])) {
-        $lock = 'need_key';
+        // без ключа этот терминал не открывается: пользователь — без терминала, иначе страница закрыта
+        if (empty($me_user['ID'])) {
+            $lock = 'need_key';
+        }
     } else {
         $me = $found;
     }
 }
-// Правила безопасности ядра смотрят терминал в сессии: на время запроса в ней — этот терминал.
-// Вход по ключу записывается в сессию насовсем (правила ядра на этом устройстве видят проверенный
-// терминал); иначе сессия в конце запроса возвращается как была
-$session_terminal = (is_object($session) && isset($session->data['TERMINAL'])) ? $session->data['TERMINAL'] : null;
-$finish_session = function () use (&$session, &$by_key, $session_terminal) {
+// Правила безопасности ядра смотрят терминал и пользователя в сессии: на время запроса в ней — эти.
+// Вход по ключу терминала записывается в сессию насовсем (правила ядра на этом устройстве видят проверенный
+// терминал); иначе сессия в конце запроса возвращается как была. Ключ пользователя на сайт не входит:
+// пользователь в сессии — только на время запроса
+$session_saved = array();
+foreach (array('TERMINAL', 'SITE_USER_ID', 'SITE_USERNAME') as $k) {
+    $session_saved[$k] = (is_object($session) && isset($session->data[$k])) ? $session->data[$k] : null;
+}
+$restore_user = function () use (&$session, $session_saved) {
+    foreach (array('SITE_USER_ID', 'SITE_USERNAME') as $k) {
+        if ($session_saved[$k] === null) {
+            unset($session->data[$k]);
+        } else {
+            $session->data[$k] = $session_saved[$k];
+        }
+    }
+};
+$finish_session = function () use (&$session, &$by_key, &$user_by_key, $session_saved, $restore_user) {
     if (!is_object($session)) {
         return;
     }
     if (!$by_key) {
-        if ($session_terminal === null) {
+        if ($session_saved['TERMINAL'] === null) {
             unset($session->data['TERMINAL'], $session->data['TERMINAL_ID']);
         } else {
-            $session->data['TERMINAL'] = $session_terminal;
+            $session->data['TERMINAL'] = $session_saved['TERMINAL'];
         }
+    }
+    if ($user_by_key) {
+        $restore_user();
     }
     if (method_exists($session, 'save')) {
         $session->save();
     }
 };
+if ($user_by_key && is_object($session)) {
+    $session->data['SITE_USER_ID'] = (int)$me_user['ID'];
+    $session->data['SITE_USERNAME'] = $me_user['USERNAME'];
+}
 if (!empty($me['ID']) && is_object($session)) {
     $session->data['TERMINAL'] = $me['NAME'];
     unset($session->data['TERMINAL_ID']);
     if (function_exists('checkAccess') && !checkAccess('terminal', $me['ID'])) {
+        // терминал закрыт правилами: пользователь — без терминала, иначе страница закрыта
         $me = array();
         $by_key = false;
-        $lock = 'rules';
+        $as_admin = false;
+        if (empty($me_user['ID'])) {
+            $lock = 'rules';
+        }
     }
 }
-// выход с устройства: ключ из cookie — убрать; дальше страница узнаёт терминал как без ключа
+// выход с устройства (who=user — пользователя): ключ из cookie — убрать; дальше страница узнаёт как без ключа
 if (gr('mode') == 'logout') {
-    terminalsTokenCookie('');
-    $by_key = false;
+    if (gr('who') == 'user') {
+        terminalsTokenCookie('', 'tmmsg_user');
+    } else {
+        terminalsTokenCookie('');
+        $by_key = false;
+    }
     $finish_session();
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode(array('ok' => 1));
@@ -172,6 +236,8 @@ if ($lock != '') {
         $out[$k] = '{}';
     }
     $out['USER_NAME_JSON'] = '""';
+    $out['ME_USER_KEY'] = '';
+    $out['USER_BY_KEY'] = 0;
     $out['WS_EXTERNAL_JSON'] = '""';
     $out['WS_PORT'] = '';
     $out['MAX_MEDIA_MB'] = 15;
@@ -251,9 +317,9 @@ $id_names = array();
 foreach (SQLSelect("SELECT ID, NAME FROM terminals") as $t) {
     $id_names[(int)$t['ID']] = $t['NAME'];
 }
-// пользователь MajorDoMo, вошедший на сайт с этого устройства: пишет от своего имени (как в общем чате);
-// его личные сообщения (TO_USER) видны на любой странице, где он вошёл
-$user_id = (is_object($session) && !empty($session->data['SITE_USER_ID'])) ? (int)$session->data['SITE_USER_ID'] : 0;
+// пользователь MajorDoMo (по ключу или вход на сайт, см. выше): пишет от своего имени (как в общем чате);
+// его личные сообщения (TO_USER) видны на любой странице, где он узнан
+$user_id = !empty($me_user['ID']) ? (int)$me_user['ID'] : 0;
 // пользователи MajorDoMo: ID => запись (имя, цвет, аватар) — личные чаты и участники групп (user:ID)
 $all_users = array();
 foreach (SQLSelect("SELECT ID, NAME, USERNAME, COLOR, AVATAR FROM users ORDER BY NAME") as $u) {
@@ -263,9 +329,26 @@ if (!isset($all_users[$user_id])) {
     $user_id = 0;
 }
 $me_user_key = $user_id ? 'user:' . $user_id : '';
-// строки, адресованные мне (терминалу или вошедшему пользователю) и отправленные мной
-$to_me_sql = "(TO_ID=$me_id" . ($user_id ? " OR TO_USER=$user_id" : '') . ")";
-$from_me_sql = "((FROM_ID=$me_id AND FROM_USER=0)" . ($user_id ? " OR FROM_USER=$user_id" : '') . ")";
+// строки, адресованные мне (терминалу или пользователю) и отправленные мной; нет ни того, ни другого — ничьи
+$to_me = array();
+$from_me = array();
+if ($me_id) {
+    $to_me[] = "TO_ID=$me_id";
+    $from_me[] = "(FROM_ID=$me_id AND FROM_USER=0)";
+}
+if ($user_id) {
+    $to_me[] = "TO_USER=$user_id";
+    $from_me[] = "FROM_USER=$user_id";
+}
+$to_me_sql = count($to_me) ? '(' . implode(' OR ', $to_me) . ')' : '0';
+$from_me_sql = count($from_me) ? '(' . implode(' OR ', $from_me) . ')' : '0';
+// страницу открыл кто-то: терминал или пользователь без терминала — можно писать и читать переписку
+$can_write = ($me_name != '' || $user_id);
+// свои ключи участника групп: терминал и пользователь
+$me_keys = array_values(array_filter(array($me_name, $me_user_key)));
+$is_member = function ($members) use ($me_keys) {
+    return count(array_intersect($me_keys, $members)) > 0;
+};
 $mine_sql = "(($to_me_sql AND HIDE_TO=0) OR ($from_me_sql AND HIDE_FROM=0))";
 $term_id = function ($name) use ($all_terminals) {
     return isset($all_terminals[$name]) ? (int)$all_terminals[$name]['ID'] : 0;
@@ -308,7 +391,7 @@ if (count($all_terminals) > 1 || $me_name == '') {
 // общий чат MajorDoMo (shoutbox): сообщение — команда дому, как из чата (say от пользователя),
 // ответ дома приходит сюда же и звучит на этом терминале
 $chats[] = array('key' => 'house', 'type' => 'house', 'title' => $computer_name, 'members' => array(),
-    'readonly' => ($user_id && $me_name != '') ? 0 : 1, 'text_only' => 1);
+    'readonly' => $user_id ? 0 : 1, 'text_only' => 1);
 // публичные комнаты чата MajorDoMo (shoutrooms): переписка людей, без команд и озвучки
 $shout_rooms = array();
 $has_rooms = SQLSelectOne("SHOW TABLES LIKE 'shoutrooms'");
@@ -320,7 +403,7 @@ foreach ($shout_rooms as $room) {
     // кто и когда создал комнату — для карточки
     $created = (!empty($room['ADDED']) && strtotime($room['ADDED']) > 0) ? date('d.m.Y', strtotime($room['ADDED'])) : '';
     $chats[] = array('key' => 'shout:' . $room['ID'], 'type' => 'shoutroom', 'title' => $room['TITLE'], 'members' => array(),
-        'readonly' => ($user_id && $me_name != '') ? 0 : 1, 'text_only' => 1,
+        'readonly' => $user_id ? 0 : 1, 'text_only' => 1,
         'created_by' => (string)$room['USER_NAME'], 'created' => $created);
 }
 // комнаты, к которым привязаны терминалы: участники — терминалы комнаты
@@ -337,10 +420,10 @@ foreach ($rooms as $room) {
     $chats[] = array('key' => 'room:' . $room['ID'], 'type' => 'room', 'title' => $room['TITLE'], 'members' => $members,
         'readonly' => $empty, 'empty' => $empty);
 }
-// свои группы: видны участникам (если терминал не определился — все)
+// свои группы: видны участникам (терминалу или пользователю; если никто не узнан — все)
 foreach (SQLSelect("SELECT * FROM terminals_groups ORDER BY TITLE") as $group) {
     $members = $group_members($group);
-    if ($me_name == '' || in_array($me_name, $members, true) || ($me_user_key != '' && in_array($me_user_key, $members, true))) {
+    if (!$can_write || $is_member($members)) {
         $chats[] = array('key' => 'group:' . $group['ID'], 'type' => 'group', 'title' => $group['TITLE'], 'members' => $members,
             'note' => (isset($group['NOTE']) && is_string(json_decode($group['NOTE'], true))) ? json_decode($group['NOTE'], true) : '');
     }
@@ -360,7 +443,7 @@ foreach ($all_users as $uid => $u) {
 }
 // «Система»: личные сообщения не от терминала (сценарий, карточка терминала без отправителя или с текстом
 // вместо терминала) — только чтение; есть, только если такие сообщения есть
-if ($me_id) {
+if ($can_write) {
     $system = SQLSelectOne("SELECT ID FROM terminals_messages WHERE CHAT='' AND $to_me_sql AND FROM_ID=0 AND FROM_USER=0 AND HIDE_TO=0 LIMIT 1");
     if (!empty($system['ID'])) {
         $chats[] = array('key' => 'system', 'type' => 'system', 'title' => terminalsLang('TERMINALS_SYSTEM_CHAT'), 'members' => array(),
@@ -425,7 +508,7 @@ $json_out = function ($data) use ($finish_session) {
 if (gr('mode') == 'set_color') {
     $key = (string)gr('chat');
     $ok = 0;
-    if ($find_chat($key) || $key == 'term:' . $me_name) {
+    if ($find_chat($key) || $key == 'term:' . $me_name || ($me_user_key != '' && $key == $me_user_key)) {
         $row = SQLSelectOne("SELECT * FROM terminals_colors WHERE CHAT_KEY='" . DBSafe($key) . "'");
         if (empty($row['ID'])) {
             $row = array('CHAT_KEY' => $key, 'COLOR' => '', 'EMOJI' => '');
@@ -466,13 +549,14 @@ if (gr('ajax') && gr('info') != '') {
     $json_out(!empty($terminal_rec['ID']) ? terminalsInfo($terminal_rec) : array());
 }
 
-// своя группа: создать или изменить (название, участники); этот терминал всегда в группе
-if (gr('mode') == 'group_save' && $me_name != '') {
+// своя группа: создать или изменить (название, участники); этот терминал (без терминала — пользователь)
+// всегда в группе
+if (gr('mode') == 'group_save' && $can_write) {
     $id = gr('id', 'int');
     $title = trim((string)gr('title'));
     $members = gr('members');
     $members = is_array($members) ? $members : array();
-    $members[] = $me_name;
+    $members[] = ($me_name != '') ? $me_name : $me_user_key;
     $list = array();
     foreach ($members as $name) {
         if ($member_ok($name) && !in_array($name, $list, true)) {
@@ -482,7 +566,7 @@ if (gr('mode') == 'group_save' && $me_name != '') {
     $result = array('ok' => 0);
     if ($title != '' && count($list) > 1) {
         $group = $id ? SQLSelectOne("SELECT * FROM terminals_groups WHERE ID=" . (int)$id) : array();
-        if ($id && (empty($group['ID']) || !in_array($me_name, $group_members($group), true))) {
+        if ($id && (empty($group['ID']) || !$is_member($group_members($group)))) {
             $json_out($result);
         }
         $group['TITLE'] = $title;
@@ -505,25 +589,29 @@ if (gr('mode') == 'group_save' && $me_name != '') {
 }
 
 // своя группа: удалить (может любой участник); её сообщения больше не показываются
-if (gr('mode') == 'group_delete' && $me_name != '') {
+if (gr('mode') == 'group_delete' && $can_write) {
     $group = SQLSelectOne("SELECT * FROM terminals_groups WHERE ID=" . gr('id', 'int'));
     $ok = 0;
-    if (!empty($group['ID']) && in_array($me_name, $group_members($group), true)) {
+    if (!empty($group['ID']) && $is_member($group_members($group))) {
         SQLExec("DELETE FROM terminals_groups WHERE ID=" . (int)$group['ID']);
         $ok = 1;
     }
     $json_out(array('ok' => $ok));
 }
 
-// общий чат MajorDoMo и его комнаты: только текст, от пользователя, вошедшего на сайт. Возвращает 1 — записано
-$send_to_shouts = function ($chat, $text) use ($user_id, $me, $me_name, &$session, $peek, $by_key) {
+// общий чат MajorDoMo и его комнаты: только текст, от пользователя. Возвращает 1 — записано.
+// Без терминала — как shoutbox без терминала (source «terminal»): ответ дома — по правилам ядра (sayReply)
+$send_to_shouts = function ($chat, $text) use ($user_id, $me, $me_name, &$session, $peek, $by_key, $user_by_key, $restore_user) {
     $text = trim((string)$text);
-    if ($text == '' || !$user_id || $me_name == '') {
+    if ($text == '' || !$user_id) {
         return 0;
     }
     // shouts в utf8: 4-байтовые символы (эмодзи) таблица не принимает
     $text = preg_replace('/[\x{10000}-\x{10FFFF}]/u', '?', $text);
-    if ($chat['type'] == 'house') {
+    $source = 'terminal' . ($me_name != '' ? $me['ID'] : '');
+    if ($chat['type'] == 'house' && $me_name == '') {
+        say(htmlspecialchars($text), 0, $user_id, $source);
+    } elseif ($chat['type'] == 'house') {
         // как shoutbox и command.php: отметить запрос терминала — по нему sayReply() находит,
         // куда отвечать, — и отдать команду дому от пользователя (source terminalID)
         $now = date('Y-m-d H:i:s');
@@ -541,6 +629,10 @@ $send_to_shouts = function ($chat, $text) use ($user_id, $me, $me_name, &$sessio
         if ($by_key && is_object($session)) {
             $session->data['TERMINAL'] = $me['NAME'];
             unset($session->data['TERMINAL_ID']);
+            if ($user_by_key) {
+                // ключ пользователя на сайт не входит: в сохраняемой сессии — прежний пользователь
+                $restore_user();
+            }
             if (method_exists($session, 'save')) {
                 $session->save();
             }
@@ -548,10 +640,10 @@ $send_to_shouts = function ($chat, $text) use ($user_id, $me, $me_name, &$sessio
                 session_write_close();
             }
         }
-        say(htmlspecialchars($text), 0, $user_id, 'terminal' . $me['ID']);
+        say(htmlspecialchars($text), 0, $user_id, $source);
     } else {
         $shout = array('MESSAGE' => htmlspecialchars($text), 'IMAGE' => '', 'ADDED' => date('Y-m-d H:i:s'),
-            'ROOM_ID' => (int)substr($chat['key'], 6), 'MEMBER_ID' => $user_id, 'SOURCE' => 'terminal' . $me['ID']);
+            'ROOM_ID' => (int)substr($chat['key'], 6), 'MEMBER_ID' => $user_id, 'SOURCE' => $source);
         SQLInsert('shouts', $shout);
     }
     return 1;
@@ -562,7 +654,7 @@ $send_to_shouts = function ($chat, $text) use ($user_id, $me, $me_name, &$sessio
 $send_to_terminals = function ($chat, $to, $text, $media, $voice, $forwarded = '') use ($me_name, $user_id) {
     $media = array_merge(array('image' => '', 'sound' => '', 'file' => '', 'file_name' => '', 'video' => '',
         'sound_duration' => 0, 'video_duration' => 0), (array)$media);
-    if ($me_name == '' || !count($to) || ($text == '' && $media['image'] == '' && $media['sound'] == '' && $media['file'] == '' && $media['video'] == '')) {
+    if (($me_name == '' && !$user_id) || !count($to) || ($text == '' && $media['image'] == '' && $media['sound'] == '' && $media['file'] == '' && $media['video'] == '')) {
         return 0;
     }
     $options = array(
@@ -628,7 +720,7 @@ if ($this->mode == 'send_message' || gr('mode') == 'send_message') {
 
 // переслать сообщение в другой чат: kind=msg (переписка терминалов, только своя) или shout (общий чат
 // и публичные комнаты); те же текст и вложения, «Переслано от …». В общий чат — только текст
-if (gr('mode') == 'forward' && $me_name != '') {
+if (gr('mode') == 'forward' && $can_write) {
     $chat = $find_chat((string)gr('chat'));
     $id = gr('id', 'int');
     $src = array();
@@ -683,10 +775,10 @@ if (gr('mode') == 'forward' && $me_name != '') {
 }
 
 // прочитано: получатель открыл чат на своей странице — его входящие в этом чате прочитаны (и доставлены)
-if (gr('mode') == 'mark_read' && $me_name != '' && $peek) {
+if (gr('mode') == 'mark_read' && $can_write && $peek) {
     $json_out(array('ok' => 1, 'read' => 0));
 }
-if (gr('mode') == 'mark_read' && $me_name != '') {
+if (gr('mode') == 'mark_read' && $can_write) {
     $key = (string)gr('chat');
     $cond = '';
     if (strpos($key, 'term:') === 0 || strpos($key, 'user:') === 0 || $key == 'system') {
@@ -715,7 +807,7 @@ if (gr('mode') == 'mark_read' && $me_name != '') {
 }
 
 // доставлено: страница получателя загрузила переписку
-if ($me_name != '' && !$peek) {
+if ($can_write && !$peek) {
     $rows = SQLSelect("SELECT ID FROM terminals_messages WHERE $to_me_sql AND DELIVERED=0");
     if (count($rows)) {
         $ids = array();
@@ -799,8 +891,9 @@ $build_messages = function ($rows, $limit) use ($me_id, $user_id, $id_names, $al
     return $conversation;
 };
 // общий чат MajorDoMo и публичные комнаты (shouts).
-// Свои — записанные с этого терминала (source terminalID) или его копии «всем» (source «terminal: Название»)
-$build_shouts = function ($rows, $chat_key) use ($me, $all_terminals, $computer_name) {
+// Свои — записанные с этого терминала (source terminalID) или его копии «всем» (source «terminal: Название»);
+// без терминала — записанные этим пользователем
+$build_shouts = function ($rows, $chat_key) use ($me, $user_id, $all_terminals, $computer_name) {
     $out_rows = array();
     foreach ($rows as $row) {
         $source = (string)$row['SOURCE'];
@@ -821,7 +914,8 @@ $build_shouts = function ($rows, $chat_key) use ($me, $all_terminals, $computer_
                 }
             }
         }
-        $mine = !empty($me['ID']) && ($source == 'terminal' . $me['ID'] || $source == 'terminal: ' . $me['TITLE']);
+        $mine = !empty($me['ID']) ? ($source == 'terminal' . $me['ID'] || $source == 'terminal: ' . $me['TITLE'])
+            : ($user_id && (int)$row['MEMBER_ID'] == $user_id && strpos($source, 'terminal: ') !== 0);
         $image = '';
         if ($row['IMAGE'] != '') {
             $path = (string)$row['IMAGE'];
@@ -874,7 +968,7 @@ $chat_sql = function ($chat) use ($mine_sql, $to_me_sql, $from_me_sql, $party_sq
 // «Очистить историю» чата (меню ⋮ в заголовке): у себя — сообщения скрываются для этого терминала
 // (у собеседников остаются); all=1 — из панели управления: удалить переписку чата у всех участников.
 // Общий чат MajorDoMo и его комнаты — не очищаются (их ведёт ядро)
-if (gr('ajax') && gr('mode') == 'clear_history' && $me_name != '') {
+if (gr('ajax') && gr('mode') == 'clear_history' && $can_write) {
     $chat = $find_chat((string)gr('chat'));
     if (empty($chat['key']) || $chat['type'] == 'house' || $chat['type'] == 'shoutroom') {
         $json_out(array('ok' => 0, 'error' => 'not_found'));
@@ -899,7 +993,7 @@ if (gr('ajax') && gr('mode') == 'clear_history' && $me_name != '') {
 }
 
 // «Показать раньше»: ещё сообщения одного чата до номера before
-if (gr('ajax') && gr('older') && $me_name != '') {
+if (gr('ajax') && gr('older') && $can_write) {
     $key = (string)gr('chat');
     $before = (int)gr('before');
     $chat = $find_chat($key);
@@ -920,7 +1014,7 @@ if (gr('ajax') && gr('older') && $me_name != '') {
 // последние сообщения всех чатов; more — у каких чатов могут быть более ранние ('*' — у всех чатов терминалов)
 $conversation = array();
 $more = array();
-if ($me_name != '') {
+if ($can_write) {
     $row_limit = $page_first * 5;
     $rows = SQLSelect("SELECT * FROM terminals_messages WHERE $mine_sql ORDER BY ID DESC LIMIT $row_limit");
     $conversation = $build_messages($rows, $page_first);
@@ -967,17 +1061,17 @@ foreach ($all_users as $uid => $u) {
     $titles['user:' . $uid] = ($u['NAME'] != '') ? $u['NAME'] : $u['USERNAME'];
 }
 $out['ME_USER_KEY'] = $me_user_key;
+$out['USER_BY_KEY'] = $user_by_key ? 1 : 0;
+// без терминала, от пользователя: в заголовке — он
+$out['USER_ONLY'] = ($me_name == '' && $user_id) ? 1 : 0;
+$out['USER_TITLE'] = $user_id ? htmlspecialchars($titles['user:' . $user_id], ENT_QUOTES, 'UTF-8') : '';
 $out['AVATARS_JSON'] = json_encode((object)$user_avatars, $flags);
 $out['TITLES_JSON'] = json_encode((object)$titles, $flags);
 $out['STATUS_JSON'] = json_encode((object)$statuses, $flags);
 $out['COLORS_JSON'] = json_encode((object)$colors, $flags);
 $out['EMOJIS_JSON'] = json_encode((object)$emojis, $flags);
-// кто вошёл на сайт с этого устройства — для карточки общего чата
-$user_name = '';
-if ($user_id) {
-    $user = SQLSelectOne("SELECT NAME, USERNAME FROM users WHERE ID=" . (int)$user_id);
-    $user_name = !empty($user['NAME']) ? $user['NAME'] : (isset($user['USERNAME']) ? $user['USERNAME'] : '');
-}
+// пользователь этой страницы — для карточки общего чата и заголовка без терминала
+$user_name = $user_id ? $titles['user:' . $user_id] : '';
 $out['USER_NAME_JSON'] = json_encode($user_name, $flags);
 // пределы размера для проверки в браузере до отправки (МБ)
 $out['MAX_MEDIA_MB'] = round($max_media / 1048576, 1);

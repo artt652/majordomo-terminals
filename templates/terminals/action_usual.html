@@ -283,9 +283,22 @@
 					[#endif AS_ADMIN#]
 				</div>
 				[#else ME_NAME#]
+				[#if USER_ONLY="1"#]
+				<!-- без терминала, от пользователя (ключ пользователя или вход на сайт): его аватарка и имя -->
+				<div class="tg-me">
+					<div class="tg-me tg-clickable" id="tm_me_title" title="<#LANG_TERMINALS_INFO#>">
+						<div class="tg-avatar" id="tm_me_avatar"></div>
+						<div class="tg-title">[#USER_TITLE#]</div>
+					</div>
+				</div>
+				[#else USER_ONLY#]
 				<div class="tg-title" id="tm_me_title"><#LANG_TERMINALS_MESSAGES#></div>
+				[#endif USER_ONLY#]
 				[#endif ME_NAME#]
 				[#if AS_ADMIN!="1"#]
+				[#if USER_ONLY="1"#]
+				<input type="hidden" id="tm_from" value="">
+				[#else USER_ONLY#]
 				[#if ME_NAME=""#]
 				<!-- терминал не узнан (без ключа, не из панели): выбрать на странице -->
 				<div class="tg-sub"><#LANG_TERMINALS_THIS_TERMINAL#>:
@@ -298,6 +311,7 @@
 				[#else ME_NAME#]
 				<input type="hidden" id="tm_from" value="[#ME_NAME#]">
 				[#endif ME_NAME#]
+				[#endif USER_ONLY#]
 				[#endif AS_ADMIN#]
 			</div>
 			<span class="tg-ws" id="tm_ws" title=""></span>
@@ -446,6 +460,7 @@
 	var tmMeUser = '[#ME_USER_KEY#]', tmUserAvatars = [#AVATARS_JSON#];
 	var tmChats = [#CHATS_JSON#];
 	var tmByKey = [#if BY_KEY="1"#]true[#else BY_KEY#]false[#endif BY_KEY#];
+	var tmUserByKey = [#if USER_BY_KEY="1"#]true[#else USER_BY_KEY#]false[#endif USER_BY_KEY#];
 	var tmTitles = [#TITLES_JSON#];
 	var tmStatus = [#STATUS_JSON#];
 	var tmColorsMap = [#COLORS_JSON#];
@@ -478,7 +493,8 @@
 		thisUser: '<#LANG_TERMINALS_THIS_USER#>', descUser: '<#LANG_TERMINALS_DESC_USER#>',
 		systemReadonly: '<#LANG_TERMINALS_SYSTEM_READONLY#>',
 		clearConfirm: '<#LANG_TERMINALS_CLEAR_HISTORY_CONFIRM#>', clearAllConfirm: '<#LANG_TERMINALS_CLEAR_HISTORY_ALL_CONFIRM#>', showEarlier: '<#LANG_TERMINALS_SHOW_EARLIER#>',
-		logout: '<#LANG_TERMINALS_LOGOUT#>', logoutConfirm: '<#LANG_TERMINALS_LOGOUT_CONFIRM#>', logoutNote: '<#LANG_TERMINALS_LOGOUT_NOTE#>', byDefault: '<#LANG_TERMINALS_BY_DEFAULT#>', tts: '<#LANG_TERMINALS_TTS#>',
+		logout: '<#LANG_TERMINALS_LOGOUT#>', logoutConfirm: '<#LANG_TERMINALS_LOGOUT_CONFIRM#>', logoutNote: '<#LANG_TERMINALS_LOGOUT_NOTE#>',
+		logoutUserConfirm: '<#LANG_TERMINALS_LOGOUT_USER_CONFIRM#>', logoutUserNote: '<#LANG_TERMINALS_LOGOUT_USER_NOTE#>', byDefault: '<#LANG_TERMINALS_BY_DEFAULT#>', tts: '<#LANG_TERMINALS_TTS#>',
 		player: '<#LANG_TERMINALS_PLAYER#>', noTts: '<#LANG_TERMINALS_NO_TTS#>', noPlayer: '<#LANG_TERMINALS_NO_PLAYER#>',
 		color: '<#LANG_TERMINALS_AVATAR_COLOR#>', resetColor: '<#LANG_TERMINALS_COLOR_DEFAULT#>',
 		loggedAs: '<#LANG_TERMINALS_LOGGED_AS#>', notLogged: '<#LANG_TERMINALS_NOT_LOGGED#>', loading: '<#LANG_TERMINALS_LOADING#>',
@@ -492,6 +508,8 @@
 	var tmMaxMedia = parseFloat('[#MAX_MEDIA_MB#]') || 15, tmMaxFile = parseFloat('[#MAX_FILE_MB#]') || 50;
 
 	function tmMe() { return document.getElementById('tm_from').value; }
+	// кто открыл страницу: терминал, без него — пользователь ('' — никто, терминал выбирается на странице)
+	function tmWho() { return tmMe() || tmMeUser; }
 
 	// Настройки страницы в браузере — в cookie: панель управления MajorDoMo (templates/panel.html)
 	// при каждом открытии вызывает localStorage.clear(), и тема, фон, масштаб, открытый чат и прочитанное
@@ -711,7 +729,7 @@
 	// общий чат и его комнаты — по последнему просмотренному в этом браузере
 	function tmShoutChat(key) { return key == 'house' || key.indexOf('shout:') === 0; }
 	function tmUnread(key) {
-		var read = parseInt(tmStore('read_' + tmMe() + '_' + key) || '0', 10), n = 0, shout = tmShoutChat(key);
+		var read = parseInt(tmStore('read_' + tmWho() + '_' + key) || '0', 10), n = 0, shout = tmShoutChat(key);
 		tmConversation.forEach(function (m) {
 			if (m.chat == key && m.incoming && (shout ? m.id > read : !m.read)) n++;
 		});
@@ -725,11 +743,11 @@
 		if (tmShoutChat(key)) {
 			var max = 0;
 			tmConversation.forEach(function (m) { if (m.chat == key && m.id > max) max = m.id; });
-			if (max) tmStore('read_' + tmMe() + '_' + key, String(max));
+			if (max) tmStore('read_' + tmWho() + '_' + key, String(max));
 			return;
 		}
 		var unread = tmConversation.filter(function (m) { return m.chat == key && m.incoming && !m.read; });
-		if (!unread.length || tmReadPending[key] || !tmMe()) return;
+		if (!unread.length || tmReadPending[key] || !tmWho()) return;
 		tmReadPending[key] = true;
 		tmGroupPost({mode: 'mark_read', chat: key}, function () {
 			unread.forEach(function (m) { m.read = 1; });
@@ -756,6 +774,7 @@
 	function tmMeAvatar() {
 		var el = document.getElementById('tm_me_avatar');
 		if (el && tmMe()) tmAvatar(el, {key: 'term:' + tmMe(), type: 'term', title: tmTitle(tmMe())});
+		else if (el && tmMeUser) tmAvatar(el, {key: tmMeUser, type: 'user', title: tmTitle(tmMeUser)});
 	}
 	// список чатов: с перепиской — по последнему сообщению, остальные — в исходном порядке
 	function tmRenderChats() {
@@ -855,7 +874,7 @@
 		if (!chat || !keep) tmApp.classList.toggle('tg-open', !!chat);
 		if (!chat) { tmRenderChats(); return; }
 		if (!keep) tmPushChat();
-		tmStore('chat_' + tmMe(), key);
+		tmStore('chat_' + tmWho(), key);
 		document.getElementById('tm_chat_value').value = key;
 		tmAvatar(document.getElementById('tm_chat_avatar'), chat);
 		document.getElementById('tm_chat_title').textContent = chat.title;
@@ -877,9 +896,9 @@
 		document.getElementById('tm_readonly').textContent = chat.type == 'system' ? tmText.systemReadonly : (chat.empty ? tmText.roomEmpty : tmText.login);
 		if (chat.text_only && tmRec) tmRecStop(null);
 		tmSendIcon();
-		document.getElementById('tm_edit_group').style.display = (chat.type == 'group' && tmMe()) ? '' : 'none';
+		document.getElementById('tm_edit_group').style.display = (chat.type == 'group' && tmWho()) ? '' : 'none';
 		// меню ⋮ — у чатов терминалов (общий чат MajorDoMo и его комнаты ведёт ядро)
-		document.getElementById('tm_chat_menu_btn').style.display = (!tmShoutChat(key) && tmMe()) ? '' : 'none';
+		document.getElementById('tm_chat_menu_btn').style.display = (!tmShoutChat(key) && tmWho()) ? '' : 'none';
 		document.getElementById('tm_chat_menu').classList.remove('tg-show');
 		document.getElementById('tm_status').textContent = '';
 		tmRender(true);
@@ -900,7 +919,7 @@
 			tmRenderChats();
 		} else {
 			// широкий экран: чат закрывается, справа — «Выберите чат»
-			tmStore('chat_' + tmMe(), '');
+			tmStore('chat_' + tmWho(), '');
 			tmOpen('');
 		}
 	}
@@ -1208,7 +1227,7 @@
 	}
 
 	function tmRefresh(then) {
-		if (!tmMe() || !window.fetch) return;
+		if (!tmWho() || !window.fetch) return;
 		fetch(tmUrl('ajax=1&list=1'), {credentials: 'same-origin'})
 			.then(function (r) { return r.json(); })
 			.then(function (res) {
@@ -1233,7 +1252,7 @@
 		e.preventDefault();
 		if (!window.fetch || !window.FormData) return;
 		var status = document.getElementById('tm_status');
-		if (!tmMe()) { status.textContent = tmText.chooseThis; return; }
+		if (!tmWho()) { status.textContent = tmText.chooseThis; return; }
 		if (tmRec) {
 			// идёт запись — остановить и отправить её
 			tmRecStop(function (voice) { if (voice) tmSend(voice); });
@@ -1304,7 +1323,7 @@
 	// своя группа: диалог создания и изменения
 	var tmModal = document.getElementById('tm_modal'), tmEditing = null;
 	function tmGroupDialog(chat) {
-		var me = tmMe();
+		var me = tmWho();
 		if (!me) { alert(tmText.chooseThis); return; }
 		tmEditing = chat;
 		document.getElementById('tm_modal_title').textContent = chat ? tmText.editGroup : tmText.newGroup;
@@ -1313,11 +1332,12 @@
 		document.getElementById('tm_group_delete').style.display = chat ? '' : 'none';
 		var box = document.getElementById('tm_group_members');
 		box.innerHTML = '';
-		// свой терминал — тоже в списке: всегда в группе (отметка не снимается); затем терминалы, затем пользователи
+		// свой терминал (без терминала — пользователь) — тоже в списке: всегда в группе (отметка не снимается);
+		// затем терминалы, затем пользователи
 		var byTitle = function (a, b) { return tmTitle(a).localeCompare(tmTitle(b)); };
 		var keys = Object.keys(tmTitles);
 		var names = [me].concat(keys.filter(function (n) { return n != me && n.indexOf('user:') !== 0; }).sort(byTitle),
-			keys.filter(function (n) { return n.indexOf('user:') === 0; }).sort(byTitle));
+			keys.filter(function (n) { return n != me && n.indexOf('user:') === 0; }).sort(byTitle));
 		names.forEach(function (name) {
 			var label = document.createElement('label');
 			label.className = 'tg-member';
@@ -1326,7 +1346,7 @@
 			tmAvatar(av, tmMemberChat(name));
 			var title = document.createElement('div');
 			title.className = 'tg-grow';
-			title.textContent = tmTitle(name) + (name == me ? ' (' + tmText.thisTerminal.toLowerCase() + ')' : (name == tmMeUser ? ' (' + tmText.thisUser + ')' : ''));
+			title.textContent = tmTitle(name) + (name == tmMe() ? ' (' + tmText.thisTerminal.toLowerCase() + ')' : (name == tmMeUser ? ' (' + tmText.thisUser + ')' : ''));
 			var cb = document.createElement('input');
 			cb.type = 'checkbox';
 			cb.value = name;
@@ -1429,7 +1449,7 @@
 		});
 	}
 	function tmForwardOpen(m) {
-		if (!tmMe()) { alert(tmText.chooseThis); return; }
+		if (!tmWho()) { alert(tmText.chooseThis); return; }
 		tmFwdMsg = m;
 		document.getElementById('tm_fwd_search').value = '';
 		document.getElementById('tm_fwd_status').textContent = '';
@@ -1626,11 +1646,26 @@
 		});
 		return box;
 	}
+	// «Выйти с этого устройства» (who: '' — ключ терминала, 'user' — ключ пользователя): ключ из cookie убирается
+	function tmInfoLogout(who) {
+		var out = tmInfoSection('');
+		var btn = tmEl('button', 'tg-btn tg-danger', tmText.logout);
+		btn.type = 'button';
+		btn.addEventListener('click', function () {
+			if (!confirm(who ? tmText.logoutUserConfirm : tmText.logoutConfirm)) return;
+			fetch(location.pathname + '?ajax=1&mode=logout' + (who ? '&who=' + who : ''), {method: 'POST', credentials: 'same-origin'})
+				.then(function () { location.reload(); })
+				.catch(function () { location.reload(); });
+		});
+		out.appendChild(btn);
+		out.appendChild(tmEl('div', 'tg-note', who ? tmText.logoutUserNote : tmText.logoutNote));
+	}
 	function tmInfoClose() { tmInfoModal.classList.remove('tg-show'); tmInfoKey = ''; }
 	function tmInfo(key) {
 		var chat = tmChat(key);
-		var me = tmMe();
-		if (!chat && key == 'term:' + me) chat = {key: key, type: 'term', title: tmTitle(me), members: [me]};
+		var me = tmWho();
+		if (!chat && key == 'term:' + tmMe()) chat = {key: key, type: 'term', title: tmTitle(tmMe()), members: [tmMe()]};
+		if (!chat && tmMeUser && key == tmMeUser) chat = {key: key, type: 'user', title: tmTitle(key), members: [key]};
 		if (!chat) return;
 		tmInfoKey = key;
 		tmAvatar(document.getElementById('tm_info_avatar'), chat);
@@ -1672,19 +1707,7 @@
 					}
 					tmInfoPalette(key);
 					// своя карточка при входе по ключу: «Выйти с этого устройства» — ключ из cookie убирается
-					if (tmByKey && name == tmMe()) {
-						var out = tmInfoSection('');
-						var btn = tmEl('button', 'tg-btn tg-danger', tmText.logout);
-						btn.type = 'button';
-						btn.addEventListener('click', function () {
-							if (!confirm(tmText.logoutConfirm)) return;
-							fetch(location.pathname + '?ajax=1&mode=logout', {method: 'POST', credentials: 'same-origin'})
-								.then(function () { location.reload(); })
-								.catch(function () { location.reload(); });
-						});
-						out.appendChild(btn);
-						out.appendChild(tmEl('div', 'tg-note', tmText.logoutNote));
-					}
+					if (tmByKey && name == tmMe()) tmInfoLogout('');
 				})
 				.catch(function () {});
 		} else if (chat.type == 'user') {
@@ -1695,6 +1718,7 @@
 			if (chat.username) tmInfoRow(us, tmText.username, chat.username);
 			us.appendChild(tmEl('div', 'tg-note', tmText.descUser));
 			tmInfoPalette(key);
+			if (tmUserByKey && key == tmMeUser) tmInfoLogout('user');
 		} else if (chat.type == 'house' || chat.type == 'shoutroom') {
 			status.textContent = chat.type == 'house' ? tmText.houseSub : tmText.shoutroomSub;
 			var sec = tmInfoSection('');
@@ -1725,7 +1749,7 @@
 	}
 	document.getElementById('tm_chat_avatar').addEventListener('click', function () { tmInfo(tmCurrent); });
 	document.getElementById('tm_chat_head').addEventListener('click', function () { tmInfo(tmCurrent); });
-	document.getElementById('tm_me_title').addEventListener('click', function () { if (tmMe()) tmInfo('term:' + tmMe()); });
+	document.getElementById('tm_me_title').addEventListener('click', function () { if (tmMe()) tmInfo('term:' + tmMe()); else if (tmMeUser) tmInfo(tmMeUser); });
 	document.getElementById('tm_info_close').addEventListener('click', tmInfoClose);
 	tmInfoModal.addEventListener('click', function (e) { if (e.target == tmInfoModal) tmInfoClose(); });
 	document.addEventListener('keydown', function (e) { if (e.key == 'Escape') tmInfoClose(); });
@@ -1774,7 +1798,7 @@
 			var v = d && d.EVENT_DATA ? d.EVENT_DATA.VALUE : null;
 			if (typeof v == 'string') { try { v = JSON.parse(v); } catch (e) { v = null; } }
 			var me = tmMe();
-			var mineKey = function (k) { return k == me || (tmMeUser && k == tmMeUser); };
+			var mineKey = function (k) { return !!k && (k == me || k == tmMeUser); };
 			if (d && d.EVENT_DATA && d.EVENT_DATA.NAME == 'TERMINAL_MESSAGE' && (!v || mineKey(v.FROM) || (Array.isArray(v.TO) ? v.TO.some(mineKey) : mineKey(v.TO)))) {
 				tmRefresh();
 			}
@@ -1794,7 +1818,7 @@
 	});
 
 	// старт: открыть сохранённый чат (на узком экране — список чатов)
-	var tmSaved = tmStore('chat_' + tmMe());
+	var tmSaved = tmStore('chat_' + tmWho());
 	if (tmSaved && tmChat(tmSaved)) {
 		// телефон: сначала список (чат выделен); широкий экран: чат открыт, «Назад» закроет его
 		tmOpen(tmSaved, tmNarrow());

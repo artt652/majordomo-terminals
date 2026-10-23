@@ -541,11 +541,13 @@ class terminals extends module
 
  terminals_tokens: ID int(10) unsigned NOT NULL auto_increment
  terminals_tokens: TERMINAL_ID int(10) NOT NULL DEFAULT '0'
+ terminals_tokens: USER_ID int(10) NOT NULL DEFAULT '0'
  terminals_tokens: TOKEN varchar(64) NOT NULL DEFAULT ''
  terminals_tokens: REQUIRED int(3) NOT NULL DEFAULT '0'
  terminals_tokens: CREATED int(10) NOT NULL DEFAULT '0'
  terminals_tokens: LAST_USED int(10) NOT NULL DEFAULT '0'
  terminals_tokens: INDEX (TERMINAL_ID)
+ terminals_tokens: INDEX (USER_ID)
  terminals_tokens: INDEX (TOKEN)
 
  terminals_colors: ID int(10) unsigned NOT NULL auto_increment

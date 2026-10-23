@@ -10,6 +10,13 @@
  * «Только по ключу» у терминала (REQUIRED): без ключа (по адресу, сессии, ?terminal=, выбору на странице)
  * этот терминал не открывается — кроме входа из панели управления. У новых терминалов включено (в том
  * числе у созданных ядром по ?terminal=), у терминалов, которые были до появления ключей, — выключено.
+ *
+ * Ключ пользователя MajorDoMo (USER_ID, TERMINAL_ID=0) — вход в «Сообщения» от его имени, без терминала.
+ * Ключи видны в настройках «Сообщений» (панель управления), открываются той же ссылкой ?token=… и
+ * запоминаются в своей cookie tmmsg_user: на одном устройстве могут быть и терминал, и пользователь.
+ * На сайт MajorDoMo ключ пользователя не входит. Без ключа пользователь попадает в «Сообщения» по
+ * входу на сайт, только если у него есть пароль: без пароля ядро входит им само (пользователь по
+ * умолчанию, по адресу устройства) — такой вход ничего не доказывает.
  */
 
 // Запись ключа терминала (или пустой массив)
@@ -102,14 +109,75 @@ function terminalsTokenFind($token)
     return $terminal_rec;
 }
 
-// Ключ в cookie устройства: HttpOnly (скрипты страницы его не видят), надолго, на весь сайт
-function terminalsTokenCookie($token)
+// Ключ в cookie устройства: HttpOnly (скрипты страницы его не видят), надолго, на весь сайт.
+// tmmsg_key — ключ терминала, tmmsg_user — ключ пользователя
+function terminalsTokenCookie($token, $name = 'tmmsg_key')
 {
     $expire = ($token != '') ? time() + 10 * 365 * 24 * 3600 : time() - 3600;
     $secure = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] != 'off';
     if (PHP_VERSION_ID >= 70300) {
-        setcookie('tmmsg_key', $token, array('expires' => $expire, 'path' => '/', 'httponly' => true, 'secure' => $secure, 'samesite' => 'Lax'));
+        setcookie($name, $token, array('expires' => $expire, 'path' => '/', 'httponly' => true, 'secure' => $secure, 'samesite' => 'Lax'));
     } else {
-        setcookie('tmmsg_key', $token, $expire, '/; samesite=Lax', '', $secure, true);
+        setcookie($name, $token, $expire, '/; samesite=Lax', '', $secure, true);
     }
+}
+
+// Запись ключа пользователя (или пустой массив)
+function terminalsUserTokenRow($user_id)
+{
+    $row = SQLSelectOne("SELECT * FROM terminals_tokens WHERE TERMINAL_ID=0 AND USER_ID=" . (int)$user_id);
+    return (!empty($row['ID']) && (int)$user_id > 0) ? $row : array();
+}
+
+// Создать ключ пользователя заново (прежний сразу перестаёт работать). Возвращает новый ключ
+function terminalsUserTokenCreate($user_id)
+{
+    $row = terminalsUserTokenRow($user_id);
+    if (empty($row['ID'])) {
+        $row = array('TERMINAL_ID' => 0, 'USER_ID' => (int)$user_id);
+    }
+    $row['TOKEN'] = terminalsTokenNew();
+    $row['CREATED'] = time();
+    $row['LAST_USED'] = 0;
+    if (!empty($row['ID'])) {
+        SQLUpdate('terminals_tokens', $row);
+    } else {
+        SQLInsert('terminals_tokens', $row);
+    }
+    return $row['TOKEN'];
+}
+
+// Ключ пользователя; нет — создать
+function terminalsUserTokenGet($user_id)
+{
+    $row = terminalsUserTokenRow($user_id);
+    return !empty($row['TOKEN']) ? $row['TOKEN'] : terminalsUserTokenCreate($user_id);
+}
+
+// Пользователь по ключу (или пустой массив); отмечает, когда ключ использовался (не чаще раза в минуту)
+function terminalsUserTokenFind($token)
+{
+    $token = strtolower(trim((string)$token));
+    if (!preg_match('/^[0-9a-f]{32,64}$/', $token)) {
+        return array();
+    }
+    $row = SQLSelectOne("SELECT * FROM terminals_tokens WHERE TERMINAL_ID=0 AND USER_ID>0 AND TOKEN='" . DBSafe($token) . "'");
+    if (empty($row['ID'])) {
+        return array();
+    }
+    $user = SQLSelectOne("SELECT * FROM users WHERE ID=" . (int)$row['USER_ID']);
+    if (empty($user['ID'])) {
+        return array();
+    }
+    if ((int)$row['LAST_USED'] < time() - 60) {
+        SQLExec("UPDATE terminals_tokens SET LAST_USED=" . time() . " WHERE ID=" . (int)$row['ID']);
+    }
+    return $user;
+}
+
+// У пользователя есть пароль (как проверяет ядро: пустой пароль — пустая строка или sha512 от пустой строки)
+function terminalsUserHasPassword($user)
+{
+    $password = isset($user['PASSWORD']) ? (string)$user['PASSWORD'] : '';
+    return $password != '' && $password != hash('sha512', '');
 }

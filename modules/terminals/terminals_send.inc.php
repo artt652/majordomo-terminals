@@ -260,8 +260,8 @@ function terminalsHistoryDays($config)
     return max(0, (int)$config['MESSAGES_HISTORY_DAYS']);
 }
 
-// Чистка переписки (раз в сутки, MINUTELY): сообщения старше срока хранения, сообщения удалённых групп
-// и терминалов-получателей; файлы вложений (cms/cached/terminals) — когда на них не осталось сообщений
+// Чистка переписки (раз в сутки, MINUTELY): сообщения старше срока хранения, сообщения удалённых групп,
+// терминалов и пользователей-получателей, ключи удалённых пользователей; файлы вложений (cms/cached/terminals) — когда на них не осталось сообщений
 // (пересланное ссылается на тот же файл), и загруженные, но не отправленные — старше суток
 function terminalsMessagesCleanup($days)
 {
@@ -279,6 +279,8 @@ function terminalsMessagesCleanup($days)
         SQLExec("DELETE FROM terminals_messages WHERE " . implode(' OR ', $where));
         DebMes('Messages cleanup: removed ' . (int)$old['TOTAL'] . ' message(s)', 'terminals');
     }
+    // ключи удалённых пользователей
+    SQLExec("DELETE FROM terminals_tokens WHERE TERMINAL_ID=0 AND USER_ID>0 AND USER_ID NOT IN (SELECT ID FROM users)");
     $dir = ROOT . 'cms/cached/terminals';
     if (!is_dir($dir)) {
         return;

@@ -1,0 +1,89 @@
+<!-- «Сообщения» в панели управления: адрес страницы, вебсокет, срок истории, ключи пользователей -->
+<p><#LANG_TERMINALS_APP_PAGE#>: <a href="[#PAGE_URL#]" target="_blank">[#PAGE_URL#]</a></p>
+[#if SAVED="1"#]<div class="alert alert-success"><#LANG_DATA_SAVED#></div>[#endif SAVED#]
+[#if KEY_RECREATED="1"#]<div class="alert alert-success"><#LANG_TERMINALS_TOKEN_RECREATED#></div>[#endif KEY_RECREATED#]
+<form action="?" method="post" class="form-horizontal">
+<div class="form-group">
+	<label class="col-lg-4 control-label"><#LANG_TERMINALS_WS_EXTERNAL#>:</label>
+	<div class="col-lg-5">
+		<input type="text" name="ws_external" class="form-control" value="[#WS_EXTERNAL#]" placeholder="wss://home.example.com/majordomo">
+		<p class="help-block"><#LANG_TERMINALS_WS_EXTERNAL_HELP#></p>
+	</div>
+</div>
+<div class="form-group">
+	<label class="col-lg-4 control-label"><#LANG_TERMINALS_HISTORY_DAYS#>:</label>
+	<div class="col-lg-5">
+		<input type="number" min="0" max="3650" name="history_days" class="form-control" style="max-width:140px" value="[#HISTORY_DAYS#]">
+		<p class="help-block"><#LANG_TERMINALS_HISTORY_DAYS_HELP#></p>
+	</div>
+</div>
+<div class="form-group">
+	<div class="col-lg-offset-2 col-lg-5"><button type="submit" class="btn btn-primary"><#LANG_TERMINALS_SAVE#></button></div>
+</div>
+<input type="hidden" name="ws_save" value="1">
+</form>
+
+<!-- ключи пользователей: вход в «Сообщения» от имени пользователя, без терминала -->
+<h4><#LANG_TERMINALS_USER_KEYS#></h4>
+<p class="help-block"><#LANG_TERMINALS_USER_KEYS_HELP#></p>
+<div class="table-responsive">
+<table class="table table-striped">
+<thead>
+	<tr>
+		<th><#LANG_TERMINALS_USER#></th>
+		<th><#LANG_TERMINALS_USER_ENTRY#></th>
+		<th><#LANG_TERMINALS_TOKEN#></th>
+		<th></th>
+	</tr>
+</thead>
+<tbody>
+[#begin USERS#]
+	<tr>
+		<td><b>[#TITLE#]</b><br><small class="text-muted">[#USERNAME#]</small></td>
+		<td>[#if HAS_PASSWORD="1"#]<#LANG_TERMINALS_USER_ENTRY_SITE#>[#else HAS_PASSWORD#]<#LANG_TERMINALS_USER_ENTRY_KEY#>[#endif HAS_PASSWORD#]</td>
+		<td><small><#LANG_TERMINALS_TOKEN_CREATED#> [#CREATED#], [#if LAST_USED!=""#]<#LANG_TERMINALS_TOKEN_LAST_USED#> [#LAST_USED#][#else LAST_USED#]<#LANG_TERMINALS_TOKEN_NEVER#>[#endif LAST_USED#]</small></td>
+		<td class="text-right" style="white-space:nowrap">
+			<button type="button" class="btn btn-default btn-sm" onclick="userKeyShow([#ID#])"><#LANG_TERMINALS_TOKEN_SHOW#></button>
+			<a href="?user_key_create=[#ID#]" class="btn btn-default btn-sm" onclick="return confirm('<#LANG_TERMINALS_TOKEN_RECREATE_CONFIRM#>');"><#LANG_TERMINALS_TOKEN_RECREATE#></a>
+		</td>
+	</tr>
+	<tr id="user_key_[#ID#]" data-token="[#TOKEN#]" style="display:none">
+		<td colspan="4">
+			<div class="input-group" style="max-width:640px">
+				<input type="text" class="form-control" readonly onclick="this.select()">
+				<span class="input-group-btn"><button class="btn btn-default" type="button" onclick="userKeyCopy([#ID#])"><#LANG_TERMINALS_TOKEN_COPY#></button></span>
+			</div>
+			<div class="thumbnail" style="display:inline-block;margin:10px 0 0"></div>
+		</td>
+	</tr>
+[#end USERS#]
+</tbody>
+</table>
+</div>
+<script src="<#ROOTHTML#>templates/terminals/js/qrcode.js"></script>
+<script type="text/javascript">
+	(function () {
+		var page = location.protocol + '//' + location.host + '[#PAGE_URL#]';
+		// строка с ссылкой и QR-кодом пользователя: показать или скрыть
+		window.userKeyShow = function (id) {
+			var row = document.getElementById('user_key_' + id);
+			if (!row) return;
+			if (row.style.display != 'none') { row.style.display = 'none'; return; }
+			var link = page + '?token=' + row.getAttribute('data-token');
+			row.querySelector('input').value = link;
+			if (window.qrcode) {
+				var qr = qrcode(0, 'M');
+				qr.addData(link);
+				qr.make();
+				row.querySelector('.thumbnail').innerHTML = qr.createSvgTag({cellSize: 4, margin: 2});
+			}
+			row.style.display = '';
+		};
+		window.userKeyCopy = function (id) {
+			var input = document.querySelector('#user_key_' + id + ' input');
+			input.select();
+			try { document.execCommand('copy'); } catch (e) {}
+			if (navigator.clipboard) navigator.clipboard.writeText(input.value).catch(function () {});
+		};
+	})();
+</script>

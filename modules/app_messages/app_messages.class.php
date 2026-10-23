@@ -31,40 +31,48 @@ class app_messages extends module
     {
         $terminals = new terminals();
         if ($this->action == 'admin') {
-            // в панели управления — ссылка на страницу и настройка вебсокета для внешнего доступа
+            // в панели управления — ссылка на страницу, вебсокет для внешнего доступа, срок истории, ключи пользователей
             terminalsLoadLanguage();
             $terminals->getConfig();
-            $saved = false;
+            $out = array();
             if (gr('ws_save')) {
                 $terminals->config['MESSAGES_WS_EXTERNAL'] = terminalsWsUrl(gr('ws_external'));
                 $terminals->config['MESSAGES_HISTORY_DAYS'] = (string)max(0, min(3650, (int)gr('history_days')));
                 // прежние общие настройки ключей больше не используются: «Только по ключу» — у каждого терминала
                 unset($terminals->config['MESSAGES_TOKEN_ONLY'], $terminals->config['MESSAGES_USE_TOKENS']);
                 $terminals->saveConfig();
-                $saved = true;
+                $out['SAVED'] = 1;
             }
-            $value = isset($terminals->config['MESSAGES_WS_EXTERNAL']) ? (string)$terminals->config['MESSAGES_WS_EXTERNAL'] : '';
-            $url = ROOTHTML . 'popup/app_messages.html';
+            $user_id = gr('user_key_create', 'int');
+            if ($user_id && SQLSelectOne("SELECT ID FROM users WHERE ID=" . (int)$user_id)) {
+                terminalsUserTokenCreate($user_id);
+                $out['KEY_RECREATED'] = 1;
+            }
             $h = function ($text) {
                 return htmlspecialchars((string)$text, ENT_QUOTES, 'UTF-8');
             };
-            $this->result = '<p>' . terminalsLang('TERMINALS_APP_PAGE') . ': <a href="' . $url . '" target="_blank">' . $url . '</a></p>'
-                . '<form method="post" action="?" class="form-horizontal" style="max-width:720px">'
-                . '<input type="hidden" name="ws_save" value="1">'
-                . '<div class="form-group"><label class="control-label col-sm-4">' . $h(terminalsLang('TERMINALS_WS_EXTERNAL')) . '</label>'
-                . '<div class="col-sm-8"><input type="text" name="ws_external" class="form-control" value="' . $h($value) . '"'
-                . ' placeholder="wss://home.example.com/majordomo">'
-                . '<span class="help-block">' . terminalsLang('TERMINALS_WS_EXTERNAL_HELP') . '</span></div></div>'
-                . '<div class="form-group"><label class="control-label col-sm-4">' . $h(terminalsLang('TERMINALS_HISTORY_DAYS')) . '</label>'
-                . '<div class="col-sm-8"><input type="number" min="0" max="3650" name="history_days" class="form-control" style="max-width:140px"'
-                . ' value="' . terminalsHistoryDays($terminals->config) . '">'
-                . '<span class="help-block">' . terminalsLang('TERMINALS_HISTORY_DAYS_HELP') . '</span></div></div>'
-                . '<div class="form-group"><div class="col-sm-offset-4 col-sm-8"><button type="submit" class="btn btn-primary">'
-                . $h(terminalsLang('TERMINALS_SAVE')) . '</button>'
-                . ($saved ? ' <span class="text-success">&#10003;</span>' : '') . '</div></div></form>';
-            // как шаблоны модулей: action="?" формы — в адрес панели с этим модулем (pd, md), иначе
-            // форма уходит на admin.php без модуля и настройка не сохраняется
-            $this->result = $this->parseLinks($this->result);
+            $out['PAGE_URL'] = ROOTHTML . 'popup/app_messages.html';
+            $out['WS_EXTERNAL'] = $h(isset($terminals->config['MESSAGES_WS_EXTERNAL']) ? $terminals->config['MESSAGES_WS_EXTERNAL'] : '');
+            $out['HISTORY_DAYS'] = terminalsHistoryDays($terminals->config);
+            // ключ каждому пользователю (создаётся при первом показе)
+            $out['USERS'] = array();
+            foreach (SQLSelect("SELECT * FROM users ORDER BY NAME") as $user) {
+                $token = terminalsUserTokenGet($user['ID']);
+                $row = terminalsUserTokenRow($user['ID']);
+                $out['USERS'][] = array(
+                    'ID' => (int)$user['ID'],
+                    'TITLE' => $h($user['NAME'] != '' ? $user['NAME'] : $user['USERNAME']),
+                    'USERNAME' => $h($user['USERNAME']),
+                    'HAS_PASSWORD' => terminalsUserHasPassword($user) ? 1 : 0,
+                    'TOKEN' => $token,
+                    'CREATED' => !empty($row['CREATED']) ? date('d.m.Y H:i', (int)$row['CREATED']) : '',
+                    'LAST_USED' => !empty($row['LAST_USED']) ? date('d.m.Y H:i', (int)$row['LAST_USED']) : '',
+                );
+            }
+            // шаблон модуля; парсер сам передаёт в ссылки и формы (action="?") адрес панели с этим модулем (pd, md)
+            $this->data = $out;
+            $p = new parser(DIR_TEMPLATES . $this->name . '/' . $this->name . '.html', $this->data, $this);
+            $this->result = $p->result;
             return;
         }
         $terminals->action = '';
