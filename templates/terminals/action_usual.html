@@ -196,6 +196,11 @@
 	.tg-from { font-size: 13px; font-weight: 600; margin-bottom: 2px; white-space: normal; cursor: pointer; }
 	.tg-msg img { display: block; max-width: 100%; max-height: 320px; border-radius: 8px; margin: 2px 0 4px; cursor: pointer; }
 	.tg-msg video { display: block; max-width: 100%; max-height: 360px; border-radius: 8px; margin: 2px 0 4px; background: #000; }
+	/* фото, идущие подряд от одного отправителя, — одним сообщением: сетка из 6 долей (по 2, 3 или 6 на снимок) */
+	.tg-album { display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px; width: 340px; max-width: 100%; border-radius: 8px; overflow: hidden; margin: 2px 0 4px; }
+	.tg-msg .tg-album img { width: 100%; height: 100px; max-height: none; object-fit: cover; margin: 0; border-radius: 0; grid-column: span 2; }
+	.tg-msg .tg-album img.tg-a3 { grid-column: span 3; height: 140px; }
+	.tg-msg .tg-album img.tg-a6 { grid-column: span 6; height: 200px; }
 	/* видео в сообщении: кнопка «развернуть» в углу */
 	.tg-video-wrap { position: relative; }
 	.tg-expand { position: absolute; top: 8px; right: 8px; width: 34px; height: 34px; border-radius: 50%; border: 0; padding: 0; cursor: pointer;
@@ -212,6 +217,15 @@
 	/* во весь доступный размер, с сохранением пропорций */
 	.tg-viewer-body img, .tg-viewer-body video { width: 100%; height: 100%; object-fit: contain; touch-action: pinch-zoom; }
 	.tg-viewer-body img { cursor: zoom-out; }
+	/* листать фото чата: стрелки по бокам, счётчик сверху; на телефоне — смахнуть влево-вправо */
+	.tg-viewer-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 46px; height: 46px; border-radius: 50%; border: 0; padding: 0;
+		background: rgba(255,255,255,.14); color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 1; }
+	.tg-viewer-nav:hover { background: rgba(255,255,255,.26); }
+	.tg-viewer-nav[hidden] { display: none; }
+	#tm_viewer_prev { left: 12px; }
+	#tm_viewer_next { right: 12px; }
+	.tg-viewer-count { flex: 1; color: #fff; font-size: 15px; align-self: center; padding-left: 6px; }
+	.tg-viewer-body { position: relative; }
 	.tg-viewer:fullscreen .tg-viewer-body { padding: 0; }
 	/* камера: предпросмотр (зеркально, как в зеркале), внизу кнопка — снимок (белый круг) или запись (красный; идёт запись — квадрат) */
 	.tg-camera .tg-viewer-bar { align-items: center; }
@@ -499,11 +513,17 @@
 	<!-- просмотр картинки или видео на весь экран чата -->
 	<div class="tg-viewer" id="tm_viewer">
 		<div class="tg-viewer-bar">
+			<span class="tg-viewer-count" id="tm_viewer_count"></span>
+			<button type="button" class="tg-viewer-btn" id="tm_viewer_fwd" title="<#LANG_TERMINALS_FORWARD#>"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5l7 7-7 7M21 12H9a6 6 0 0 0-6 6v1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
 			<a class="tg-viewer-btn" id="tm_viewer_open" href="#" target="_blank" title="<#LANG_TERMINALS_OPEN_ORIGINAL#>"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
 			<button type="button" class="tg-viewer-btn" id="tm_viewer_full" title="<#LANG_TERMINALS_FULLSCREEN#>"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
 			<button type="button" class="tg-viewer-btn" id="tm_viewer_close" title="<#LANG_TERMINALS_CANCEL#>"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
 		</div>
-		<div class="tg-viewer-body" id="tm_viewer_body"></div>
+		<div class="tg-viewer-main" style="flex:1;min-height:0;display:flex;position:relative">
+			<button type="button" class="tg-viewer-nav" id="tm_viewer_prev" hidden><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+			<div class="tg-viewer-body" id="tm_viewer_body" style="flex:1"></div>
+			<button type="button" class="tg-viewer-nav" id="tm_viewer_next" hidden><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+		</div>
 	</div>
 
 	<!-- камера на компьютере (там браузер вместо камеры открывает выбор файла): снимок или запись видео -->
@@ -1196,8 +1216,24 @@
 			box.appendChild(empty);
 			return;
 		}
+		// фото подряд (без текста, кроме первого — подпись; один отправитель, не дальше 2 минут) — одним сообщением
+		var units = [];
+		var onlyPic = function (x) { return x && x.image && !x.video && !x.sound && !x.file; };
+		items.forEach(function (x) {
+			var last = units[units.length - 1];
+			var prev = last ? (last.album ? last.album[last.album.length - 1] : last.m) : null;
+			if (onlyPic(x) && !x.text && onlyPic(prev) && prev.incoming == x.incoming && prev.other == x.other
+				&& prev.other_title == x.other_title && (prev.kind || '') == (x.kind || '') && (prev.forwarded || '') == (x.forwarded || '')
+				&& Math.abs((x.ts || 0) - (prev.ts || 0)) <= 120 && (prev.time || '').split(' ')[0] == (x.time || '').split(' ')[0]) {
+				if (!last.album) last.album = [last.m];
+				last.album.push(x);
+				return;
+			}
+			units.push({m: x});
+		});
 		var lastDay = '';
-		items.forEach(function (m) {
+		units.forEach(function (u) {
+			var m = u.m, album = u.album || null, lastM = album ? album[album.length - 1] : m;
 			var day = (m.time || '').split(' ')[0];
 			if (day && day != lastDay) {
 				var d = document.createElement('div');
@@ -1230,11 +1266,27 @@
 				fw.appendChild(fwName);
 				div.appendChild(fw);
 			}
-			if (m.image) {
+			if (album) {
+				// сетка: 2 — по половине, 3 — первое во всю ширину, 4 — 2×2, больше — по три в ряд,
+				// остаток — первые шире (1 — во всю ширину, 2 — по половине)
+				var grid = document.createElement('div');
+				grid.className = 'tg-album';
+				var n = album.length, rest = n % 3;
+				album.forEach(function (a, i) {
+					var cell = document.createElement('img');
+					cell.src = a.image;
+					cell.alt = '';
+					if (n == 2 || n == 4 || (n == 3 && i > 0) || (n > 4 && rest == 2 && i < 2)) cell.className = 'tg-a3';
+					if ((n == 3 && i == 0) || (n > 4 && rest == 1 && i == 0)) cell.className = 'tg-a6';
+					cell.addEventListener('click', function () { tmViewer('image', a.image, 0, false, a); });
+					grid.appendChild(cell);
+				});
+				div.appendChild(grid);
+			} else if (m.image) {
 				var img = document.createElement('img');
 				img.src = m.image;
 				img.alt = '';
-				img.addEventListener('click', function () { tmViewer('image', m.image); });
+				img.addEventListener('click', function () { tmViewer('image', m.image, 0, false, m); });
 				div.appendChild(img);
 			}
 			if (m.video) {
@@ -1290,8 +1342,8 @@
 			}
 			var t = document.createElement('span');
 			t.className = 'tg-time';
-			t.textContent = (m.time || '').split(' ')[1] || '';
-			if (!m.incoming && m.status) t.appendChild(tmTicks(m.status));
+			t.textContent = (lastM.time || '').split(' ')[1] || '';
+			if (!lastM.incoming && lastM.status) t.appendChild(tmTicks(lastM.status));
 			div.appendChild(t);
 			if (m.text) {
 				div.appendChild(document.createTextNode(m.text));
@@ -1302,7 +1354,7 @@
 			fb.className = 'tg-fwd-btn';
 			fb.title = tmText.forward;
 			fb.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5l7 7-7 7M21 12H9a6 6 0 0 0-6 6v1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-			fb.addEventListener('click', function (e) { e.stopPropagation(); tmForwardOpen(m); });
+			fb.addEventListener('click', function (e) { e.stopPropagation(); tmForwardOpen(m, album); });
 			div.appendChild(fb);
 			div.classList.add('tg-has-fwd');
 			// касание сообщения (не плеера, не картинки, не ссылки) показывает кнопку «Переслать»
@@ -1547,8 +1599,9 @@
 	document.addEventListener('keydown', function (e) { if (e.key == 'Escape') { tmGroupClose(); tmForwardClose(); } });
 
 	// Переслать: окно выбора чата. Сюда нельзя: чаты только для чтения; в общий чат и его комнаты — только текст
-	var tmFwdModal = document.getElementById('tm_fwd_modal'), tmFwdMsg = null;
-	function tmForwardClose() { tmFwdModal.classList.remove('tg-show'); tmFwdMsg = null; }
+	// tmFwdList — пересылаемые сообщения (несколько — фото одним сообщением); tmFwdMsg — первое из них
+	var tmFwdModal = document.getElementById('tm_fwd_modal'), tmFwdMsg = null, tmFwdList = [];
+	function tmForwardClose() { tmFwdModal.classList.remove('tg-show'); tmFwdMsg = null; tmFwdList = []; }
 	function tmForwardList() {
 		var box = document.getElementById('tm_fwd_list');
 		var q = document.getElementById('tm_fwd_search').value.trim().toLowerCase();
@@ -1572,28 +1625,36 @@
 			box.appendChild(row);
 		});
 	}
-	function tmForwardOpen(m) {
+	function tmForwardOpen(m, list) {
 		if (!tmWho()) { alert(tmText.chooseThis); return; }
 		tmFwdMsg = m;
+		tmFwdList = (list && list.length) ? list.slice() : [m];
 		document.getElementById('tm_fwd_search').value = '';
 		document.getElementById('tm_fwd_status').textContent = '';
 		tmForwardList();
 		tmFwdModal.classList.add('tg-show');
 	}
 	function tmForwardTo(key) {
-		var m = tmFwdMsg, status = document.getElementById('tm_fwd_status');
-		if (!m) return;
-		status.textContent = tmText.sending;
-		tmGroupPost({mode: 'forward', kind: m.kind || 'msg', id: m.id, chat: key, voice: document.getElementById('tm_voice_value').value}, function (res) {
-			if (!res.sent) {
-				var errors = {text_only: tmText.fwdTextOnly, login: tmText.login, not_found: tmText.fwdNotFound};
-				status.textContent = errors[res.error] || tmText.notSent;
-				return;
-			}
-			tmForwardClose();
-			// открыть чат, куда переслали
-			tmRefresh(function () { tmOpen(res.chat || key); });
-		});
+		var list = tmFwdList.slice(), status = document.getElementById('tm_fwd_status');
+		if (!list.length) return;
+		var done = 0, voice = document.getElementById('tm_voice_value').value;
+		// по одному, по порядку
+		var next = function () {
+			var m = list[done];
+			status.textContent = tmText.sending + (list.length > 1 ? ' ' + (done + 1) + '/' + list.length : '');
+			tmGroupPost({mode: 'forward', kind: m.kind || 'msg', id: m.id, chat: key, voice: voice}, function (res) {
+				if (!res.sent) {
+					var errors = {text_only: tmText.fwdTextOnly, login: tmText.login, not_found: tmText.fwdNotFound};
+					status.textContent = errors[res.error] || tmText.notSent;
+					return;
+				}
+				if (++done < list.length) { next(); return; }
+				tmForwardClose();
+				// открыть чат, куда переслали
+				tmRefresh(function () { tmOpen(res.chat || key); });
+			});
+		};
+		next();
 	}
 	document.getElementById('tm_fwd_search').addEventListener('input', tmForwardList);
 	document.getElementById('tm_fwd_cancel').addEventListener('click', tmForwardClose);
@@ -1970,7 +2031,32 @@
 	// Просмотр картинки или видео на весь экран чата (kind: image | video; видео — с места at).
 	// «Назад» телефона, ✕, Escape или нажатие на фон закрывают; ⤓ — открыть файл; ⛶ — на весь экран устройства
 	var tmViewerEl = document.getElementById('tm_viewer');
-	function tmViewer(kind, src, at, play) {
+	// Фото — с листанием по всем фото открытого чата (msg — сообщение снимка: по нему место в списке и «Переслать»)
+	var tmGallery = [], tmGalleryAt = -1;
+	function tmViewer(kind, src, at, play, msg) {
+		tmGallery = [];
+		tmGalleryAt = -1;
+		if (kind == 'image') {
+			tmGallery = tmMessages(tmCurrent).filter(function (x) { return x.image && !x.video; });
+			for (var g = tmGallery.length - 1; g >= 0; g--) {
+				if (msg ? tmGallery[g] === msg : tmGallery[g].image == src) { tmGalleryAt = g; break; }
+			}
+			if (tmGalleryAt < 0) { tmGallery = msg ? [msg] : [{image: src}]; tmGalleryAt = 0; }
+		}
+		tmViewerShow(kind, src, at, play);
+		tmViewerEl.classList.add('tg-show');
+		if (!tmViewHistory && window.history && history.pushState) {
+			try { history.pushState({tmView: 1}, document.title, location.href); tmViewHistory = true; } catch (e) {}
+		}
+	}
+	// n-е фото галереи (листание)
+	function tmViewerGo(step) {
+		var i = tmGalleryAt + step;
+		if (i < 0 || i >= tmGallery.length) return;
+		tmGalleryAt = i;
+		tmViewerShow('image', tmGallery[i].image);
+	}
+	function tmViewerShow(kind, src, at, play) {
 		var body = document.getElementById('tm_viewer_body');
 		body.innerHTML = '';
 		var el;
@@ -1985,18 +2071,51 @@
 			el = document.createElement('img');
 			el.alt = '';
 			el.src = src;
-			// нажатие на картинку — закрыть (как в мессенджерах)
-			el.addEventListener('click', tmViewerDone);
+			// не перетаскивать картинку мышью — смахивание листает
+			el.draggable = false;
+			// нажатие на картинку — закрыть (как в мессенджерах); после смахивания — нет
+			el.addEventListener('click', function () { if (!tmSwiped) tmViewerDone(); });
 		}
 		body.appendChild(el);
 		document.getElementById('tm_viewer_open').href = src;
 		var full = document.getElementById('tm_viewer_full');
 		full.style.display = (tmViewerEl.requestFullscreen || tmViewerEl.webkitRequestFullscreen) && (document.fullscreenEnabled || document.webkitFullscreenEnabled) ? '' : 'none';
-		tmViewerEl.classList.add('tg-show');
-		if (!tmViewHistory && window.history && history.pushState) {
-			try { history.pushState({tmView: 1}, document.title, location.href); tmViewHistory = true; } catch (e) {}
-		}
+		var many = tmGallery.length > 1;
+		document.getElementById('tm_viewer_count').textContent = many ? (tmGalleryAt + 1) + ' / ' + tmGallery.length : '';
+		document.getElementById('tm_viewer_prev').hidden = !many || tmGalleryAt <= 0;
+		document.getElementById('tm_viewer_next').hidden = !many || tmGalleryAt >= tmGallery.length - 1;
+		var cur = tmGallery[tmGalleryAt];
+		document.getElementById('tm_viewer_fwd').style.display = (kind == 'image' && cur && cur.id) ? '' : 'none';
 	}
+	document.getElementById('tm_viewer_prev').addEventListener('click', function () { tmViewerGo(-1); });
+	document.getElementById('tm_viewer_next').addEventListener('click', function () { tmViewerGo(1); });
+	document.getElementById('tm_viewer_fwd').addEventListener('click', function () {
+		var cur = tmGallery[tmGalleryAt];
+		if (!cur || !cur.id) return;
+		tmViewerDone();
+		tmForwardOpen(cur);
+	});
+	document.addEventListener('keydown', function (e) {
+		if (!tmViewerEl.classList.contains('tg-show')) return;
+		if (e.key == 'ArrowLeft') tmViewerGo(-1);
+		if (e.key == 'ArrowRight') tmViewerGo(1);
+	});
+	// смахнуть влево-вправо (палец или мышь); фото увеличено двумя пальцами — не листаем
+	var tmSwipe = null, tmSwiped = false;
+	document.getElementById('tm_viewer_body').addEventListener('pointerdown', function (e) {
+		tmSwiped = false;
+		tmSwipe = (tmGallery.length > 1 && e.isPrimary) ? {x: e.clientX, y: e.clientY} : null;
+	});
+	document.getElementById('tm_viewer_body').addEventListener('pointerup', function (e) {
+		if (!tmSwipe) return;
+		var dx = e.clientX - tmSwipe.x, dy = e.clientY - tmSwipe.y;
+		tmSwipe = null;
+		if (window.visualViewport && visualViewport.scale > 1.05) return;
+		if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+			tmSwiped = true;
+			tmViewerGo(dx < 0 ? 1 : -1);
+		}
+	});
 	function tmViewerClose() {
 		if (!tmViewerEl.classList.contains('tg-show')) return;
 		if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(function () {});
@@ -2008,7 +2127,7 @@
 		if (tmViewHistory) history.back(); else tmViewerClose();
 	}
 	document.getElementById('tm_viewer_close').addEventListener('click', tmViewerDone);
-	document.getElementById('tm_viewer_body').addEventListener('click', function (e) { if (e.target === this) tmViewerDone(); });
+	document.getElementById('tm_viewer_body').addEventListener('click', function (e) { if (e.target === this && !tmSwiped) tmViewerDone(); });
 	document.getElementById('tm_viewer_full').addEventListener('click', function () {
 		if (document.fullscreenElement || document.webkitFullscreenElement) {
 			(document.exitFullscreen || document.webkitExitFullscreen).call(document);
