@@ -99,7 +99,7 @@
 	.tg-wave span { flex: 0 1 3px; min-width: 2px; min-height: 3px; border-radius: 2px; background: rgba(127,127,127,.38); transition: background .1s; }
 	.tg-wave span.tg-on { background: var(--tg-accent); }
 	.tg-out .tg-wave span.tg-on { background: var(--tg-audio-out, var(--tg-accent)); }
-	.tg-audio-time { font-size: 12px; color: var(--tg-time); }
+	.tg-audio-time { font-size: 12px; color: var(--tg-time); min-height: 16px; line-height: 16px; }
 	/* меню вида: тема и фон */
 	.tg-chat-view > .tg-head { position: relative; }
 	.tg-pop { position: absolute; top: 50px; right: 8px; z-index: 15; background: var(--tg-panel); border: 1px solid var(--tg-border); border-radius: 12px;
@@ -195,7 +195,9 @@
 	.tg-msg.tg-out { align-self: flex-end; background: var(--tg-out); color: var(--tg-out-text); border-bottom-right-radius: 4px; }
 	.tg-from { font-size: 13px; font-weight: 600; margin-bottom: 2px; white-space: normal; cursor: pointer; }
 	.tg-msg img { display: block; max-width: 100%; max-height: 320px; border-radius: 8px; margin: 2px 0 4px; cursor: pointer; }
-	.tg-msg video { display: block; max-width: 100%; max-height: 360px; border-radius: 8px; margin: 2px 0 4px; background: #000; }
+	/* видео — в окне постоянного размера (16:9, поля чёрные): размер ролика узнаётся только при загрузке,
+	   окно под него не меняется — переписка не прыгает */
+	.tg-msg video { display: block; width: 320px; max-width: 100%; aspect-ratio: 16 / 9; object-fit: contain; border-radius: 8px; margin: 2px 0 4px; background: #000; }
 	/* фото, идущие подряд от одного отправителя, — одним сообщением: сетка из 6 долей (по 2, 3 или 6 на снимок) */
 	.tg-album { display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px; width: 340px; max-width: 100%; border-radius: 8px; overflow: hidden; margin: 2px 0 4px; }
 	.tg-album-cell { position: relative; grid-column: span 2; height: 100px; cursor: pointer; }
@@ -1299,6 +1301,16 @@
 				var img = document.createElement('img');
 				img.src = m.image;
 				img.alt = '';
+				// размер известен (сервер прочитал его из файла) — место под картинку отводится сразу:
+				// пропорции как у снимка, высота до 320 px, ширина — не больше сообщения
+				if (m.image_size && m.image_size.length == 2) {
+					var iw = m.image_size[0], ih = m.image_size[1];
+					img.style.aspectRatio = iw + ' / ' + ih;
+					// ширина в пикселях (не в процентах: сообщение подстраивается под содержимое); уже сообщения —
+					// сжимается (max-width), высота следует пропорции
+					img.style.width = Math.round(Math.min(iw, 320 * iw / ih)) + 'px';
+					img.style.height = 'auto';
+				}
 				img.addEventListener('click', function () { tmViewer('image', m.image, 0, false, m); });
 				div.appendChild(img);
 			}
@@ -1379,11 +1391,7 @@
 			});
 			box.appendChild(div);
 		});
-		if (toBottom || nearBottom) {
-			box.scrollTop = box.scrollHeight;
-			// картинки и видео догружаются и раздвигают переписку — держаться низа, пока его не покинули
-			tmStick = true;
-		}
+		if (toBottom || nearBottom) box.scrollTop = box.scrollHeight;
 		tmMarkRead(tmCurrent);
 	}
 
@@ -1430,25 +1438,11 @@
 
 	// отправка: текст, вложения и записанное голосовое (voice = {blob, name, duration})
 	// переписка — в самый низ (после отправки); картинки и видео догружаются — ещё раз, когда загрузятся
+	// (место под картинки и видео отведено заранее — догрузка переписку не сдвигает)
 	function tmScrollEnd() {
 		var box = document.getElementById('tm_list');
 		box.scrollTop = box.scrollHeight;
-		tmStick = true;
 	}
-	// «Держаться низа»: переписка открыта или прокручена в самый низ. Пока так, догрузившаяся картинка или видео
-	// (их высота известна только после загрузки) не оставляет экран посередине — переписка снова в самом низу.
-	// Рост содержимого прокрутку не вызывает; прокрутил вверх сам — низа больше не держим
-	var tmStick = false;
-	(function () {
-		var box = document.getElementById('tm_list');
-		box.addEventListener('scroll', function () {
-			tmStick = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
-		});
-		var keep = function () { if (tmStick) box.scrollTop = box.scrollHeight; };
-		// load и loadedmetadata не всплывают — ловим на погружении
-		box.addEventListener('load', keep, true);
-		box.addEventListener('loadedmetadata', keep, true);
-	})();
 	// Отправка. Несколько файлов одного вида — отдельными сообщениями по очереди: n-е сообщение несёт
 	// n-й файл каждого поля; текст и голосовое — с первым
 	function tmSend(voice) {

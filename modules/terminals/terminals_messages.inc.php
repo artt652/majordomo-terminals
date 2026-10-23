@@ -830,7 +830,25 @@ if ($can_write && !$peek) {
 // ещё по $page_older сообщений одного чата. min_id — самый ранний номер строки сообщения (для before)
 $page_first = 500;
 $page_older = 100;
-$build_messages = function ($rows, $limit) use ($me_id, $user_id, $id_names, $all_terminals, $all_users, $computer_name) {
+// размер картинки (ширина и высота) — страница заранее отводит ей место: переписка не прыгает, пока картинки
+// догружаются. Только файлы веб-корня (getimagesize читает заголовок файла); не узнали — пусто
+$image_size = function ($path) {
+    static $cache = array();
+    $path = (string)$path;
+    if ($path == '' || preg_match('/^https?:/i', $path)) {
+        return array();
+    }
+    if (strpos($path, ROOT) === 0) {
+        $path = substr($path, strlen(ROOT));
+    }
+    $file = ROOT . ltrim($path, '/');
+    if (!isset($cache[$file])) {
+        $info = is_file($file) ? @getimagesize($file) : false;
+        $cache[$file] = (is_array($info) && $info[0] > 0 && $info[1] > 0) ? array((int)$info[0], (int)$info[1]) : array();
+    }
+    return $cache[$file];
+};
+$build_messages = function ($rows, $limit) use ($me_id, $user_id, $id_names, $all_terminals, $all_users, $computer_name, $image_size) {
     $conversation = array();
     $seen = array();
     foreach ($rows as $row) {
@@ -882,6 +900,7 @@ $build_messages = function ($rows, $limit) use ($me_id, $user_id, $id_names, $al
             'other_title' => $other_title,
             'text' => is_string($text) ? $text : '',
             'image' => ($row['IMAGE'] != '' && !preg_match('/^https?:/i', $row['IMAGE'])) ? ROOTHTML . ltrim($row['IMAGE'], '/') : $row['IMAGE'],
+            'image_size' => $image_size($row['IMAGE']),
             'sound' => ($row['SOUND'] != '' && !preg_match('/^https?:/i', $row['SOUND'])) ? ROOTHTML . ltrim($row['SOUND'], '/') : $row['SOUND'],
             'video' => (!empty($row['VIDEO']) && !preg_match('/^https?:/i', $row['VIDEO'])) ? ROOTHTML . ltrim($row['VIDEO'], '/') : (isset($row['VIDEO']) ? $row['VIDEO'] : ''),
             'file' => (!empty($row['FILE']) && !preg_match('/^https?:/i', $row['FILE'])) ? ROOTHTML . ltrim($row['FILE'], '/') : (isset($row['FILE']) ? $row['FILE'] : ''),
@@ -899,7 +918,7 @@ $build_messages = function ($rows, $limit) use ($me_id, $user_id, $id_names, $al
 // общий чат MajorDoMo и публичные комнаты (shouts).
 // Свои — записанные с этого терминала (source terminalID) или его копии «всем» (source «terminal: Название»);
 // без терминала — записанные этим пользователем
-$build_shouts = function ($rows, $chat_key) use ($me, $user_id, $all_terminals, $computer_name) {
+$build_shouts = function ($rows, $chat_key) use ($me, $user_id, $all_terminals, $computer_name, $image_size) {
     $out_rows = array();
     foreach ($rows as $row) {
         $source = (string)$row['SOURCE'];
@@ -945,6 +964,7 @@ $build_shouts = function ($rows, $chat_key) use ($me, $user_id, $all_terminals, 
             'color' => $color,
             'text' => $text,
             'image' => $image,
+            'image_size' => ($image != '') ? $image_size($row['IMAGE']) : array(),
             'sound' => '', 'video' => '', 'file' => '', 'file_name' => '', 'forwarded' => '', 'kind' => 'shout',
             'time' => date('d.m H:i', $ts),
             'ts' => $ts,
