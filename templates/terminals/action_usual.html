@@ -313,6 +313,8 @@
 	.tg-app:not(.tg-no-chat) .tg-placeholder { display: none; }
 	/* диалог группы */
 	.tg-modal { position: absolute; inset: 0; background: rgba(0,0,0,.45); display: none; align-items: center; justify-content: center; z-index: 20; padding: 16px; }
+	/* выбор чата открывается и из просмотра камеры или фото — поверх него */
+	#tm_fwd_modal { position: fixed; z-index: 70; }
 	.tg-modal.tg-show { display: flex; }
 	.tg-dialog { background: var(--tg-panel); color: var(--tg-text); border-radius: 14px; width: 380px; max-width: 100%; max-height: 100%;
 		display: flex; flex-direction: column; box-shadow: 0 8px 32px rgba(0,0,0,.3); }
@@ -2324,6 +2326,8 @@
 	// выбор чата для камеры: показать на терминалах чата / снимок в чат
 	function tmCamPick(action) {
 		if (!tmCamName) return;
+		// на весь экран устройства видно только окно просмотра — выйти, иначе выбор чата не покажется
+		if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(function () {});
 		tmFwdMsg = {image: '1'};
 		tmFwdList = [];
 		tmFwdCam = {action: action, name: tmCamName};
@@ -2429,6 +2433,7 @@
 	document.getElementById('tm_viewer_fwd').addEventListener('click', function () {
 		var cur = tmGallery[tmGalleryAt];
 		if (!cur || !cur.id) return;
+		if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(function () {});
 		tmViewerDone();
 		tmForwardOpen(cur);
 	});
