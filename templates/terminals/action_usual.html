@@ -408,6 +408,7 @@
 		<div class="tg-lock-box">
 			<div class="tg-lock-icon">🔒</div>
 			[#if LOCK="need_key"#]<div><#LANG_TERMINALS_LOCK_NEED_KEY#></div>[#endif#]
+			[#if LOCK_USER_NOTE!=""#]<div style="margin-top:10px">[#LOCK_USER_NOTE#]</div>[#endif LOCK_USER_NOTE#]
 			[#if LOCK="bad_key"#]<div><#LANG_TERMINALS_LOCK_BAD_KEY#></div>[#endif#]
 			[#if LOCK="rules"#]<div><#LANG_TERMINALS_LOCK_RULES#></div>[#endif#]
 		</div>

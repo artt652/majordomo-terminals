@@ -116,10 +116,14 @@ if (!$user_by_key && $lock == '' && $user_cookie != '') {
         terminalsTokenCookie('', 'tmmsg_user');
     }
 }
+// вход на сайт пользователем без пароля не принят — для пояснения на закрытой странице
+$site_user_no_password = '';
 if (empty($me_user['ID']) && $lock == '' && is_object($session) && !empty($session->data['SITE_USER_ID'])) {
     $site_user = SQLSelectOne("SELECT * FROM users WHERE ID=" . (int)$session->data['SITE_USER_ID']);
     if (!empty($site_user['ID']) && (terminalsUserHasPassword($site_user) || !empty($session->data['AUTHORIZED']))) {
         $me_user = $site_user;
+    } elseif (!empty($site_user['ID'])) {
+        $site_user_no_password = ($site_user['NAME'] != '') ? $site_user['NAME'] : $site_user['USERNAME'];
     }
 }
 if (!$by_key && $lock == '') {
@@ -226,6 +230,8 @@ if ($lock != '') {
         exit;
     }
     $out['LOCK'] = $lock;
+    $out['LOCK_USER_NOTE'] = ($lock == 'need_key' && $site_user_no_password != '')
+        ? sprintf(terminalsLang('TERMINALS_LOCK_NO_PASSWORD'), htmlspecialchars($site_user_no_password, ENT_QUOTES, 'UTF-8')) : '';
     $out['ME_NAME'] = '';
     $out['ME_TITLE'] = '';
     $out['ALL_TERMINALS'] = array();
