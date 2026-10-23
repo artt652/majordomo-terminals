@@ -196,6 +196,23 @@
 	.tg-from { font-size: 13px; font-weight: 600; margin-bottom: 2px; white-space: normal; cursor: pointer; }
 	.tg-msg img { display: block; max-width: 100%; max-height: 320px; border-radius: 8px; margin: 2px 0 4px; cursor: pointer; }
 	.tg-msg video { display: block; max-width: 100%; max-height: 360px; border-radius: 8px; margin: 2px 0 4px; background: #000; }
+	/* видео в сообщении: кнопка «развернуть» в углу */
+	.tg-video-wrap { position: relative; }
+	.tg-expand { position: absolute; top: 8px; right: 8px; width: 34px; height: 34px; border-radius: 50%; border: 0; padding: 0; cursor: pointer;
+		background: rgba(0,0,0,.5); color: #fff; display: flex; align-items: center; justify-content: center; }
+	.tg-expand:hover { background: rgba(0,0,0,.7); }
+	/* просмотр на весь экран: картинка или видео по центру, на тёмном фоне; панель кнопок сверху */
+	.tg-viewer { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.96); display: none; flex-direction: column; }
+	.tg-viewer.tg-show { display: flex; }
+	.tg-viewer-bar { display: flex; justify-content: flex-end; gap: 6px; padding: 8px 10px; padding-top: max(8px, env(safe-area-inset-top)); flex: none; }
+	.tg-viewer-btn { width: 42px; height: 42px; border-radius: 50%; border: 0; padding: 0; cursor: pointer; background: rgba(255,255,255,.12);
+		color: #fff; display: flex; align-items: center; justify-content: center; text-decoration: none; }
+	.tg-viewer-btn:hover { background: rgba(255,255,255,.22); color: #fff; }
+	.tg-viewer-body { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 8px 12px; }
+	/* во весь доступный размер, с сохранением пропорций */
+	.tg-viewer-body img, .tg-viewer-body video { width: 100%; height: 100%; object-fit: contain; touch-action: pinch-zoom; }
+	.tg-viewer-body img { cursor: zoom-out; }
+	.tg-viewer:fullscreen .tg-viewer-body { padding: 0; }
 	.tg-msg audio { display: block; width: 240px; max-width: 100%; margin: 2px 0 4px; }
 	.tg-ticks { display: inline-block; vertical-align: -1px; margin-left: 3px; color: var(--tg-time); }
 	.tg-ticks.tg-read { color: var(--tg-accent); }
@@ -469,6 +486,16 @@
 			</div>
 		</div>
 	</div>
+
+	<!-- просмотр картинки или видео на весь экран чата -->
+	<div class="tg-viewer" id="tm_viewer">
+		<div class="tg-viewer-bar">
+			<a class="tg-viewer-btn" id="tm_viewer_open" href="#" target="_blank" title="<#LANG_TERMINALS_OPEN_ORIGINAL#>"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+			<button type="button" class="tg-viewer-btn" id="tm_viewer_full" title="<#LANG_TERMINALS_FULLSCREEN#>"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+			<button type="button" class="tg-viewer-btn" id="tm_viewer_close" title="<#LANG_TERMINALS_CANCEL#>"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+		</div>
+		<div class="tg-viewer-body" id="tm_viewer_body"></div>
+	</div>
 </div>
 
 <script type="text/javascript">
@@ -514,6 +541,7 @@
 		systemReadonly: '<#LANG_TERMINALS_SYSTEM_READONLY#>',
 		clearConfirm: '<#LANG_TERMINALS_CLEAR_HISTORY_CONFIRM#>', clearAllConfirm: '<#LANG_TERMINALS_CLEAR_HISTORY_ALL_CONFIRM#>', showEarlier: '<#LANG_TERMINALS_SHOW_EARLIER#>',
 		logout: '<#LANG_TERMINALS_LOGOUT#>', logoutConfirm: '<#LANG_TERMINALS_LOGOUT_CONFIRM#>', logoutNote: '<#LANG_TERMINALS_LOGOUT_NOTE#>',
+		fullscreen: '<#LANG_TERMINALS_FULLSCREEN#>',
 		logoutUserConfirm: '<#LANG_TERMINALS_LOGOUT_USER_CONFIRM#>', logoutUserNote: '<#LANG_TERMINALS_LOGOUT_USER_NOTE#>', byDefault: '<#LANG_TERMINALS_BY_DEFAULT#>', tts: '<#LANG_TERMINALS_TTS#>',
 		player: '<#LANG_TERMINALS_PLAYER#>', noTts: '<#LANG_TERMINALS_NO_TTS#>', noPlayer: '<#LANG_TERMINALS_NO_PLAYER#>',
 		color: '<#LANG_TERMINALS_AVATAR_COLOR#>', resetColor: '<#LANG_TERMINALS_COLOR_DEFAULT#>',
@@ -927,7 +955,7 @@
 	}
 	// «Назад» (кнопка телефона или браузера) при открытом чате — в список чатов, а не на прежнюю страницу:
 	// открытие чата добавляет шаг истории, возврат по нему закрывает чат
-	var tmHistory = false;
+	var tmHistory = false, tmViewHistory = false;
 	function tmNarrow() { return !!(window.matchMedia && window.matchMedia('(max-width: 720px)').matches); }
 	function tmPushChat() {
 		if (tmHistory || !window.history || !history.pushState) return;
@@ -945,6 +973,8 @@
 		}
 	}
 	window.addEventListener('popstate', function () {
+		// открыт просмотр картинки или видео — «Назад» закрывает только его
+		if (tmViewHistory) { tmViewHistory = false; tmViewerClose(); return; }
 		if (!tmHistory) return;
 		tmHistory = false;
 		tmInfoClose();
@@ -1183,16 +1213,34 @@
 				var img = document.createElement('img');
 				img.src = m.image;
 				img.alt = '';
-				img.addEventListener('click', function () { window.open(m.image, '_blank'); });
+				img.addEventListener('click', function () { tmViewer('image', m.image); });
 				div.appendChild(img);
 			}
 			if (m.video) {
+				var vw = document.createElement('div');
+				vw.className = 'tg-video-wrap';
 				var v = document.createElement('video');
 				v.controls = true;
 				v.preload = 'metadata';
 				v.setAttribute('playsinline', '');
 				v.src = m.video;
-				div.appendChild(v);
+				vw.appendChild(v);
+				// развернуть: видео — в окно просмотра на весь экран чата, с того же места
+				var ex = document.createElement('button');
+				ex.type = 'button';
+				ex.className = 'tg-expand';
+				ex.title = tmText.fullscreen;
+				ex.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+				(function (v) {
+					ex.addEventListener('click', function (e) {
+						e.stopPropagation();
+						var at = v.currentTime, playing = !v.paused;
+						v.pause();
+						tmViewer('video', m.video, at, playing);
+					});
+				})(v);
+				vw.appendChild(ex);
+				div.appendChild(vw);
 			}
 			if (m.file) {
 				var link = document.createElement('a');
@@ -1727,11 +1775,14 @@
 		});
 		var fixing = false;
 		function duration() { return isFinite(audio.duration) ? audio.duration : 0; }
+		// пока ведут по волне — показывается место, куда перемотается (pos), звук идёт как шёл
+		var dragging = false, pos = 0;
 		function show() {
 			var d = duration();
-			var on = d ? Math.round(Math.min(1, audio.currentTime / d) * tmWaveBars) : 0;
+			var at = dragging ? pos * d : audio.currentTime;
+			var on = d ? Math.round(Math.min(1, at / d) * tmWaveBars) : 0;
 			bars.forEach(function (bar, n) { bar.classList.toggle('tg-on', n < on); });
-			time.textContent = (audio.currentTime > 0 && !audio.paused ? tmFmt(audio.currentTime) + ' / ' : '') + tmFmt(d);
+			time.textContent = (dragging || at > 0 ? tmFmt(at) + ' / ' : '') + tmFmt(d);
 		}
 		audio.addEventListener('loadedmetadata', function () {
 			// запись из браузера (webm) не знает длительности, пока не перемотать в конец
@@ -1759,26 +1810,84 @@
 				audio.pause();
 			}
 		});
-		// перемотка: нажатие на волну или ведение по ней (мышь, палец); вертикально — прокрутка переписки
-		var dragging = false;
-		function seek(e) {
-			var d = duration();
-			if (!d) return;
+		// перемотка: нажатие на волну или ведение по ней (мышь, палец) — при отпускании;
+		// вертикально — прокрутка переписки (браузер отменяет ведение, перемотки нет)
+		function track(e) {
 			var r = wave.getBoundingClientRect();
-			audio.currentTime = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * d;
+			pos = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
 			show();
 		}
 		wave.addEventListener('pointerdown', function (e) {
+			if (!duration()) return;
 			dragging = true;
 			if (wave.setPointerCapture) wave.setPointerCapture(e.pointerId);
-			seek(e);
+			track(e);
 		});
-		wave.addEventListener('pointermove', function (e) { if (dragging) seek(e); });
-		['pointerup', 'pointercancel', 'lostpointercapture'].forEach(function (name) {
-			wave.addEventListener(name, function () { dragging = false; });
+		wave.addEventListener('pointermove', function (e) { if (dragging) track(e); });
+		wave.addEventListener('pointerup', function (e) {
+			if (!dragging) return;
+			track(e);
+			dragging = false;
+			audio.currentTime = pos * duration();
+			show();
+		});
+		['pointercancel', 'lostpointercapture'].forEach(function (name) {
+			wave.addEventListener(name, function () { if (dragging) { dragging = false; show(); } });
 		});
 		return box;
 	}
+	// Просмотр картинки или видео на весь экран чата (kind: image | video; видео — с места at).
+	// «Назад» телефона, ✕, Escape или нажатие на фон закрывают; ⤓ — открыть файл; ⛶ — на весь экран устройства
+	var tmViewerEl = document.getElementById('tm_viewer');
+	function tmViewer(kind, src, at, play) {
+		var body = document.getElementById('tm_viewer_body');
+		body.innerHTML = '';
+		var el;
+		if (kind == 'video') {
+			el = document.createElement('video');
+			el.controls = true;
+			el.setAttribute('playsinline', '');
+			el.src = src;
+			if (at) el.addEventListener('loadedmetadata', function () { el.currentTime = at; }, {once: true});
+			if (play) el.autoplay = true;
+		} else {
+			el = document.createElement('img');
+			el.alt = '';
+			el.src = src;
+			// нажатие на картинку — закрыть (как в мессенджерах)
+			el.addEventListener('click', tmViewerDone);
+		}
+		body.appendChild(el);
+		document.getElementById('tm_viewer_open').href = src;
+		var full = document.getElementById('tm_viewer_full');
+		full.style.display = (tmViewerEl.requestFullscreen || tmViewerEl.webkitRequestFullscreen) && (document.fullscreenEnabled || document.webkitFullscreenEnabled) ? '' : 'none';
+		tmViewerEl.classList.add('tg-show');
+		if (!tmViewHistory && window.history && history.pushState) {
+			try { history.pushState({tmView: 1}, document.title, location.href); tmViewHistory = true; } catch (e) {}
+		}
+	}
+	function tmViewerClose() {
+		if (!tmViewerEl.classList.contains('tg-show')) return;
+		if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(function () {});
+		tmViewerEl.classList.remove('tg-show');
+		document.getElementById('tm_viewer_body').innerHTML = '';
+	}
+	// закрыть кнопкой: запись истории просмотра — убрать («Назад» потом не откроет его снова)
+	function tmViewerDone() {
+		if (tmViewHistory) history.back(); else tmViewerClose();
+	}
+	document.getElementById('tm_viewer_close').addEventListener('click', tmViewerDone);
+	document.getElementById('tm_viewer_body').addEventListener('click', function (e) { if (e.target === this) tmViewerDone(); });
+	document.getElementById('tm_viewer_full').addEventListener('click', function () {
+		if (document.fullscreenElement || document.webkitFullscreenElement) {
+			(document.exitFullscreen || document.webkitExitFullscreen).call(document);
+		} else {
+			var req = tmViewerEl.requestFullscreen || tmViewerEl.webkitRequestFullscreen;
+			var res = req.call(tmViewerEl);
+			if (res && res.catch) res.catch(function () {});
+		}
+	});
+	document.addEventListener('keydown', function (e) { if (e.key == 'Escape' && tmViewerEl.classList.contains('tg-show') && !document.fullscreenElement) tmViewerDone(); });
 	// «Выйти с этого устройства» (who: '' — ключ терминала, 'user' — ключ пользователя): ключ из cookie убирается
 	function tmInfoLogout(who) {
 		var out = tmInfoSection('');
