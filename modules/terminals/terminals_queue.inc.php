@@ -145,11 +145,12 @@ function terminalsDeviceLabel($terminal_rec, $tts = null)
     return (isset($terminal_rec['HOST']) && trim((string)$terminal_rec['HOST']) != '') ? trim((string)$terminal_rec['HOST']) : '-';
 }
 
-// Текст для журнала без секретов: пароль в ссылках (rtsp://user:pass@… → rtsp://user:***@…), подписи и ключи в параметрах
+// Текст для журнала без секретов: пароль в ссылках (rtsp://user:pass@… → rtsp://user:***@…), подписи, ключи и пароли
+// в параметрах (в том числе pwd= внешней ссылки WebTorrent)
 function terminalsLogSafe($text)
 {
     $text = preg_replace('~(\b[a-z][a-z0-9+.-]*://[^/:@\s"\']*):[^/@\s"\']*@~i', '$1:***@', (string)$text);
-    return preg_replace('/([?&](?:token|sig|key|password|pass)=)[^&\s"\']+/i', '$1***', $text);
+    return preg_replace('/([?&#](?:token|sig|key|password|pass|pwd)=)[^&\s"\']+/i', '$1***', $text);
 }
 
 // Просит ли дополнение очередь

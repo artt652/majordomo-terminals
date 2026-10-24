@@ -611,7 +611,8 @@
 		uploadError: '<#LANG_TERMINALS_UPLOAD_ERROR#>', houseSub: '<#LANG_TERMINALS_HOUSE_CHAT#>', forward: '<#LANG_TERMINALS_FORWARD#>', forwardedFrom: '<#LANG_TERMINALS_FORWARDED_FROM#>',
 		cameras: '<#LANG_TERMINALS_CAMERAS#>', camerasSub: '<#LANG_TERMINALS_CAMERAS_SUB#>', camShow: '<#LANG_TERMINALS_CAM_SHOW#>',
 		camPhoto: '<#LANG_TERMINALS_CAM_PHOTO#>', camShare: '<#LANG_TERMINALS_CAM_SHARE#>', camShared: '<#LANG_TERMINALS_CAM_SHARED#>',
-		camUnshare: '<#LANG_TERMINALS_CAM_UNSHARE#>', camCopied: '<#LANG_TERMINALS_CAM_COPIED#>', camDuration: '<#LANG_TERMINALS_CAM_DURATION#>',
+		camUnshare: '<#LANG_TERMINALS_CAM_UNSHARE#>', camCopied: '<#LANG_TERMINALS_CAM_COPIED#>', camCopyLink: '<#LANG_TERMINALS_CAM_COPY_LINK#>',
+		camLinkText: '<#LANG_TERMINALS_CAM_LINK_TEXT#>', camLinkReady: '<#LANG_TERMINALS_CAM_LINK_READY#>', camDuration: '<#LANG_TERMINALS_CAM_DURATION#>',
 		camNoAccess: '<#LANG_TERMINALS_CAM_NO_ACCESS#>', camFailed: '<#LANG_TERMINALS_CAM_FAILED#>', camLive: '<#LANG_TERMINALS_CAM_LIVE#>',
 		camSnapshot: '<#LANG_TERMINALS_CAM_SNAPSHOT#>', camOffline: '<#LANG_TERMINALS_CAM_OFFLINE#>',
 		fwdTextOnly: '<#LANG_TERMINALS_FORWARD_TEXT_ONLY#>', fwdNotFound: '<#LANG_TERMINALS_FORWARD_NOT_FOUND#>', emoji: '<#LANG_TERMINALS_AVATAR_EMOJI#>',
@@ -788,6 +789,36 @@
 		var h = 0;
 		for (var i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) % 1000003;
 		return tmColors[h % tmColors.length];
+	}
+	// текст сообщения: ссылки http(s) — нажимаются (открываются в новой вкладке), остальное — как есть
+	function tmAppendText(el, text) {
+		var re = /https?:\/\/[^\s<>"']+/g, at = 0, m;
+		while ((m = re.exec(text))) {
+			var url = m[0].replace(/[.,;:!?)\]]+$/, '');
+			if (m.index > at) el.appendChild(document.createTextNode(text.slice(at, m.index)));
+			var a = document.createElement('a');
+			a.href = url;
+			a.target = '_blank';
+			a.rel = 'noopener noreferrer';
+			a.textContent = url;
+			a.addEventListener('click', function (e) { e.stopPropagation(); });
+			el.appendChild(a);
+			at = m.index + url.length;
+			re.lastIndex = at;
+		}
+		if (at < text.length) el.appendChild(document.createTextNode(text.slice(at)));
+	}
+	// скопировать в буфер (navigator.clipboard — только по HTTPS и localhost; иначе — через выделение)
+	function tmCopy(text) {
+		if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(text).catch(function () {}); return; }
+		var area = document.createElement('textarea');
+		area.value = text;
+		area.style.position = 'fixed';
+		area.style.opacity = '0';
+		document.body.appendChild(area);
+		area.select();
+		try { document.execCommand('copy'); } catch (e) {}
+		document.body.removeChild(area);
 	}
 	function tmAvatar(el, chat) {
 		var icons = {all: '📢', room: '🏠', group: '👥', house: '💬', shoutroom: '🗨️', system: '⚙️', cameras: '📹'};
@@ -1486,7 +1517,7 @@
 			if (!lastM.incoming && lastM.status) t.appendChild(tmTicks(lastM.status));
 			div.appendChild(t);
 			if (m.text) {
-				div.appendChild(document.createTextNode(m.text));
+				tmAppendText(div, m.text);
 			}
 			// переслать
 			var fb = document.createElement('button');
@@ -1752,9 +1783,28 @@
 		var q = document.getElementById('tm_fwd_search').value.trim().toLowerCase();
 		var m = tmFwdMsg;
 		if (!m) return;
-		// камера: «Показать на…» / «Снимок в чат» — чаты терминалов (общий чат MajorDoMo — только текст)
-		var media = tmFwdCam ? true : !!(m.image || m.sound || m.video || m.file);
+		// камера: «Показать на…» / «Снимок в чат» — чаты терминалов (общий чат MajorDoMo — только текст);
+		// внешняя ссылка — текст, в любой чат; первой строкой — «Скопировать ссылку»
+		var link = tmFwdCam && tmFwdCam.action == 'cam_link';
+		var media = (tmFwdCam && !link) ? true : !!(m.image || m.sound || m.video || m.file);
 		box.innerHTML = '';
+		if (link && !q) {
+			var copy = tmEl('div', 'tg-chat');
+			var icon = tmEl('div', 'tg-avatar', '📋');
+			icon.style.background = 'var(--tg-accent, #3390ec)';
+			var cbody = tmEl('div', 'tg-chat-body');
+			cbody.appendChild(tmEl('div', 'tg-title', tmText.camCopyLink));
+			cbody.appendChild(tmEl('div', 'tg-sub', tmFwdCam.url));
+			copy.appendChild(icon);
+			copy.appendChild(cbody);
+			copy.addEventListener('click', function () {
+				var cam = tmFwdCam;
+				tmCopy(cam.url);
+				tmForwardClose();
+				tmCamLinkNote(cam, tmText.camCopied);
+			});
+			box.appendChild(copy);
+		}
 		tmChats.forEach(function (c) {
 			if (c.readonly || c.type == 'cameras') return;
 			if (q && (c.title || '').toLowerCase().indexOf(q) < 0) return;
@@ -1789,6 +1839,17 @@
 			// камера: показать на терминалах чата или снимок в чат
 			var cam = tmFwdCam;
 			var duration = document.getElementById('tm_fwd_duration').value;
+			if (cam.action == 'cam_link') {
+				// внешняя ссылка — текстом в чат, без озвучки; окно камеры остаётся, под ним — ссылка
+				tmForwardClose();
+				tmCamLinkNote(cam, tmText.camLinkReady);
+				tmGroupPost({mode: 'send_message', chat: key, voice: 0,
+					message: tmText.camLinkText.replace('%s', cam.name).replace('%s', tmFmtClock(cam.expires)) + ' ' + cam.url}, function (res) {
+					if (!res.sent) { tmCamNote(tmText.notSent); return; }
+					tmRefresh();
+				});
+				return;
+			}
 			if (cam.action == 'cam_show') {
 				// показ: не ждём — окно закрывается, открывается чат; сервер отвечает сразу, сообщение со снимком
 				// появится чуть позже (вебсокет; без него — проверить ещё пару раз). Не ушло — строка под полем ввода
@@ -2456,29 +2517,45 @@
 	}
 	document.getElementById('tm_viewer_cam_show').addEventListener('click', function () { tmCamPick('cam_show'); });
 	document.getElementById('tm_viewer_cam_photo').addEventListener('click', function () { tmCamPick('cam_photo'); });
-	// ссылка для просмотра снаружи (WebTorrent): создать или продлить, скопировать; «Закрыть ссылку» — у всех
+	// под окном камеры: внешняя ссылка (что с ней сделали — скопирована / отправлена), «Закрыть ссылку» — у всех
+	function tmCamLinkNote(cam, label) {
+		if (tmCamName != cam.name) return;
+		var res = cam, name = cam.name;
+		var wrap = document.createElement('span');
+		wrap.appendChild(document.createTextNode(label.replace('%s', tmFmtClock(res.expires)) + ' '));
+		var a = document.createElement('a');
+		a.href = res.url;
+		a.target = '_blank';
+		a.rel = 'noopener';
+		a.textContent = res.url;
+		wrap.appendChild(a);
+		var close = document.createElement('button');
+		close.type = 'button';
+		close.textContent = tmText.camUnshare;
+		close.addEventListener('click', function () {
+			tmGroupPost({mode: 'cam_unshare', name: name}, function () { tmCamNote(''); tmRefresh(); });
+		});
+		wrap.appendChild(close);
+		tmCamNote(wrap);
+	}
+	// ссылка для просмотра снаружи (WebTorrent): создать или продлить — и окно выбора: скопировать или отправить в чат
 	document.getElementById('tm_viewer_cam_share').addEventListener('click', function () {
 		var name = tmCamName;
 		if (!name) return;
 		tmGroupPost({mode: 'cam_share', name: name}, function (res) {
 			if (!res.ok || !res.url) { tmCamNote(tmText.camFailed); return; }
-			if (navigator.clipboard) navigator.clipboard.writeText(res.url).catch(function () {});
-			var wrap = document.createElement('span');
-			wrap.appendChild(document.createTextNode(tmText.camCopied.replace('%s', tmFmtClock(res.expires)) + ' '));
-			var a = document.createElement('a');
-			a.href = res.url;
-			a.target = '_blank';
-			a.rel = 'noopener';
-			a.textContent = res.url;
-			wrap.appendChild(a);
-			var close = document.createElement('button');
-			close.type = 'button';
-			close.textContent = tmText.camUnshare;
-			close.addEventListener('click', function () {
-				tmGroupPost({mode: 'cam_unshare', name: name}, function () { tmCamNote(''); tmRefresh(); });
-			});
-			wrap.appendChild(close);
-			tmCamNote(wrap);
+			if (tmCamName != name) return;
+			if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(function () {});
+			tmFwdMsg = {text: '1'};
+			tmFwdList = [];
+			tmFwdCam = {action: 'cam_link', name: name, url: res.url, expires: res.expires};
+			document.getElementById('tm_fwd_title').textContent = tmText.camShare;
+			document.getElementById('tm_fwd_duration_box').style.display = 'none';
+			document.getElementById('tm_fwd_search').value = '';
+			document.getElementById('tm_fwd_status').textContent = '';
+			tmForwardList();
+			tmFwdModal.classList.add('tg-show');
+			tmCamLinkNote(tmFwdCam, tmText.camLinkReady);
 			tmRefresh();
 		});
 	});
