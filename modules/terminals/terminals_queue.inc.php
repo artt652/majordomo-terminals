@@ -145,10 +145,10 @@ function terminalsDeviceLabel($terminal_rec, $tts = null)
     return (isset($terminal_rec['HOST']) && trim((string)$terminal_rec['HOST']) != '') ? trim((string)$terminal_rec['HOST']) : '-';
 }
 
-// Текст для журнала без секретов: логин и пароль в ссылках (rtsp://user:pass@…), подписи и ключи в параметрах
+// Текст для журнала без секретов: пароль в ссылках (rtsp://user:pass@… → rtsp://user:***@…), подписи и ключи в параметрах
 function terminalsLogSafe($text)
 {
-    $text = preg_replace('~(\b[a-z][a-z0-9+.-]*://)[^/@\s"\']+@~i', '$1***@', (string)$text);
+    $text = preg_replace('~(\b[a-z][a-z0-9+.-]*://[^/:@\s"\']*):[^/@\s"\']*@~i', '$1:***@', (string)$text);
     return preg_replace('/([?&](?:token|sig|key|password|pass)=)[^&\s"\']+/i', '$1***', $text);
 }
 

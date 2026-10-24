@@ -270,15 +270,19 @@ function terminalsGo2rtcShow($terminal_rec, $name, $duration = 60, $title = '', 
         // pipup: окно потока сразу, поверх (потоки в очередь не ставятся — окно продлевается по тому же id)
         $format = $tts->cameraFormat();
         $url = terminalsGo2rtcUrl($name, $format, $terminal_rec);
-        DebMes('go2rtc: show ' . $name . ' (' . $format . ') on ' . $terminal_rec['TITLE'] . ' (' . terminalsDeviceLabel($terminal_rec, $tts) . ')', 'terminals');
+        $poster = terminalsGo2rtcUrl($name, 'frame');
+        // в журнал — ссылки, которые получает устройство (пароль, ключ и подпись — ***)
+        DebMes('go2rtc: show ' . $name . ' (' . $format . ') on ' . $terminal_rec['TITLE'] . ' (' . terminalsDeviceLabel($terminal_rec, $tts) . '): '
+            . terminalsLogSafe($url) . ', poster ' . terminalsLogSafe($poster), 'terminals');
         return (bool)$tts->sendVideo($url, '', $title, ($format == 'webrtc') ? 'whep' : 'video', array(
             'duration' => $duration, 'id' => 'cam_' . $name, 'muted' => false, 'liveBadge' => true,
-            'poster' => terminalsGo2rtcUrl($name, 'frame')));
+            'poster' => $poster));
     }
     if (is_object($tts) && method_exists($tts, 'sendVideo') && method_exists($tts, 'canShowVideo') && $tts->canShowVideo()) {
         // плеер с экраном: через очередь, держит терминал на время показа
         $url = terminalsGo2rtcUrl($name, 'rtsp');
-        DebMes('go2rtc: show ' . $name . ' (rtsp) on ' . $terminal_rec['TITLE'] . ' (' . terminalsDeviceLabel($terminal_rec, $tts) . ')', 'terminals');
+        DebMes('go2rtc: show ' . $name . ' (rtsp) on ' . $terminal_rec['TITLE'] . ' (' . terminalsDeviceLabel($terminal_rec, $tts) . '): '
+            . terminalsLogSafe($url), 'terminals');
         return (bool)terminalsQueueCall($terminal_rec, 'sendVideo', array($url, '', $title, 'stream', array('duration' => $duration)),
             array('level' => $level, 'busy' => $duration));
     }
