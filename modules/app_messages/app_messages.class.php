@@ -52,6 +52,7 @@ class app_messages extends module
                 $terminals->config['GO2RTC_RTSP_PORT'] = gr('go2rtc_rtsp_port', 'int') ? (string)gr('go2rtc_rtsp_port', 'int') : '';
                 $terminals->config['GO2RTC_WEBTORRENT'] = gr('go2rtc_webtorrent', 'int') ? '1' : '0';
                 $terminals->config['GO2RTC_WT_MINUTES'] = gr('go2rtc_wt_minutes', 'int') ? (string)max(1, min(1440, gr('go2rtc_wt_minutes', 'int'))) : '';
+                $terminals->config['GO2RTC_WAIT'] = gr('go2rtc_wait', 'int') ? (string)max(2, min(25, gr('go2rtc_wait', 'int'))) : '';
                 $terminals->saveConfig();
                 $out['SAVED'] = 1;
             }
@@ -89,7 +90,7 @@ class app_messages extends module
             // камеры go2rtc: настройки и состояние (сколько потоков видно)
             $terminals->getConfig();
             foreach (array('GO2RTC_URL', 'GO2RTC_USER', 'GO2RTC_PASSWORD', 'GO2RTC_DEVICE_URL', 'GO2RTC_RTSP_PORT', 'GO2RTC_RTSP_USER',
-                'GO2RTC_RTSP_PASSWORD', 'GO2RTC_WT_MINUTES') as $key) {
+                'GO2RTC_RTSP_PASSWORD', 'GO2RTC_WT_MINUTES', 'GO2RTC_WAIT') as $key) {
                 $out[$key] = $h(isset($terminals->config[$key]) ? $terminals->config[$key] : '');
             }
             $out['GO2RTC_WEBTORRENT'] = !empty($terminals->config['GO2RTC_WEBTORRENT']) ? 1 : 0;

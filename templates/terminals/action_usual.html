@@ -2249,7 +2249,7 @@
 		}, 4000);
 	}
 	// живое видео: WebRTC (WHEP) — предложение уходит на сервер, сервер спрашивает go2rtc; видео идёт с go2rtc
-	// напрямую. Не вышло за 8 с (вне дома, нет порта 8555, кодек) — onFail
+	// напрямую. Не вышло за ожидание камеры + 4 с (по умолчанию 10 с; вне дома, нет порта 8555, кодек) — onFail
 	function tmCamLive(name, video, onFail) {
 		if (!window.RTCPeerConnection) { onFail(); return null; }
 		var pc = new RTCPeerConnection({iceServers: []}), failed = false;
@@ -2273,7 +2273,7 @@
 			.then(function (r) { if (!r.ok) throw new Error('whep'); return r.text(); })
 			.then(function (sdp) { return pc.setRemoteDescription({type: 'answer', sdp: sdp}); })
 			.catch(fail);
-		setTimeout(function () { if (!failed && video.readyState < 2) fail(); }, 8000);
+		setTimeout(function () { if (!failed && video.readyState < 2) fail(); }, (tmCamWait + 4) * 1000);
 		return pc;
 	}
 	function tmCamStop() {
@@ -2623,6 +2623,7 @@
 	// Пока вебсокет не подключён, переписка обновляется опросом раз в 15 с, при подключённом — раз в минуту
 	var tmWsPort = '[#WS_PORT#]', tmWsOpen = false, tmLastPoll = Date.now();
 	var tmWsExternal = [#WS_EXTERNAL_JSON#];
+	var tmCamWait = parseInt('[#CAM_WAIT#]', 10) || 6;
 	// адрес вебсокета: по локальному адресу — порт WEBSOCKETS_PORT на том же хосте (как в MajorDoMo);
 	// по внешнему (интернет, обратный прокси) — адрес из настройки приложения «Сообщения», если он задан
 	function tmLocalHost(host) {

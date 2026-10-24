@@ -13,6 +13,7 @@
  *   GO2RTC_DEVICE_URL — адрес go2rtc для устройств (пусто — адрес сервера в сети и порт из GO2RTC_URL);
  *   GO2RTC_RTSP_PORT, GO2RTC_RTSP_USER, GO2RTC_RTSP_PASSWORD — RTSP-сервер go2rtc (свой пароль, только просмотр);
  *   GO2RTC_WEBTORRENT, GO2RTC_WT_MINUTES — внешний просмотр через WebTorrent и срок ссылки;
+ *   GO2RTC_WAIT — сколько ждать первый кадр камеры, с (снимок, начало просмотра; пусто — 6);
  *   GO2RTC_SHARES — действующие ссылки WebTorrent: имя потока => до какого времени.
  * Пароль API никуда не уходит: устройства смотрят по RTSP (пароль RTSP) или WebRTC через сервер
  * (страница «Сообщения», mode=whep — согласование по ключу терминала, видео идёт напрямую с go2rtc).
@@ -52,6 +53,8 @@ function terminalsGo2rtcConfig()
         'rtsp_password' => $get('GO2RTC_RTSP_PASSWORD'),
         'webtorrent' => $get('GO2RTC_WEBTORRENT') == '1',
         'wt_minutes' => max(1, min(1440, (int)$get('GO2RTC_WT_MINUTES', '10'))),
+        // удалённые и облачные камеры просыпаются дольше; не больше 25 с — запрос страницы укладывается в 30 с PHP
+        'wait' => max(2, min(25, (int)$get('GO2RTC_WAIT', '6'))),
     );
 }
 
@@ -207,8 +210,10 @@ function terminalsGo2rtcFrame($name, $width = 0)
     if ($width > 0) {
         $query['width'] = (int)$width;
     }
-    // камера просыпается (go2rtc подключается к ней) обычно за 1–3 с; дольше 6 с — считаем недоступной
-    $jpeg = terminalsGo2rtcRequest('GET', 'api/frame.jpeg', $query, null, '', $code, 6, $type);
+    // камера просыпается (go2rtc подключается к ней) обычно за 1–3 с, удалённая — дольше; не ответила
+    // за GO2RTC_WAIT (по умолчанию 6 с) — считаем недоступной
+    $cfg = terminalsGo2rtcConfig();
+    $jpeg = terminalsGo2rtcRequest('GET', 'api/frame.jpeg', $query, null, '', $code, $cfg['wait'], $type);
     $ok = ($code == 200 && strpos($type, 'image/jpeg') === 0 && $jpeg != '');
     if (!$ok) {
         terminalsGo2rtcDown($name, true);

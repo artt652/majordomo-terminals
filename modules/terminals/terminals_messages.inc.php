@@ -245,6 +245,7 @@ if ($lock != '') {
     $out['ME_USER_KEY'] = '';
     $out['USER_BY_KEY'] = 0;
     $out['WS_EXTERNAL_JSON'] = '""';
+    $out['CAM_WAIT'] = 6;
     $out['WS_PORT'] = '';
     $out['MAX_MEDIA_MB'] = 15;
     $out['MAX_FILE_MB'] = 50;
@@ -784,8 +785,10 @@ if (gr('mode') == 'whep') {
         header('HTTP/1.1 504 Gateway Timeout');
         exit;
     }
+    // ответ go2rtc — после подключения к камере: ожидание камеры (GO2RTC_WAIT) и 2 с
+    $go2rtc = terminalsGo2rtcConfig();
     $answer = terminalsGo2rtcRequest('POST', 'api/webrtc', array('src' => $name), (string)file_get_contents('php://input'),
-        $type_in, $code, 8, $type_out);
+        $type_in, $code, $go2rtc['wait'] + 2, $type_out);
     header('HTTP/1.1 ' . (($code >= 200 && $code < 300) ? $code . ' OK' : '502 Bad Gateway'));
     header('Content-Type: ' . (($type_out != '') ? $type_out : $type_in));
     echo $answer;
@@ -1299,4 +1302,7 @@ $out['WS_PORT'] = (defined('WEBSOCKETS_PORT') && !(defined('DISABLE_WEBSOCKETS')
 // не по локальному адресу (интернет, обратный прокси); локально — порт WEBSOCKETS_PORT на том же хосте
 $this->getConfig();
 $out['WS_EXTERNAL_JSON'] = json_encode(isset($this->config['MESSAGES_WS_EXTERNAL']) ? terminalsWsUrl($this->config['MESSAGES_WS_EXTERNAL']) : '', $flags);
+// ожидание камеры (настройка «Сообщений»): сколько живой просмотр ждёт первый кадр до снимка
+$go2rtc = terminalsGo2rtcConfig();
+$out['CAM_WAIT'] = (int)$go2rtc['wait'];
 $finish_session();
