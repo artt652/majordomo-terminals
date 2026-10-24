@@ -363,11 +363,115 @@ function terminalsGo2rtcShares()
 // MINUTELY: закрыть ссылки, срок которых вышел
 function terminalsGo2rtcSharesCleanup()
 {
+    terminalsCamLinksCleanup();
     foreach (terminalsGo2rtcShares() as $name => $expires) {
         if ((int)$expires < time()) {
             terminalsGo2rtcUnshare($name);
         }
     }
+}
+
+// --- Временный доступ к камере ---
+// GO2RTC_LINKS: id (32 hex) => array('cam' => поток, 'kind' => 'chat' | 'guest', 'members' => ключи участников чата
+// (имена терминалов, user:ID) — для 'chat', 'by' => кто создал (имя терминала или user:ID), 'by_title', 'created', 'expires').
+// chat — участники чата смотрят камеру на странице «Сообщения» до expires, без отметки в правах;
+// guest — гостевая ссылка: страница просмотра без входа (снимки и WebRTC через сервер). Закрыть — автор или администратор.
+// Устаревшие убирает MINUTELY. Отдельно от WebTorrent (там одна ссылка на поток)
+function terminalsCamLinks()
+{
+    $config = terminalsModuleConfig();
+    $links = (isset($config['GO2RTC_LINKS']) && is_array($config['GO2RTC_LINKS'])) ? $config['GO2RTC_LINKS'] : array();
+    foreach ($links as $id => $link) {
+        if (!is_array($link) || empty($link['cam']) || (int)$link['expires'] < time()) {
+            unset($links[$id]);
+        }
+    }
+    return $links;
+}
+
+// Действующая ссылка или пустой массив
+function terminalsCamLinkGet($id)
+{
+    $id = strtolower((string)$id);
+    $links = terminalsCamLinks();
+    return (preg_match('/^[0-9a-f]{32}$/', $id) && isset($links[$id])) ? $links[$id] : array();
+}
+
+// Создать ссылку на $minutes минут (1 мин — 30 дней). Возвращает id
+function terminalsCamLinkCreate($cam, $kind, $minutes, $members, $by, $by_title)
+{
+    $id = function_exists('random_bytes') ? bin2hex(random_bytes(16)) : md5(uniqid('', true) . mt_rand());
+    $minutes = max(1, min(43200, (int)$minutes));
+    $config = terminalsModuleConfig();
+    $config['GO2RTC_LINKS'] = terminalsCamLinks();
+    $config['GO2RTC_LINKS'][$id] = array('cam' => (string)$cam, 'kind' => ($kind == 'guest') ? 'guest' : 'chat',
+        'members' => array_values(array_unique(array_map('strval', (array)$members))), 'by' => (string)$by,
+        'by_title' => (string)$by_title, 'created' => time(), 'expires' => time() + $minutes * 60);
+    terminalsModuleConfigSave($config);
+    DebMes('go2rtc: ' . (($kind == 'guest') ? 'guest link' : 'chat access') . ' ' . substr($id, 0, 6) . '… to ' . $cam
+        . ' by ' . $by_title . ' for ' . $minutes . ' min', 'terminals');
+    return $id;
+}
+
+// Закрыть ссылку (перестаёт действовать сразу)
+function terminalsCamLinkClose($id)
+{
+    $config = terminalsModuleConfig();
+    $links = terminalsCamLinks();
+    if (!isset($links[$id])) {
+        return false;
+    }
+    unset($links[$id]);
+    $config['GO2RTC_LINKS'] = $links;
+    terminalsModuleConfigSave($config);
+    DebMes('go2rtc: link ' . substr($id, 0, 6) . '… closed', 'terminals');
+    return true;
+}
+
+// MINUTELY: убрать устаревшие (запись — только если было что убрать)
+function terminalsCamLinksCleanup()
+{
+    $config = terminalsModuleConfig();
+    $all = (isset($config['GO2RTC_LINKS']) && is_array($config['GO2RTC_LINKS'])) ? $config['GO2RTC_LINKS'] : array();
+    $links = terminalsCamLinks();
+    if (count($links) != count($all)) {
+        $config['GO2RTC_LINKS'] = $links;
+        terminalsModuleConfigSave($config);
+    }
+}
+
+// Камеры, открытые этому терминалу или пользователю по ссылкам «участникам чата»: поток => до какого времени
+function terminalsCamLinkCameras($me_keys)
+{
+    $result = array();
+    foreach (terminalsCamLinks() as $link) {
+        if ($link['kind'] == 'chat' && count(array_intersect((array)$me_keys, (array)$link['members']))
+            && (!isset($result[$link['cam']]) || $result[$link['cam']] < (int)$link['expires'])) {
+            $result[$link['cam']] = (int)$link['expires'];
+        }
+    }
+    return $result;
+}
+
+// WebRTC: согласование (WHEP) через сервер — предложение SDP, ответ go2rtc; выводит ответ и завершает запрос.
+// Само видео идёт с go2rtc напрямую; пароль API go2rtc остаётся на сервере
+function terminalsGo2rtcWhepProxy($name)
+{
+    $type_in = isset($_SERVER['CONTENT_TYPE']) ? (string)$_SERVER['CONTENT_TYPE'] : 'application/sdp';
+    $type_in = (stripos($type_in, 'json') !== false) ? 'application/json' : 'application/sdp';
+    // камера недавно не ответила — сразу отказ (браузер покажет снимок «нет связи», PHP не ждёт)
+    if (terminalsGo2rtcDown($name)) {
+        header('HTTP/1.1 504 Gateway Timeout');
+        exit;
+    }
+    // ответ go2rtc — после подключения к камере: ожидание камеры (GO2RTC_WAIT) и 2 с
+    $go2rtc = terminalsGo2rtcConfig();
+    $answer = terminalsGo2rtcRequest('POST', 'api/webrtc', array('src' => $name), (string)file_get_contents('php://input'),
+        $type_in, $code, $go2rtc['wait'] + 2, $type_out);
+    header('HTTP/1.1 ' . (($code >= 200 && $code < 300) ? $code . ' OK' : '502 Bad Gateway'));
+    header('Content-Type: ' . (($type_out != '') ? $type_out : $type_in));
+    echo $answer;
+    exit;
 }
 
 // --- Права на камеры ---

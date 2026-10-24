@@ -146,10 +146,11 @@ function terminalsDeviceLabel($terminal_rec, $tts = null)
 }
 
 // Текст для журнала без секретов: пароль в ссылках (rtsp://user:pass@… → rtsp://user:***@…), подписи, ключи и пароли
-// в параметрах (в том числе pwd= внешней ссылки WebTorrent)
+// в параметрах (в том числе pwd= внешней ссылки WebTorrent и id= гостевой ссылки на камеру)
 function terminalsLogSafe($text)
 {
     $text = preg_replace('~(\b[a-z][a-z0-9+.-]*://[^/:@\s"\']*):[^/@\s"\']*@~i', '$1:***@', (string)$text);
+    $text = preg_replace('/([?&]id=)[0-9a-f]{32}\b/i', '$1***', $text);
     return preg_replace('/([?&#](?:token|sig|key|password|pass|pwd)=)[^&\s"\']+/i', '$1***', $text);
 }
 

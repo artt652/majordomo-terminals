@@ -220,6 +220,17 @@
 	.tg-cam-name { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 8px 5px; color: #fff; font-size: 13px; font-weight: 600;
 		background: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,.6)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 	.tg-cam-share { position: absolute; top: 6px; right: 6px; background: rgba(0,0,0,.6); color: #fff; font-size: 11px; padding: 2px 7px; border-radius: 10px; }
+	.tg-share-kinds { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 18px 8px; }
+	.tg-share-kinds button { flex: 1 1 auto; border: 1px solid var(--tg-border, rgba(127,127,127,.35)); background: none; color: var(--tg-text); border-radius: 16px; padding: 5px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+	.tg-share-kinds button.tg-on { background: var(--tg-accent); border-color: var(--tg-accent); color: #fff; }
+	.tg-share-for { display: flex; align-items: center; gap: 6px; padding: 0 18px 6px; font-size: 13px; color: var(--tg-muted); }
+	.tg-share-for input { width: 64px; }
+	.tg-share-for input, .tg-share-for select { background: var(--tg-input); color: var(--tg-text); border: 0; border-radius: 8px; padding: 4px 6px; font: inherit; }
+	.tg-share-hint { font-size: 12px; color: var(--tg-muted); padding: 0 18px 6px; }
+	.tg-link-card { margin: 4px 0 2px; padding: 6px 10px; border-left: 3px solid var(--tg-accent); border-radius: 6px; background: rgba(127,127,127,.1); font-size: 13px; }
+	.tg-link-card.tg-gone { border-left-color: var(--tg-muted); color: var(--tg-muted); }
+	.tg-link-card button { margin: 4px 8px 0 0; border: 1px solid var(--tg-accent); background: none; color: var(--tg-accent); border-radius: 12px; padding: 2px 10px; font: inherit; cursor: pointer; }
+	.tg-cam-until { position: absolute; top: 6px; right: 6px; font-size: 11px; color: #fff; background: rgba(0,0,0,.55); border-radius: 8px; padding: 1px 6px; }
 	.tg-cam-badge { display: inline-block; font-size: 13px; color: var(--tg-accent); cursor: pointer; margin: 0 0 4px; }
 	#tm_viewer .tg-cam-note { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); max-width: calc(100% - 24px); color: #fff;
 		background: rgba(0,0,0,.6); padding: 6px 12px; border-radius: 14px; font-size: 13px; text-align: center; word-break: break-all; z-index: 2; }
@@ -521,6 +532,16 @@
 			<div class="tg-field"><input type="text" id="tm_fwd_search" placeholder="<#LANG_TERMINALS_SEARCH#>" autocomplete="off"></div>
 			<div class="tg-field" id="tm_fwd_duration_box" style="display:none"><label style="font-size:13px;color:var(--tg-muted)"><#LANG_TERMINALS_CAM_DURATION#>
 				<select id="tm_fwd_duration"><option value="30">30 с</option><option value="60" selected>1 мин</option><option value="300">5 мин</option><option value="600">10 мин</option></select></label></div>
+			<div id="tm_fwd_share_box" style="display:none">
+				<div class="tg-share-kinds" id="tm_share_kinds">
+					<button type="button" data-kind="chat"><#LANG_TERMINALS_CAM_KIND_CHAT#></button>
+					<button type="button" data-kind="guest"><#LANG_TERMINALS_CAM_KIND_GUEST#></button>
+					<button type="button" data-kind="wt">WebTorrent</button>
+				</div>
+				<div class="tg-share-for" id="tm_share_for"><#LANG_TERMINALS_CAM_FOR#> <input type="number" id="tm_share_n" min="1" max="999" value="1">
+					<select id="tm_share_unit"><option value="1"><#LANG_TERMINALS_CAM_MINUTES#></option><option value="60" selected><#LANG_TERMINALS_CAM_HOURS#></option><option value="1440"><#LANG_TERMINALS_CAM_DAYS#></option></select></div>
+				<div class="tg-share-hint" id="tm_share_hint"></div>
+			</div>
 			<div class="tg-fwd-list" id="tm_fwd_list"></div>
 			<div class="tg-fwd-status" id="tm_fwd_status"></div>
 			<div class="tg-buttons">
@@ -554,7 +575,7 @@
 			<span class="tg-viewer-count" id="tm_viewer_count"></span>
 			<button type="button" class="tg-viewer-btn" id="tm_viewer_cam_show" title="<#LANG_TERMINALS_CAM_SHOW#>" style="display:none"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 21h8M12 17v4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
 			<button type="button" class="tg-viewer-btn" id="tm_viewer_cam_photo" title="<#LANG_TERMINALS_CAM_PHOTO#>" style="display:none"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/></svg></button>
-			<button type="button" class="tg-viewer-btn" id="tm_viewer_cam_share" title="<#LANG_TERMINALS_CAM_SHARE#>" style="display:none"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+			<button type="button" class="tg-viewer-btn" id="tm_viewer_cam_share" title="<#LANG_TERMINALS_CAM_SHARE_TITLE#>" style="display:none"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
 			<button type="button" class="tg-viewer-btn" id="tm_viewer_fwd" title="<#LANG_TERMINALS_FORWARD#>"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5l7 7-7 7M21 12H9a6 6 0 0 0-6 6v1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
 			<a class="tg-viewer-btn" id="tm_viewer_open" href="#" target="_blank" title="<#LANG_TERMINALS_OPEN_ORIGINAL#>"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
 			<button type="button" class="tg-viewer-btn" id="tm_viewer_full" title="<#LANG_TERMINALS_FULLSCREEN#>"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
@@ -612,7 +633,11 @@
 		cameras: '<#LANG_TERMINALS_CAMERAS#>', camerasSub: '<#LANG_TERMINALS_CAMERAS_SUB#>', camShow: '<#LANG_TERMINALS_CAM_SHOW#>',
 		camPhoto: '<#LANG_TERMINALS_CAM_PHOTO#>', camShare: '<#LANG_TERMINALS_CAM_SHARE#>', camShared: '<#LANG_TERMINALS_CAM_SHARED#>',
 		camUnshare: '<#LANG_TERMINALS_CAM_UNSHARE#>', camCopied: '<#LANG_TERMINALS_CAM_COPIED#>', camCopyLink: '<#LANG_TERMINALS_CAM_COPY_LINK#>',
-		camLinkText: '<#LANG_TERMINALS_CAM_LINK_TEXT#>', camLinkReady: '<#LANG_TERMINALS_CAM_LINK_READY#>', camDuration: '<#LANG_TERMINALS_CAM_DURATION#>',
+		camLinkText: '<#LANG_TERMINALS_CAM_LINK_TEXT#>', camLinkReady: '<#LANG_TERMINALS_CAM_LINK_READY#>',
+		camShareTitle: '<#LANG_TERMINALS_CAM_SHARE_TITLE#>', camHintChat: '<#LANG_TERMINALS_CAM_HINT_CHAT#>', camHintGuest: '<#LANG_TERMINALS_CAM_HINT_GUEST#>',
+		camHintWt: '<#LANG_TERMINALS_CAM_HINT_WT#>', camNoMembers: '<#LANG_TERMINALS_CAM_NO_MEMBERS#>', camAccessSent: '<#LANG_TERMINALS_CAM_ACCESS_SENT#>',
+		camAccessUntil: '<#LANG_TERMINALS_CAM_ACCESS_UNTIL#>', camGuestUntil: '<#LANG_TERMINALS_CAM_GUEST_UNTIL#>', camLinkOver: '<#LANG_TERMINALS_CAM_LINK_OVER#>',
+		camOpen: '<#LANG_TERMINALS_CAM_OPEN#>', camClose: '<#LANG_TERMINALS_CAM_CLOSE#>', copy: '<#LANG_TERMINALS_TOKEN_COPY#>', camDuration: '<#LANG_TERMINALS_CAM_DURATION#>',
 		camNoAccess: '<#LANG_TERMINALS_CAM_NO_ACCESS#>', camFailed: '<#LANG_TERMINALS_CAM_FAILED#>', camLive: '<#LANG_TERMINALS_CAM_LIVE#>',
 		camSnapshot: '<#LANG_TERMINALS_CAM_SNAPSHOT#>', camOffline: '<#LANG_TERMINALS_CAM_OFFLINE#>',
 		fwdTextOnly: '<#LANG_TERMINALS_FORWARD_TEXT_ONLY#>', fwdNotFound: '<#LANG_TERMINALS_FORWARD_NOT_FOUND#>', emoji: '<#LANG_TERMINALS_AVATAR_EMOJI#>',
@@ -1519,6 +1544,7 @@
 			if (m.text) {
 				tmAppendText(div, m.text);
 			}
+			if (m.link) div.appendChild(tmLinkCard(m.link));
 			// переслать
 			var fb = document.createElement('button');
 			fb.type = 'button';
@@ -1785,39 +1811,36 @@
 		if (!m) return;
 		// камера: «Показать на…» / «Снимок в чат» — чаты терминалов (общий чат MajorDoMo — только текст);
 		// внешняя ссылка — текст, в любой чат; первой строкой — «Скопировать ссылку»
+		// «Поделиться камерой»: участникам чата — только чаты со списком участников; гостевая ссылка и WebTorrent —
+		// текст, в любой чат, первой строкой — «Скопировать ссылку»
 		var link = tmFwdCam && tmFwdCam.action == 'cam_link';
 		var media = (tmFwdCam && !link) ? true : !!(m.image || m.sound || m.video || m.file);
 		box.innerHTML = '';
-		if (link && !q) {
+		if (link && tmFwdCam.kind != 'chat' && !q) {
 			var copy = tmEl('div', 'tg-chat');
 			var icon = tmEl('div', 'tg-avatar', '📋');
 			icon.style.background = 'var(--tg-accent, #3390ec)';
 			var cbody = tmEl('div', 'tg-chat-body');
 			cbody.appendChild(tmEl('div', 'tg-title', tmText.camCopyLink));
-			cbody.appendChild(tmEl('div', 'tg-sub', tmFwdCam.url));
 			copy.appendChild(icon);
 			copy.appendChild(cbody);
-			copy.addEventListener('click', function () {
-				var cam = tmFwdCam;
-				tmCopy(cam.url);
-				tmForwardClose();
-				tmCamLinkNote(cam, tmText.camCopied);
-			});
+			copy.addEventListener('click', function () { tmCamShareTo(''); });
 			box.appendChild(copy);
 		}
 		tmChats.forEach(function (c) {
 			if (c.readonly || c.type == 'cameras') return;
 			if (q && (c.title || '').toLowerCase().indexOf(q) < 0) return;
-			var blocked = !!(c.text_only && (media || !m.text));
+			var noMembers = link && tmFwdCam.kind == 'chat' && !!c.text_only;
+			var blocked = noMembers || !!(c.text_only && (media || !m.text));
 			var row = tmEl('div', 'tg-chat' + (blocked ? ' tg-disabled' : ''));
 			var av = tmEl('div', 'tg-avatar');
 			tmAvatar(av, c);
 			var body = tmEl('div', 'tg-chat-body');
 			body.appendChild(tmEl('div', 'tg-title', c.title));
-			body.appendChild(tmEl('div', 'tg-sub', blocked ? tmText.fwdTextOnly : tmMembersText(c)));
+			body.appendChild(tmEl('div', 'tg-sub', noMembers ? tmText.camNoMembers : (blocked ? tmText.fwdTextOnly : tmMembersText(c))));
 			row.appendChild(av);
 			row.appendChild(body);
-			if (!blocked) row.addEventListener('click', function () { tmForwardTo(c.key); });
+			if (!blocked) row.addEventListener('click', function () { if (link) tmCamShareTo(c.key); else tmForwardTo(c.key); });
 			box.appendChild(row);
 		});
 	}
@@ -1828,6 +1851,7 @@
 		tmFwdCam = null;
 		document.getElementById('tm_fwd_title').textContent = tmText.forward;
 		document.getElementById('tm_fwd_duration_box').style.display = 'none';
+		document.getElementById('tm_fwd_share_box').style.display = 'none';
 		document.getElementById('tm_fwd_search').value = '';
 		document.getElementById('tm_fwd_status').textContent = '';
 		tmForwardList();
@@ -1839,17 +1863,6 @@
 			// камера: показать на терминалах чата или снимок в чат
 			var cam = tmFwdCam;
 			var duration = document.getElementById('tm_fwd_duration').value;
-			if (cam.action == 'cam_link') {
-				// внешняя ссылка — текстом в чат, без озвучки; окно камеры остаётся, под ним — ссылка
-				tmForwardClose();
-				tmCamLinkNote(cam, tmText.camLinkReady);
-				tmGroupPost({mode: 'send_message', chat: key, voice: 0,
-					message: tmText.camLinkText.replace('%s', cam.name).replace('%s', tmFmtClock(cam.expires)) + ' ' + cam.url}, function (res) {
-					if (!res.sent) { tmCamNote(tmText.notSent); return; }
-					tmRefresh();
-				});
-				return;
-			}
 			if (cam.action == 'cam_show') {
 				// показ: не ждём — окно закрывается, открывается чат; сервер отвечает сразу, сообщение со снимком
 				// появится чуть позже (вебсокет; без него — проверить ещё пару раз). Не ушло — строка под полем ввода
@@ -2362,6 +2375,7 @@
 			card.appendChild(tmEl('div', 'tg-cam-offline', tmText.camOffline));
 			card.appendChild(tmEl('div', 'tg-cam-name', c.name));
 			if (c.shared && c.shared * 1000 > Date.now()) card.appendChild(tmEl('div', 'tg-cam-share', '🔗 ' + tmFmtClock(c.shared)));
+			if (c.until) card.appendChild(tmEl('div', 'tg-cam-until', tmText.camAccessUntil.replace('%s', tmFmtClock(c.until))));
 			card.addEventListener('click', function () { tmCamOpen(c.name); });
 			grid.appendChild(card);
 		});
@@ -2491,9 +2505,11 @@
 		document.getElementById('tm_viewer_prev').hidden = true;
 		document.getElementById('tm_viewer_next').hidden = true;
 		document.getElementById('tm_viewer_full').style.display = (tmViewerEl.requestFullscreen || tmViewerEl.webkitRequestFullscreen) && (document.fullscreenEnabled || document.webkitFullscreenEnabled) ? '' : 'none';
-		document.getElementById('tm_viewer_cam_show').style.display = '';
-		document.getElementById('tm_viewer_cam_photo').style.display = '';
-		document.getElementById('tm_viewer_cam_share').style.display = (chat && chat.webtorrent) ? '' : 'none';
+		// временный доступ (по ссылке «участникам чата») — только смотреть
+		var mine = !(chat && (chat.cameras || []).some(function (c) { return c.name == name && c.until; }));
+		document.getElementById('tm_viewer_cam_show').style.display = mine ? '' : 'none';
+		document.getElementById('tm_viewer_cam_photo').style.display = mine ? '' : 'none';
+		document.getElementById('tm_viewer_cam_share').style.display = mine ? '' : 'none';
 		tmCamNote('');
 		tmViewerEl.classList.add('tg-show');
 		if (!tmViewHistory && window.history && history.pushState) {
@@ -2510,6 +2526,7 @@
 		tmFwdCam = {action: action, name: tmCamName};
 		document.getElementById('tm_fwd_title').textContent = action == 'cam_show' ? tmText.camShow : tmText.camPhoto;
 		document.getElementById('tm_fwd_duration_box').style.display = action == 'cam_show' ? '' : 'none';
+		document.getElementById('tm_fwd_share_box').style.display = 'none';
 		document.getElementById('tm_fwd_search').value = '';
 		document.getElementById('tm_fwd_status').textContent = '';
 		tmForwardList();
@@ -2517,47 +2534,119 @@
 	}
 	document.getElementById('tm_viewer_cam_show').addEventListener('click', function () { tmCamPick('cam_show'); });
 	document.getElementById('tm_viewer_cam_photo').addEventListener('click', function () { tmCamPick('cam_photo'); });
-	// под окном камеры: внешняя ссылка (что с ней сделали — скопирована / отправлена), «Закрыть ссылку» — у всех
-	function tmCamLinkNote(cam, label) {
-		if (tmCamName != cam.name) return;
-		var res = cam, name = cam.name;
+	// под окном камеры: что сделали (label с %s — срок), ссылка с «Скопировать» (если есть) и «Закрыть» — у всех сразу.
+	// share: {name, kind: 'chat'|'guest'|'wt', url, expires, id}
+	function tmCamLinkNote(share, label) {
+		if (tmCamName != share.name) return;
 		var wrap = document.createElement('span');
-		wrap.appendChild(document.createTextNode(label.replace('%s', tmFmtClock(res.expires)) + ' '));
-		var a = document.createElement('a');
-		a.href = res.url;
-		a.target = '_blank';
-		a.rel = 'noopener';
-		a.textContent = res.url;
-		wrap.appendChild(a);
+		wrap.appendChild(document.createTextNode(label.replace('%s', tmFmtClock(share.expires)) + ' '));
+		if (share.url) {
+			var a = document.createElement('a');
+			a.href = share.url;
+			a.target = '_blank';
+			a.rel = 'noopener noreferrer';
+			a.textContent = share.url;
+			wrap.appendChild(a);
+			var copy = document.createElement('button');
+			copy.type = 'button';
+			copy.textContent = tmText.copy;
+			copy.addEventListener('click', function () { tmCopy(share.url); copy.textContent = '✓'; });
+			wrap.appendChild(copy);
+		}
 		var close = document.createElement('button');
 		close.type = 'button';
-		close.textContent = tmText.camUnshare;
+		close.textContent = share.kind == 'chat' ? tmText.camClose : tmText.camUnshare;
 		close.addEventListener('click', function () {
-			tmGroupPost({mode: 'cam_unshare', name: name}, function () { tmCamNote(''); tmRefresh(); });
+			var done = function () { tmCamNote(''); tmRefresh(); };
+			if (share.kind == 'wt') tmGroupPost({mode: 'cam_unshare', name: share.name}, done);
+			else tmGroupPost({mode: 'cam_link_close', id: share.id}, done);
 		});
 		wrap.appendChild(close);
 		tmCamNote(wrap);
 	}
-	// ссылка для просмотра снаружи (WebTorrent): создать или продлить — и окно выбора: скопировать или отправить в чат
+	// «Поделиться камерой»: вид — участникам чата / гостевая ссылка / WebTorrent; срок — «на сколько»
+	function tmShareKind(kind) {
+		if (!tmFwdCam) return;
+		tmFwdCam.kind = kind;
+		Array.prototype.forEach.call(document.querySelectorAll('#tm_share_kinds button'), function (b) {
+			b.classList.toggle('tg-on', b.getAttribute('data-kind') == kind);
+		});
+		document.getElementById('tm_share_for').style.display = kind == 'wt' ? 'none' : '';
+		document.getElementById('tm_share_hint').textContent = kind == 'chat' ? tmText.camHintChat : (kind == 'guest' ? tmText.camHintGuest : tmText.camHintWt);
+		tmForwardList();
+	}
+	Array.prototype.forEach.call(document.querySelectorAll('#tm_share_kinds button'), function (b) {
+		b.addEventListener('click', function () { tmShareKind(b.getAttribute('data-kind')); });
+	});
+	// куда: key — чат, '' — скопировать ссылку. Окно выбора закрывается сразу, окно камеры остаётся; итог — под ним
+	function tmCamShareTo(key) {
+		var cam = tmFwdCam;
+		if (!cam) return;
+		var minutes = Math.max(1, parseInt(document.getElementById('tm_share_n').value, 10) || 1) * parseInt(document.getElementById('tm_share_unit').value, 10);
+		tmForwardClose();
+		tmCamNote(tmText.sending);
+		var fail = function (res) { tmCamNote(res && res.error == 'no_access' ? tmText.camNoAccess : tmText.notSent); };
+		if (cam.kind == 'wt') {
+			// WebTorrent: ссылка go2rtc на поток (одна на всех), срок — из настроек
+			tmGroupPost({mode: 'cam_share', name: cam.name}, function (res) {
+				if (!res.ok || !res.url) { tmCamNote(tmText.camFailed); return; }
+				var share = {name: cam.name, kind: 'wt', url: res.url, expires: res.expires};
+				if (!key) { tmCopy(res.url); tmCamLinkNote(share, tmText.camCopied); tmRefresh(); return; }
+				tmGroupPost({mode: 'send_message', chat: key, voice: 0,
+					message: tmText.camLinkText.replace('%s', cam.name).replace('%s', tmFmtClock(res.expires)) + ' ' + res.url}, function (r) {
+					if (!r.sent) { fail(r); return; }
+					tmCamLinkNote(share, tmText.camLinkReady);
+					tmRefresh();
+				});
+			});
+			return;
+		}
+		tmGroupPost({mode: 'cam_link', name: cam.name, kind: cam.kind, minutes: minutes, chat: key}, function (res) {
+			if (!res.ok) { fail(res); return; }
+			var share = {name: cam.name, kind: cam.kind, url: res.url, expires: res.expires, id: res.id};
+			if (!key) tmCopy(res.url);
+			tmCamLinkNote(share, cam.kind == 'chat' ? tmText.camAccessSent : (key ? tmText.camLinkReady : tmText.camCopied));
+			tmRefresh();
+		});
+	}
+	// карточка временного доступа в сообщении: камера, срок, «Открыть» (доступ участникам чата), «Закрыть» — автору
+	function tmLinkCard(l) {
+		var card = tmEl('div', 'tg-link-card' + (l.active ? '' : ' tg-gone'));
+		if (!l.active) { card.textContent = tmText.camLinkOver; return card; }
+		card.appendChild(tmEl('div', '', '📹 ' + l.cam + ' · ' + (l.kind == 'chat' ? tmText.camAccessUntil : tmText.camGuestUntil).replace('%s', tmFmtClock(l.expires))));
+		if (l.kind == 'chat' && tmCamVisible(l.cam)) {
+			var open = document.createElement('button');
+			open.type = 'button';
+			open.textContent = tmText.camOpen;
+			open.addEventListener('click', function (e) { e.stopPropagation(); tmCamOpen(l.cam); });
+			card.appendChild(open);
+		}
+		if (l.close) {
+			var close = document.createElement('button');
+			close.type = 'button';
+			close.textContent = l.kind == 'chat' ? tmText.camClose : tmText.camUnshare;
+			close.addEventListener('click', function (e) { e.stopPropagation(); tmGroupPost({mode: 'cam_link_close', id: l.id}, function () { tmRefresh(); }); });
+			card.appendChild(close);
+		}
+		return card;
+	}
+	// кнопка «Поделиться камерой» в окне камеры
 	document.getElementById('tm_viewer_cam_share').addEventListener('click', function () {
 		var name = tmCamName;
 		if (!name) return;
-		tmGroupPost({mode: 'cam_share', name: name}, function (res) {
-			if (!res.ok || !res.url) { tmCamNote(tmText.camFailed); return; }
-			if (tmCamName != name) return;
-			if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(function () {});
-			tmFwdMsg = {text: '1'};
-			tmFwdList = [];
-			tmFwdCam = {action: 'cam_link', name: name, url: res.url, expires: res.expires};
-			document.getElementById('tm_fwd_title').textContent = tmText.camShare;
-			document.getElementById('tm_fwd_duration_box').style.display = 'none';
-			document.getElementById('tm_fwd_search').value = '';
-			document.getElementById('tm_fwd_status').textContent = '';
-			tmForwardList();
-			tmFwdModal.classList.add('tg-show');
-			tmCamLinkNote(tmFwdCam, tmText.camLinkReady);
-			tmRefresh();
-		});
+		if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(function () {});
+		var chat = tmChat('cameras');
+		tmFwdMsg = {text: '1'};
+		tmFwdList = [];
+		tmFwdCam = {action: 'cam_link', name: name, kind: 'chat'};
+		document.getElementById('tm_fwd_title').textContent = tmText.camShareTitle + ': ' + name;
+		document.getElementById('tm_fwd_duration_box').style.display = 'none';
+		document.getElementById('tm_fwd_share_box').style.display = '';
+		document.querySelector('#tm_share_kinds [data-kind="wt"]').style.display = (chat && chat.webtorrent) ? '' : 'none';
+		document.getElementById('tm_fwd_search').value = '';
+		document.getElementById('tm_fwd_status').textContent = '';
+		tmShareKind('chat');
+		tmFwdModal.classList.add('tg-show');
 	});
 
 	// Фото — с листанием по всем фото открытого чата (msg — сообщение снимка: по нему место в списке и «Переслать»)

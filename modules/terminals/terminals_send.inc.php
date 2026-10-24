@@ -25,6 +25,8 @@
  *       'stream_duration' => 60,                // сколько секунд показывать поток (по умолчанию 60)
  *       'snapshot' => false,                    // без снимка потока (по умолчанию — снимок в сообщение)
  *       'history' => false,                     // только на устройства, без записи в переписку
+ *       'link' => 'id',                         // временный доступ к камере (terminalsCamLinkCreate): на странице —
+ *                                               // карточка ссылки (открыть, закрыть, срок)
  *   ));
  *
  * Куда: имя, название или адрес терминала или пользователь 'user:ID' (только в переписку); можно массив.
@@ -60,6 +62,7 @@ function terminalsSend($to, $message, $options = array())
         $stream = '';
     }
     $stream_duration = !empty($options['stream_duration']) ? (int)$options['stream_duration'] : 60;
+    $link = (isset($options['link']) && preg_match('/^[0-9a-f]{32}$/', (string)$options['link'])) ? (string)$options['link'] : '';
     if ($stream != '' && $image == '' && (!isset($options['snapshot']) || $options['snapshot'])) {
         $image = terminalsGo2rtcSnapshot($stream);
     }
@@ -141,7 +144,7 @@ function terminalsSend($to, $message, $options = array())
                 'MESSAGE' => json_encode($message), 'IMAGE' => $image, 'SOUND' => $sound, 'FILE' => $file, 'VIDEO' => $video,
                 'FILE_NAME' => $file_name,
                 'FORWARDED' => isset($options['forwarded']) ? mb_substr(trim((string)$options['forwarded']), 0, 255, 'UTF-8') : '',
-                'ADDED' => time(), 'CHAT' => $chat, 'SEND_ID' => $send_id, 'STREAM' => $stream,
+                'ADDED' => time(), 'CHAT' => $chat, 'SEND_ID' => $send_id, 'STREAM' => $stream, 'LINK' => $link,
             );
             SQLInsert('terminals_messages', $rec);
             $recipients[] = 'user:' . (int)$user['ID'];
@@ -172,6 +175,7 @@ function terminalsSend($to, $message, $options = array())
             'CHAT' => $chat,
             'SEND_ID' => $send_id,
             'STREAM' => $stream,
+            'LINK' => $link,
         );
         $rec['ID'] = $history ? SQLInsert('terminals_messages', $rec) : 0;
         $message_id = (int)$rec['ID'];

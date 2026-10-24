@@ -531,6 +531,7 @@ class terminals extends module
  terminals_messages: CHAT varchar(50) NOT NULL DEFAULT ''
  terminals_messages: SEND_ID varchar(32) NOT NULL DEFAULT ''
  terminals_messages: STREAM varchar(100) NOT NULL DEFAULT ''
+ terminals_messages: LINK varchar(32) NOT NULL DEFAULT ''
  terminals_messages: DELIVERED int(10) NOT NULL DEFAULT '0'
  terminals_messages: READ_AT int(10) NOT NULL DEFAULT '0'
  terminals_messages: FROM_ID int(10) NOT NULL DEFAULT '0'

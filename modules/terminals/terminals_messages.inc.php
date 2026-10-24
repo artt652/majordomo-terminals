@@ -50,6 +50,95 @@ $max_media = $limit(15 * 1024 * 1024);
 $max_file = $limit(50 * 1024 * 1024);
 $upload_error = '';
 
+// Гостевая ссылка на камеру (временный доступ, terminals_go2rtc.inc.php): страница просмотра одной камеры без входа —
+// снимки и WebRTC через сервер, до срока ссылки. Ключи, сессия и правила этой страницы здесь не участвуют
+if (gr('mode') == 'cam_guest') {
+    if (session_id() != '') {
+        session_write_close();
+    }
+    $link = terminalsGo2rtcEnabled() ? terminalsCamLinkGet((string)gr('id')) : array();
+    $link = (!empty($link['cam']) && $link['kind'] == 'guest' && terminalsGo2rtcHas($link['cam'])) ? $link : array();
+    header('Referrer-Policy: no-referrer');
+    header('X-Robots-Tag: noindex, nofollow');
+    header('Cache-Control: no-store');
+    if (gr('frame')) {
+        $jpeg = !empty($link['cam']) ? terminalsGo2rtcFrame($link['cam'], min(1280, max(0, gr('w', 'int')))) : '';
+        if ($jpeg == '') {
+            header('HTTP/1.1 404 Not Found');
+            exit;
+        }
+        header('Content-Type: image/jpeg');
+        echo $jpeg;
+        exit;
+    }
+    if (gr('whep')) {
+        if (empty($link['cam']) || $_SERVER['REQUEST_METHOD'] != 'POST') {
+            header('HTTP/1.1 404 Not Found');
+            exit;
+        }
+        terminalsGo2rtcWhepProxy($link['cam']);
+    }
+    if (gr('check')) {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(array('ok' => !empty($link['cam']) ? 1 : 0));
+        exit;
+    }
+    $h = function ($text) {
+        return htmlspecialchars((string)$text, ENT_QUOTES, 'UTF-8');
+    };
+    header('Content-Type: text/html; charset=utf-8');
+    if (empty($link['cam'])) {
+        header('HTTP/1.1 404 Not Found');
+        echo '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+            . '<title>' . $h(terminalsLang('TERMINALS_CAM_LINK_GONE')) . '</title></head>'
+            . '<body style="margin:0;background:#000;color:#ccc;font:16px sans-serif;display:flex;align-items:center;justify-content:center;height:100vh">'
+            . $h(terminalsLang('TERMINALS_CAM_LINK_GONE')) . '</body></html>';
+        exit;
+    }
+    DebMes('go2rtc: guest link ' . substr((string)gr('id'), 0, 6) . '… to ' . $link['cam'] . ' opened from '
+        . (isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '-'), 'terminals');
+    $go2rtc = terminalsGo2rtcConfig();
+    $self = strtok((string)$_SERVER['REQUEST_URI'], '?') . '?ajax=1&mode=cam_guest&id=' . rawurlencode(strtolower((string)gr('id')));
+    $texts = array('live' => terminalsLang('TERMINALS_CAM_LIVE'), 'snapshot' => terminalsLang('TERMINALS_CAM_SNAPSHOT'),
+        'offline' => terminalsLang('TERMINALS_CAM_OFFLINE'), 'gone' => terminalsLang('TERMINALS_CAM_LINK_GONE'));
+    $flags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE;
+    echo '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+        . '<meta name="referrer" content="no-referrer"><title>' . $h($link['cam']) . '</title><style>'
+        . 'html,body{margin:0;height:100%;background:#000;color:#eee;font:14px -apple-system,Segoe UI,Roboto,sans-serif}'
+        . 'body{display:flex;flex-direction:column}header{padding:10px 16px;display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}'
+        . 'header b{font-size:16px}header span{color:#9aa}main{flex:1;min-height:0;position:relative;display:flex;align-items:center;justify-content:center}'
+        . 'main img,main video{width:100%;height:100%;object-fit:contain}main.off::after{content:attr(data-off);position:absolute;color:#ccc}'
+        . 'main.off img{opacity:.35}</style></head><body><header><b>📹 ' . $h($link['cam']) . '</b><span id="state"></span>'
+        . '<span>' . $h(str_replace('%s', date('H:i', $link['expires']) . ((date('Y-m-d', $link['expires']) != date('Y-m-d')) ? ' ' . date('d.m', $link['expires']) : ''),
+            terminalsLang('TERMINALS_CAM_LINK_READY'))) . '</span></header>'
+        . '<main id="view" data-off="' . $h($texts['offline']) . '"><img id="shot" alt=""><video id="live" autoplay muted playsinline controls style="display:none"></video></main>'
+        . '<script>(function(){var self=' . json_encode($self, $flags) . ',t=' . json_encode($texts, $flags) . ',wait=' . (int)$go2rtc['wait'] . ',expires=' . (int)$link['expires'] . ';'
+        . 'var view=document.getElementById("view"),shot=document.getElementById("shot"),video=document.getElementById("live"),state=document.getElementById("state");'
+        . 'var loading=false,failSince=0,timer=null,live=false;state.textContent=t.snapshot;'
+        // снимок: следующий — когда загрузился прошлый; «нет связи» — после 20 с неудач
+        . 'function frame(){if(loading||live)return;loading=true;var next=new Image();'
+        . 'next.onload=function(){loading=false;failSince=0;view.classList.remove("off");next.id="shot";next.alt="";shot.parentNode.replaceChild(next,shot);shot=next;};'
+        . 'next.onerror=function(){loading=false;if(!failSince)failSince=Date.now();if(Date.now()-failSince>=20000)view.classList.add("off");};'
+        . 'next.src=self+"&frame=1&w=1280&t="+Date.now();}'
+        . 'function gone(){clearInterval(timer);if(window.pc)try{pc.close();}catch(e){}document.body.innerHTML="";var d=document.createElement("main");d.textContent=t.gone;document.body.appendChild(d);}'
+        . 'frame();timer=setInterval(function(){if(Date.now()>expires*1000){gone();return;}frame();},2000);'
+        . 'setInterval(function(){fetch(self+"&check=1",{cache:"no-store"}).then(function(r){return r.json();}).then(function(j){if(!j.ok)gone();}).catch(function(){});},30000);'
+        // WebRTC (WHEP через сервер): вышло — видео вместо снимков; нет за ожидание камеры + 4 с — остаются снимки
+        . 'if(window.RTCPeerConnection){var pc=window.pc=new RTCPeerConnection({iceServers:[]});pc.addTransceiver("video",{direction:"recvonly"});pc.addTransceiver("audio",{direction:"recvonly"});'
+        . 'pc.ontrack=function(e){if(!video.srcObject)video.srcObject=e.streams[0]||new MediaStream([e.track]);};'
+        . 'video.addEventListener("playing",function(){live=true;shot.style.display="none";video.style.display="";view.classList.remove("off");state.textContent=t.live;});'
+        . 'pc.createOffer().then(function(o){return pc.setLocalDescription(o);}).then(function(){return new Promise(function(ok){if(pc.iceGatheringState=="complete"){ok();return;}'
+        . 'var to=setTimeout(ok,2000),first=null;var done=function(){clearTimeout(to);clearTimeout(first);ok();};'
+        . 'pc.addEventListener("icecandidate",function(e){if(e.candidate&&!first)first=setTimeout(done,300);});'
+        . 'pc.addEventListener("icegatheringstatechange",function(){if(pc.iceGatheringState=="complete")done();});});})'
+        . '.then(function(){return fetch(self+"&whep=1",{method:"POST",body:pc.localDescription.sdp,headers:{"Content-Type":"application/sdp"}});})'
+        . '.then(function(r){if(!r.ok)throw new Error("whep");return r.text();}).then(function(sdp){return pc.setRemoteDescription({type:"answer",sdp:sdp});})'
+        . '.catch(function(){try{pc.close();}catch(e){}});'
+        . 'setTimeout(function(){if(video.readyState<2){try{pc.close();}catch(e){}}},(wait+4)*1000);}'
+        . '})();</script></body></html>';
+    exit;
+}
+
 // Кто открыл страницу: терминал этого устройства и (или) пользователь MajorDoMo.
 // Терминал:
 // 1) Ключ (terminals_auth.inc.php): ?token=… (ссылка из карточки терминала, API) или cookie tmmsg_key —
@@ -464,12 +553,24 @@ foreach ($shout_rooms as $room) {
 // снимок в чат, ссылка для внешнего просмотра (WebTorrent)
 $cam_admin = $as_admin || (!empty($me_user['IS_ADMIN']));
 $my_cameras = ($can_write && terminalsGo2rtcEnabled()) ? terminalsCamerasFor($me_name, $user_id, $cam_admin) : array();
-if (count($my_cameras)) {
+// временный доступ (ссылка «участникам чата», terminals_go2rtc.inc.php): только смотреть — снимки и видео,
+// без «Показать на…», «Снимок в чат» и ссылок; в чате «Камеры» — с отметкой «до …»
+$link_cameras = ($can_write && terminalsGo2rtcEnabled()) ? terminalsCamLinkCameras($me_keys) : array();
+foreach ($link_cameras as $name => $until) {
+    if (in_array($name, $my_cameras, true) || !terminalsGo2rtcHas($name)) {
+        unset($link_cameras[$name]);
+    }
+}
+$view_cameras = array_merge($my_cameras, array_keys($link_cameras));
+if (count($view_cameras)) {
     $go2rtc_cfg = terminalsGo2rtcConfig();
     $shares = terminalsGo2rtcShares();
     $cameras = array();
     foreach ($my_cameras as $name) {
         $cameras[] = array('name' => $name, 'shared' => isset($shares[$name]) ? (int)$shares[$name] : 0);
+    }
+    foreach ($link_cameras as $name => $until) {
+        $cameras[] = array('name' => $name, 'shared' => 0, 'until' => $until);
     }
     // снимки — браузер берёт прямо у go2rtc (api/frame.jpeg, свежий кадр), если у API нет пароля: пароль API
     // браузеру не отдаём. Не загрузилось (вне дома, страница по HTTPS) — через сервер (mode=cam_frame)
@@ -739,6 +840,7 @@ $send_to_terminals = function ($chat, $to, $text, $media, $voice, $forwarded = '
         'video_duration' => $media['video_duration'],
         'voice' => $voice ? true : false,
         'forwarded' => $forwarded,
+        'link' => isset($media['link']) ? (string)$media['link'] : '',
     );
     // вошедший на сайт пишет от своего имени (на устройстве — его имя в заголовке)
     if ($user_id) {
@@ -758,7 +860,7 @@ $send_to_terminals = function ($chat, $to, $text, $media, $voice, $forwarded = '
 // Камеры. Снимок для страницы (через сервер: браузеру не нужен доступ к go2rtc и его пароль)
 if (gr('mode') == 'cam_frame') {
     $name = (string)gr('name');
-    $jpeg = in_array($name, $my_cameras, true) ? terminalsGo2rtcFrame($name, min(1280, max(0, gr('w', 'int')))) : '';
+    $jpeg = in_array($name, $view_cameras, true) ? terminalsGo2rtcFrame($name, min(1280, max(0, gr('w', 'int')))) : '';
     $finish_session();
     if ($jpeg == '') {
         header('HTTP/1.1 404 Not Found');
@@ -777,25 +879,11 @@ if (gr('mode') == 'whep') {
     // камера разрешена этому терминалу или пользователю — или показана ему (подписанная ссылка, terminalsGo2rtcUrl)
     $signed = $by_key && !empty($me['ID']) && (int)gr('exp') > time()
         && hash_equals(terminalsGo2rtcSign($name, $me['ID'], (int)gr('exp')), (string)gr('sig'));
-    if ((!in_array($name, $my_cameras, true) && !($signed && terminalsGo2rtcHas($name))) || $_SERVER['REQUEST_METHOD'] != 'POST') {
+    if ((!in_array($name, $view_cameras, true) && !($signed && terminalsGo2rtcHas($name))) || $_SERVER['REQUEST_METHOD'] != 'POST') {
         header('HTTP/1.1 404 Not Found');
         exit;
     }
-    $type_in = isset($_SERVER['CONTENT_TYPE']) ? (string)$_SERVER['CONTENT_TYPE'] : 'application/sdp';
-    $type_in = (stripos($type_in, 'json') !== false) ? 'application/json' : 'application/sdp';
-    // камера недавно не ответила — сразу отказ (браузер покажет снимок «нет связи», PHP не ждёт)
-    if (terminalsGo2rtcDown($name)) {
-        header('HTTP/1.1 504 Gateway Timeout');
-        exit;
-    }
-    // ответ go2rtc — после подключения к камере: ожидание камеры (GO2RTC_WAIT) и 2 с
-    $go2rtc = terminalsGo2rtcConfig();
-    $answer = terminalsGo2rtcRequest('POST', 'api/webrtc', array('src' => $name), (string)file_get_contents('php://input'),
-        $type_in, $code, $go2rtc['wait'] + 2, $type_out);
-    header('HTTP/1.1 ' . (($code >= 200 && $code < 300) ? $code . ' OK' : '502 Bad Gateway'));
-    header('Content-Type: ' . (($type_out != '') ? $type_out : $type_in));
-    echo $answer;
-    exit;
+    terminalsGo2rtcWhepProxy($name);
 }
 // показать камеру на терминалах чата (chat) на duration секунд; в чат — сообщение со снимком.
 // Терминал, которому эта камера не разрешена, её не получает (кроме входа администратора)
@@ -851,6 +939,67 @@ if (gr('mode') == 'cam_show' || gr('mode') == 'cam_photo') {
     $json_out(array('sent' => $sent, 'error' => $sent ? '' : 'camera', 'chat' => $chat['key']));
 }
 // ссылка для внешнего просмотра (WebTorrent) — создать или продлить; закрыть
+// временный доступ к камере: kind=chat — участникам чата chat (карточка в чате; смотреть — на этой странице),
+// kind=guest — гостевая ссылка (страница просмотра без входа): с chat — текстом в чат, без chat — только ссылка
+// (скопировать). minutes — на сколько (1 мин — 30 дней). Создаёт тот, кому камера доступна
+if (gr('mode') == 'cam_link') {
+    $name = (string)gr('name');
+    $kind = (gr('kind') == 'guest') ? 'guest' : 'chat';
+    $chat = (gr('chat') != '') ? $find_chat((string)gr('chat')) : array();
+    if (!in_array($name, $my_cameras, true)) {
+        $json_out(array('ok' => 0, 'error' => 'no_access'));
+    }
+    if ((gr('chat') != '' || $kind == 'chat') && (empty($chat['key']) || !empty($chat['readonly']) || $chat['type'] == 'cameras')) {
+        $json_out(array('ok' => 0, 'error' => 'not_found'));
+    }
+    // общий чат MajorDoMo и его комнаты: у них нет списка участников — только гостевая ссылка текстом
+    if ($kind == 'chat' && !empty($chat['text_only'])) {
+        $json_out(array('ok' => 0, 'error' => 'text_only'));
+    }
+    $members = ($kind == 'chat') ? array_merge($chat['members'], $me_keys) : array();
+    $who = $user_id ? $me_user_key : $me_name;
+    $who_title = ($user_id && !empty($me_user['NAME'])) ? $me_user['NAME'] : (!empty($me['ID']) ? $me['TITLE'] : $me_name);
+    $id = terminalsCamLinkCreate($name, $kind, gr('minutes', 'int'), $members, $who, $who_title);
+    $link = terminalsCamLinkGet($id);
+    $until = date('H:i', $link['expires']) . ((date('Y-m-d', $link['expires']) != date('Y-m-d')) ? ' ' . date('d.m', $link['expires']) : '');
+    $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] != 'off')
+        || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && strtolower($_SERVER['HTTP_X_FORWARDED_PROTO']) == 'https');
+    $url = ($kind == 'guest') ? ($https ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'] . strtok((string)$_SERVER['REQUEST_URI'], '?')
+        . '?ajax=1&mode=cam_guest&id=' . $id : '';
+    $sent = 0;
+    $result = array('ok' => 1, 'id' => $id, 'url' => $url, 'expires' => $link['expires'], 'chat' => !empty($chat['key']) ? $chat['key'] : '');
+    if (!empty($chat['key'])) {
+        $text = ($kind == 'guest') ? str_replace(array('%cam', '%until'), array($name, $until), terminalsLang('TERMINALS_CAM_GUEST_TEXT')) . ' ' . $url
+            : str_replace(array('%cam', '%until'), array($name, $until), terminalsLang('TERMINALS_CAM_ACCESS_TEXT'));
+        if ($chat['type'] == 'house' || $chat['type'] == 'shoutroom') {
+            $sent = $send_to_shouts($chat, $text);
+        } else {
+            // ответ браузеру — после записи в переписку, до доставки устройствам
+            $sent = $send_to_terminals($chat, array_values(array_diff($chat['members'], array($me_name, $me_user_key))), $text,
+                array('link' => $id), false, '', $answer_after_record($result));
+        }
+        if ($responded) {
+            $finish_session();
+            exit;
+        }
+        if (!$sent) {
+            terminalsCamLinkClose($id);
+            $json_out(array('ok' => 0, 'error' => 'not_sent'));
+        }
+    }
+    $json_out(array_merge($result, array('sent' => $sent)));
+}
+if (gr('mode') == 'cam_link_close') {
+    $id = strtolower((string)gr('id'));
+    $link = terminalsCamLinkGet($id);
+    if (empty($link['cam']) || !($cam_admin || in_array($link['by'], $me_keys, true))) {
+        $json_out(array('ok' => 0));
+    }
+    terminalsCamLinkClose($id);
+    // у участников карточка сразу становится «закрыта»
+    terminalsMessagesNotify($user_id ? $me_user_key : $me_name, array_merge((array)$link['members'], $me_keys));
+    $json_out(array('ok' => 1));
+}
 if (gr('mode') == 'cam_share' || gr('mode') == 'cam_unshare') {
     $name = (string)gr('name');
     if (!in_array($name, $my_cameras, true)) {
@@ -1040,7 +1189,20 @@ $image_size = function ($path) {
     }
     return $cache[$file];
 };
-$build_messages = function ($rows, $limit) use ($me_id, $user_id, $id_names, $all_terminals, $all_users, $computer_name, $image_size) {
+// временный доступ к камере (сообщение с LINK): карточка — камера, вид, срок, можно ли закрыть (автор, администратор)
+$cam_links = terminalsGo2rtcEnabled() ? terminalsCamLinks() : array();
+$link_card = function ($id) use ($cam_links, $me_keys, $cam_admin) {
+    if ($id == '') {
+        return null;
+    }
+    if (!isset($cam_links[$id])) {
+        return array('id' => $id, 'active' => 0);
+    }
+    $link = $cam_links[$id];
+    return array('id' => $id, 'active' => 1, 'kind' => $link['kind'], 'cam' => $link['cam'], 'expires' => (int)$link['expires'],
+        'close' => ($cam_admin || in_array($link['by'], $me_keys, true)) ? 1 : 0);
+};
+$build_messages = function ($rows, $limit) use ($me_id, $user_id, $id_names, $all_terminals, $all_users, $computer_name, $image_size, $link_card) {
     $conversation = array();
     $seen = array();
     foreach ($rows as $row) {
@@ -1106,6 +1268,7 @@ $build_messages = function ($rows, $limit) use ($me_id, $user_id, $id_names, $al
             'forwarded' => isset($row['FORWARDED']) ? (string)$row['FORWARDED'] : '',
             // камера go2rtc, показанная этим сообщением (снимок — в image)
             'stream' => isset($row['STREAM']) ? (string)$row['STREAM'] : '',
+            'link' => $link_card(isset($row['LINK']) ? (string)$row['LINK'] : ''),
             'kind' => 'msg',
             'read' => ($incoming && !empty($row['READ_AT'])) ? 1 : 0,
         );
