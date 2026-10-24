@@ -316,7 +316,8 @@
 	@keyframes tg-blink { 50% { opacity: .2; } }
 	.tg-rec-time { font-variant-numeric: tabular-nums; }
 	.tg-recording .tg-rec { display: flex; }
-	.tg-text-only #tm_attach, .tg-text-only #tm_voice { display: none; }
+	/* общий чат MajorDoMo и комнаты: текст и фото (что умеет ядро), без голосовых, видео и файлов */
+	.tg-text-only #tm_voice, .tg-text-only #tm_menu label:not(.tg-photo-item) { display: none; }
 	.tg-readonly { padding: 12px; text-align: center; font-size: 13px; color: var(--tg-muted); background: var(--tg-panel); border-top: 1px solid var(--tg-border); display: none; }
 	.tg-recording #tm_attach, .tg-recording #tm_text, .tg-recording #tm_voice { display: none; }
 	.tg-status { font-size: 12px; color: var(--tg-muted); padding: 2px 12px; background: var(--tg-panel); }
@@ -474,8 +475,8 @@
 			<div class="tg-readonly" id="tm_readonly"><#LANG_TERMINALS_LOGIN_TO_WRITE#></div>
 			<div class="tg-compose" id="tm_compose">
 				<div class="tg-menu" id="tm_menu">
-					<label>🖼 <#LANG_TERMINALS_PHOTO#><input type="file" name="image" accept="image/*" multiple style="display:none"></label>
-					<label id="tm_cam_photo">📷 <#LANG_TERMINALS_CAMERA#><input type="file" name="image_camera" accept="image/*" capture="environment" style="display:none"></label>
+					<label class="tg-photo-item">🖼 <#LANG_TERMINALS_PHOTO#><input type="file" name="image" accept="image/*" multiple style="display:none"></label>
+					<label id="tm_cam_photo" class="tg-photo-item">📷 <#LANG_TERMINALS_CAMERA#><input type="file" name="image_camera" accept="image/*" capture="environment" style="display:none"></label>
 					<label>📄 <#LANG_TERMINALS_FILE#><input type="file" name="file" multiple style="display:none"></label>
 					<label>🎬 <#LANG_TERMINALS_VIDEO#><input type="file" name="video" accept="video/*" multiple style="display:none"></label>
 					<label id="tm_cam_video_btn">🎥 <#LANG_TERMINALS_VIDEO_CAMERA#><input type="file" name="video_camera" accept="video/*" capture="environment" style="display:none"></label>
@@ -1661,7 +1662,7 @@
 		tmInput.value = '';
 		tmGrow();
 		tmScrollEnd();
-		var errors = {too_big: tmText.tooBig.replace('%s', tmMaxFile), type: tmText.badType, upload: tmText.uploadError};
+		var errors = {too_big: tmText.tooBig.replace('%s', tmMaxFile), type: tmText.badType, upload: tmText.uploadError, text_only: tmText.fwdTextOnly, login: tmText.login};
 		var sent = 0;
 		var finish = function (error) {
 			status.textContent = error;
@@ -1830,8 +1831,11 @@
 		tmChats.forEach(function (c) {
 			if (c.readonly || c.type == 'cameras') return;
 			if (q && (c.title || '').toLowerCase().indexOf(q) < 0) return;
+			// общий чат MajorDoMo и комнаты: текст и фото, «Снимок в чат»; не голосовые, видео, файлы и не «Показать на…»
 			var noMembers = link && tmFwdCam.kind == 'chat' && !!c.text_only;
-			var blocked = noMembers || !!(c.text_only && (media || !m.text));
+			var shoutOk = tmFwdCam ? (link || tmFwdCam.action == 'cam_photo')
+				: tmFwdList.every(function (x) { return !x.sound && !x.video && !x.file && (x.text || x.image); });
+			var blocked = noMembers || !!(c.text_only && !shoutOk);
 			var row = tmEl('div', 'tg-chat' + (blocked ? ' tg-disabled' : ''));
 			var av = tmEl('div', 'tg-avatar');
 			tmAvatar(av, c);

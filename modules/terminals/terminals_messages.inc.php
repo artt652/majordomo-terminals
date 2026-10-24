@@ -773,14 +773,24 @@ if (gr('mode') == 'group_delete' && $can_write) {
 
 // общий чат MajorDoMo и его комнаты: только текст, от пользователя. Возвращает 1 — записано.
 // Без терминала — как shoutbox без терминала (source «terminal»): ответ дома — по правилам ядра (sayReply)
-$send_to_shouts = function ($chat, $text) use ($user_id, $me, $me_name, &$session, $peek, $by_key, $user_by_key, $restore_user) {
+// $image — фото (путь от веб-корня, файл на сервере): что умеет ядро — shouts.IMAGE, shoutbox показывает его
+// под сообщением. Фото — не команда дому: запись в чат, как say() от пользователя, но без события COMMAND
+// (подпись к фото не запустит сценарий). Голосовые, видео и файлы ядро в shouts не хранит — сюда не идут
+$send_to_shouts = function ($chat, $text, $image = '') use ($user_id, $me, $me_name, &$session, $peek, $by_key, $user_by_key, $restore_user) {
     $text = trim((string)$text);
-    if ($text == '' || !$user_id) {
+    $image = ($image != '' && !preg_match('/^https?:/i', $image) && is_file(ROOT . ltrim($image, '/'))) ? ltrim($image, '/') : '';
+    if (($text == '' && $image == '') || !$user_id) {
         return 0;
     }
     // shouts в utf8: 4-байтовые символы (эмодзи) таблица не принимает
     $text = preg_replace('/[\x{10000}-\x{10FFFF}]/u', '?', $text);
     $source = 'terminal' . ($me_name != '' ? $me['ID'] : '');
+    if ($image != '') {
+        $shout = array('MESSAGE' => htmlspecialchars($text), 'IMAGE' => $image, 'ADDED' => date('Y-m-d H:i:s'),
+            'ROOM_ID' => ($chat['type'] == 'house') ? 0 : (int)substr($chat['key'], 6), 'MEMBER_ID' => $user_id, 'SOURCE' => $source);
+        SQLInsert('shouts', $shout);
+        return 1;
+    }
     if ($chat['type'] == 'house' && $me_name == '') {
         say(htmlspecialchars($text), 0, $user_id, $source);
     } elseif ($chat['type'] == 'house') {
@@ -892,6 +902,18 @@ if (gr('mode') == 'cam_show' || gr('mode') == 'cam_photo') {
     $chat = $find_chat((string)gr('chat'));
     if (!in_array($name, $my_cameras, true) || empty($chat['key']) || !empty($chat['readonly'])) {
         $json_out(array('sent' => 0, 'error' => 'not_found'));
+    }
+    // общий чат MajorDoMo и комнаты: только «Снимок в чат» — фото (не команда), подпись — имя камеры
+    if ($chat['type'] == 'house' || $chat['type'] == 'shoutroom') {
+        if (gr('mode') != 'cam_photo') {
+            $json_out(array('sent' => 0, 'error' => 'text_only'));
+        }
+        if (!$user_id) {
+            $json_out(array('sent' => 0, 'error' => 'login'));
+        }
+        $snapshot = terminalsGo2rtcDown($name) ? '' : terminalsGo2rtcSnapshot($name);
+        $sent = ($snapshot != '') ? $send_to_shouts($chat, $name, $snapshot) : 0;
+        $json_out(array('sent' => $sent, 'error' => $sent ? '' : 'camera', 'chat' => $chat['key']));
     }
     $to = array();
     foreach (array_values(array_diff($chat['members'], array($me_name, $me_user_key))) as $member) {
@@ -1019,7 +1041,20 @@ if ($this->mode == 'send_message' || gr('mode') == 'send_message') {
     $to = !empty($chat['key']) ? array_values(array_diff($chat['members'], array($me_name, $me_user_key))) : array();
     $text = gr('message');
     if (!empty($chat['key']) && ($chat['type'] == 'house' || $chat['type'] == 'shoutroom')) {
-        $json_out(array('sent' => $send_to_shouts($chat, $text), 'error' => $user_id ? '' : 'login'));
+        // общий чат MajorDoMo и комнаты: текст и фото (что умеет ядро); голосовые, видео, файлы — нет
+        foreach (array('audio', 'file', 'video', 'video_camera') as $field) {
+            if (!empty($_FILES[$field]['name']) && (!isset($_FILES[$field]['error']) || $_FILES[$field]['error'] != UPLOAD_ERR_NO_FILE)) {
+                $json_out(array('sent' => 0, 'error' => 'text_only'));
+            }
+        }
+        if (!$user_id) {
+            $json_out(array('sent' => 0, 'error' => 'login'));
+        }
+        $image = $save_upload('image', $image_ext, $max_media);
+        if ($image == '' && $upload_error == '') {
+            $image = $save_upload('image_camera', $image_ext, $max_media);
+        }
+        $json_out(array('sent' => ($upload_error == '') ? $send_to_shouts($chat, $text, $image) : 0, 'error' => $upload_error));
     }
     $image = $save_upload('image', $image_ext, $max_media);
     if ($image == '') {
@@ -1103,13 +1138,17 @@ if (gr('mode') == 'forward' && $can_write) {
     if (empty($src) || empty($chat['key'])) {
         $error = 'not_found';
     } elseif ($chat['type'] == 'house' || $chat['type'] == 'shoutroom') {
-        $has_media = count(array_filter($src['media'])) > 0;
-        if ($has_media || trim($src['text']) == '') {
+        // текст и фото (фото — не команда); голосовые, видео, файлы ядро в shouts не хранит
+        $media = $src['media'];
+        $image = isset($media['image']) ? (string)$media['image'] : '';
+        unset($media['image'], $media['file_name']);
+        $local_image = ($image == '' || (!preg_match('/^https?:/i', $image) && is_file(ROOT . ltrim($image, '/'))));
+        if (count(array_filter($media)) > 0 || !$local_image || (trim($src['text']) == '' && $image == '')) {
             $error = 'text_only';
         } elseif (!$user_id) {
             $error = 'login';
         } else {
-            $sent = $send_to_shouts($chat, $src['text']);
+            $sent = $send_to_shouts($chat, $src['text'], $image);
         }
     } else {
         $sent = $send_to_terminals($chat, array_values(array_diff($chat['members'], array($me_name, $me_user_key))), $src['text'], $src['media'],
