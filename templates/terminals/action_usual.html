@@ -2222,7 +2222,15 @@
 	// «Камеры» (go2rtc): сетка снимков, просмотр (дома — живое видео WebRTC, согласование через сервер;
 	// иначе — снимок, обновляется раз в 2 с), показ на терминалах, снимок в чат, ссылка для просмотра снаружи
 	var tmCamTimer = null, tmCamPc = null, tmCamName = '', tmCamSnap = null;
+	// снимок через сервер (с кэшем go2rtc 5 с и отметкой недоступных камер)
 	function tmCamFrameUrl(name, w) { return tmUrl('ajax=1&mode=cam_frame&name=' + encodeURIComponent(name) + '&w=' + w + '&t=' + Date.now()); }
+	// снимок прямо с go2rtc — свежий кадр (у API нет пароля; frame_base от сервера). tmCamDirect = false — прямой
+	// путь не работает (вне дома, страница по HTTPS): дальше через сервер
+	var tmCamDirect = true;
+	function tmCamDirectUrl(name, w) {
+		var base = (tmChat('cameras') || {}).frame_base;
+		return (base && tmCamDirect) ? base + '/api/frame.jpeg?src=' + encodeURIComponent(name) + '&width=' + w + '&t=' + Date.now() : '';
+	}
 	function tmCamVisible(name) {
 		var chat = tmChat('cameras');
 		return !!(chat && (chat.cameras || []).some(function (c) { return c.name == name; }));
@@ -2230,12 +2238,24 @@
 	function tmFmtClock(ts) { var d = new Date(ts * 1000); return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
 	// картинку менять, только когда новый снимок загрузился (без мигания)
 	// не загрузилась (камера не отвечает) — на карточке и в просмотре «нет связи»
-	function tmCamRefreshImg(img, url) {
-		var next = new Image();
-		var box = img.parentNode;
-		next.onload = function () { img.src = next.src; if (img.parentNode) img.parentNode.classList.remove('tg-cam-off'); };
-		next.onerror = function () { if (img.parentNode) img.parentNode.classList.add('tg-cam-off'); };
-		next.src = url;
+	// прямой снимок не загрузился — ещё раз через сервер; через сервер загрузился — прямой путь не работает
+	// прошлый снимок ещё грузится (камера просыпается) — новый не просим: запросы не копятся
+	function tmCamRefreshImg(img, name, w) {
+		if (img.tmLoading) return;
+		img.tmLoading = true;
+		var next = new Image(), direct = tmCamDirectUrl(name, w);
+		next.onload = function () {
+			img.tmLoading = false;
+			img.src = next.src;
+			if (img.parentNode) img.parentNode.classList.remove('tg-cam-off');
+			if (next.getAttribute('data-retry')) tmCamDirect = false;
+		};
+		next.onerror = function () {
+			if (direct) { direct = ''; next.setAttribute('data-retry', '1'); next.src = tmCamFrameUrl(name, w); return; }
+			img.tmLoading = false;
+			if (img.parentNode) img.parentNode.classList.add('tg-cam-off');
+		};
+		next.src = direct || tmCamFrameUrl(name, w);
 	}
 	function tmRenderCameras(chat) {
 		var box = document.getElementById('tm_list');
@@ -2246,7 +2266,7 @@
 			var img = document.createElement('img');
 			img.alt = '';
 			// снимок ставится, когда загрузился: пока камера просыпается — чёрная карточка, а не значок ошибки
-			tmCamRefreshImg(img, tmCamFrameUrl(c.name, 480));
+			tmCamRefreshImg(img, c.name, 480);
 			img.setAttribute('data-cam', c.name);
 			card.appendChild(img);
 			card.appendChild(tmEl('div', 'tg-cam-offline', tmText.camOffline));
@@ -2264,7 +2284,7 @@
 			if (document.visibilityState && document.visibilityState != 'visible') return;
 			if (tmViewerEl.classList.contains('tg-show')) return;
 			Array.prototype.forEach.call(grid.querySelectorAll('img[data-cam]'), function (img) {
-				tmCamRefreshImg(img, tmCamFrameUrl(img.getAttribute('data-cam'), 480));
+				tmCamRefreshImg(img, img.getAttribute('data-cam'), 480);
 			});
 		}, 4000);
 	}
@@ -2330,7 +2350,7 @@
 		var img = document.createElement('img');
 		img.alt = '';
 		img.draggable = false;
-		tmCamRefreshImg(img, tmCamFrameUrl(name, 1280));
+		tmCamRefreshImg(img, name, 1280);
 		video.style.display = 'none';
 		body.appendChild(img);
 		body.appendChild(video);
@@ -2339,7 +2359,7 @@
 		var count = document.getElementById('tm_viewer_count');
 		count.textContent = name + ' · ' + tmText.camSnapshot;
 		// пока нет живого видео — снимок раз в 2 с
-		tmCamSnap = setInterval(function () { if (tmCamName == name && img.style.display != 'none') tmCamRefreshImg(img, tmCamFrameUrl(name, 1280)); }, 2000);
+		tmCamSnap = setInterval(function () { if (tmCamName == name && img.style.display != 'none') tmCamRefreshImg(img, name, 1280); }, 2000);
 		video.addEventListener('playing', function () {
 			if (tmCamName != name) return;
 			img.style.display = 'none';

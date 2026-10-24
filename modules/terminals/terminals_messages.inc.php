@@ -471,8 +471,11 @@ if (count($my_cameras)) {
     foreach ($my_cameras as $name) {
         $cameras[] = array('name' => $name, 'shared' => isset($shares[$name]) ? (int)$shares[$name] : 0);
     }
+    // снимки — браузер берёт прямо у go2rtc (api/frame.jpeg, свежий кадр), если у API нет пароля: пароль API
+    // браузеру не отдаём. Не загрузилось (вне дома, страница по HTTPS) — через сервер (mode=cam_frame)
+    $frame_base = ($go2rtc_cfg['user'] == '' && $go2rtc_cfg['password'] == '') ? terminalsGo2rtcDeviceBase() : '';
     $chats[] = array('key' => 'cameras', 'type' => 'cameras', 'title' => terminalsLang('TERMINALS_CAMERAS'), 'members' => array(),
-        'readonly' => 1, 'cameras' => $cameras, 'webtorrent' => $go2rtc_cfg['webtorrent'] ? 1 : 0);
+        'readonly' => 1, 'cameras' => $cameras, 'webtorrent' => $go2rtc_cfg['webtorrent'] ? 1 : 0, 'frame_base' => $frame_base);
 }
 // комнаты, к которым привязаны терминалы: участники — терминалы комнаты
 $rooms = SQLSelect("SELECT ID, TITLE FROM locations ORDER BY PRIORITY DESC, TITLE");
