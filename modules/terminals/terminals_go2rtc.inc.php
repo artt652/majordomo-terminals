@@ -219,29 +219,44 @@ function terminalsGo2rtcFrame($name, $width = 0)
     $cfg = terminalsGo2rtcConfig();
     $jpeg = terminalsGo2rtcRequest('GET', 'api/frame.jpeg', $query, null, '', $code, $cfg['wait'], $type);
     $ok = ($code == 200 && strpos($type, 'image/jpeg') === 0 && $jpeg != '');
-    if (!$ok) {
-        terminalsGo2rtcDown($name, true);
-    }
+    terminalsGo2rtcDown($name, !$ok);
     return $ok ? $jpeg : '';
 }
 
-// Недоступная камера: снимок не получился — следующие 30 с к ней не обращаемся (ответ сразу), чтобы
-// страница и показ не ждали её каждый раз. $set === true — отметить недоступной. cms/cached/terminals_go2rtc_down.json
+// Недоступная камера: снимки не получаются 20 с подряд (с первой неудачи, без удачных между ними) — следующие
+// 30 с к ней не обращаемся (ответ сразу), чтобы страница и показ не ждали её каждый раз. Короткая задержка —
+// ещё не недоступна: медленная камера иногда отдаёт кадр дольше ожидания, просыпается после простоя.
+// $set === true — неудача, false — снимок получился (сброс).
+// cms/cached/terminals_go2rtc_down.json: имя => время отметки; «?имя» => время первой неудачи
 function terminalsGo2rtcDown($name, $set = null)
 {
     $file = ROOT . 'cms/cached/terminals_go2rtc_down.json';
     $down = is_file($file) ? json_decode((string)@file_get_contents($file), true) : array();
     $down = is_array($down) ? $down : array();
+    if ($set === false) {
+        if (isset($down[$name]) || isset($down['?' . $name])) {
+            unset($down[$name], $down['?' . $name]);
+            @file_put_contents($file, json_encode($down));
+        }
+        return false;
+    }
     if ($set === true) {
-        $down[$name] = time();
+        $marked = false;
+        if (!isset($down['?' . $name]) || $down['?' . $name] <= time() - 120) {
+            $down['?' . $name] = time();
+        } elseif ($down['?' . $name] <= time() - 20) {
+            unset($down['?' . $name]);
+            $down[$name] = time();
+            $marked = true;
+        }
         foreach ($down as $key => $time) {
-            if ($time < time() - 30) {
+            if ($time < time() - (($key[0] == '?') ? 120 : 30)) {
                 unset($down[$key]);
             }
         }
         @file_put_contents($file, json_encode($down));
-        DebMes('go2rtc: camera not responding: ' . $name, 'terminals');
-        return true;
+        DebMes('go2rtc: camera ' . ($marked ? 'not responding (skipped for 30 s): ' : 'slow (no frame in time): ') . $name, 'terminals');
+        return $marked;
     }
     return isset($down[$name]) && $down[$name] > time() - 30;
 }

@@ -2246,28 +2246,51 @@
 		var next = new Image(), direct = tmCamDirectUrl(name, w);
 		next.onload = function () {
 			img.tmLoading = false;
-			img.src = next.src;
-			if (img.parentNode) img.parentNode.classList.remove('tg-cam-off');
+			img.tmFailSince = 0;
 			if (next.getAttribute('data-retry')) tmCamDirect = false;
+			next.removeAttribute('data-retry');
+			next.onload = next.onerror = null;
+			if (!img.parentNode) { img.src = next.src; return; }
+			img.parentNode.classList.remove('tg-cam-off');
+			// загруженный снимок встаёт на место прошлого (img.src = тот же адрес загрузил бы его ещё раз:
+			// снимки без кэша — лишний запрос к камере и мигание)
+			next.alt = img.alt;
+			next.draggable = img.draggable;
+			next.className = img.className;
+			next.style.cssText = img.style.cssText;
+			if (img.hasAttribute('data-cam')) next.setAttribute('data-cam', img.getAttribute('data-cam'));
+			img.parentNode.replaceChild(next, img);
 		};
 		next.onerror = function () {
 			if (direct) { direct = ''; next.setAttribute('data-retry', '1'); next.src = tmCamFrameUrl(name, w); return; }
 			img.tmLoading = false;
-			if (img.parentNode) img.parentNode.classList.add('tg-cam-off');
+			// «нет связи» — когда снимки не получаются 20 с подряд: короткая задержка (камера долго отдала кадр,
+			// просыпается) — не повод; до того на карточке остаётся прошлый снимок
+			if (!img.tmFailSince) img.tmFailSince = Date.now();
+			if (Date.now() - img.tmFailSince >= 20000 && img.parentNode) img.parentNode.classList.add('tg-cam-off');
 		};
 		next.src = direct || tmCamFrameUrl(name, w);
 	}
 	function tmRenderCameras(chat) {
 		var box = document.getElementById('tm_list');
+		// обновление чата (опрос, вебсокет): прошлые снимки и прокрутка остаются — карточки не чернеют заново
+		var old = {}, scroll = box.scrollTop;
+		Array.prototype.forEach.call(box.querySelectorAll('.tg-cams img[data-cam]'), function (im) { old[im.getAttribute('data-cam')] = im; });
+		var again = Object.keys(old).length > 0;
 		box.innerHTML = '';
 		var grid = tmEl('div', 'tg-cams');
 		(chat.cameras || []).forEach(function (c) {
 			var card = tmEl('div', 'tg-cam');
-			var img = document.createElement('img');
-			img.alt = '';
-			// снимок ставится, когда загрузился: пока камера просыпается — чёрная карточка, а не значок ошибки
-			tmCamRefreshImg(img, c.name, 480);
-			img.setAttribute('data-cam', c.name);
+			var img = old[c.name];
+			if (img) {
+				if (img.tmFailSince && Date.now() - img.tmFailSince >= 20000) card.classList.add('tg-cam-off');
+			} else {
+				img = document.createElement('img');
+				img.alt = '';
+				// снимок ставится, когда загрузился: пока камера просыпается — чёрная карточка, а не значок ошибки
+				tmCamRefreshImg(img, c.name, 480);
+				img.setAttribute('data-cam', c.name);
+			}
 			card.appendChild(img);
 			card.appendChild(tmEl('div', 'tg-cam-offline', tmText.camOffline));
 			card.appendChild(tmEl('div', 'tg-cam-name', c.name));
@@ -2276,7 +2299,7 @@
 			grid.appendChild(card);
 		});
 		box.appendChild(grid);
-		box.scrollTop = 0;
+		box.scrollTop = again ? scroll : 0;
 		// снимки обновляются, пока открыт этот чат и страница на экране
 		clearInterval(tmCamTimer);
 		tmCamTimer = setInterval(function () {
@@ -2359,10 +2382,15 @@
 		var count = document.getElementById('tm_viewer_count');
 		count.textContent = name + ' · ' + tmText.camSnapshot;
 		// пока нет живого видео — снимок раз в 2 с
-		tmCamSnap = setInterval(function () { if (tmCamName == name && img.style.display != 'none') tmCamRefreshImg(img, name, 1280); }, 2000);
+		// (снимок в окне — body.querySelector('img'): новый встаёт на место прошлого)
+		tmCamSnap = setInterval(function () {
+			var shot = body.querySelector('img');
+			if (tmCamName == name && shot && shot.style.display != 'none') tmCamRefreshImg(shot, name, 1280);
+		}, 2000);
 		video.addEventListener('playing', function () {
 			if (tmCamName != name) return;
-			img.style.display = 'none';
+			var shot = body.querySelector('img');
+			if (shot) shot.style.display = 'none';
 			video.style.display = '';
 			count.textContent = name + ' · ' + tmText.camLive;
 		});
