@@ -129,7 +129,26 @@ class mediaplayer extends tts_addon
             terminalsSignalField(),
             array('NAME' => 'SHOW_VIDEO', 'TITLE' => terminalsLang('TERMINALS_SHOW_VIDEO'), 'TYPE' => 'checkbox',
                 'DEFAULT' => $this->showVideoDefault() ? '1' : '0'),
+            // камеры go2rtc (terminals_go2rtc.inc.php): RTSP — VLC без модуля live555 (сборки Debian, Raspberry Pi OS)
+            // и Chromecast его не играют; HTTP (MP4) — с API go2rtc, по TCP, нужен доступ к нему без пароля
+            array('NAME' => 'CAMERA_FORMAT', 'TITLE' => terminalsLang('TERMINALS_PLAYER_CAMERA_FORMAT'), 'TYPE' => 'select',
+                'OPTIONS' => array('rtsp' => 'RTSP', 'mp4' => 'HTTP (MP4)'), 'DEFAULT' => $this->streamFormatDefault(),
+                'HINT' => terminalsLang('TERMINALS_PLAYER_CAMERA_FORMAT_HINT')),
         );
+    }
+
+    // Формат камер по умолчанию: Chromecast и DLNA RTSP не играют
+    protected function streamFormatDefault()
+    {
+        return in_array($this->playerType(), array('chromecast', 'dnla'), true) ? 'mp4' : 'rtsp';
+    }
+
+    // Как показывать камеры go2rtc: rtsp или mp4 (поле «Камеры»)
+    public function streamFormat()
+    {
+        $settings = function_exists('terminalsAddonSettings') ? terminalsAddonSettings($this->terminal, 'tts', 'mediaplayer') : array();
+        $format = isset($settings['CAMERA_FORMAT']) ? $settings['CAMERA_FORMAT'] : '';
+        return in_array($format, array('rtsp', 'mp4'), true) ? $format : $this->streamFormatDefault();
     }
 
     // Плееры с экраном (у остальных — только звук: mpd, lms, ghn, foobar)
@@ -168,7 +187,8 @@ class mediaplayer extends tts_addon
         if ($this->playerType() == 'dnla' && !in_array(strtolower(pathinfo((string)parse_url($uri, PHP_URL_PATH), PATHINFO_EXTENSION)), array('mp4', 'm4v'), true)) {
             return false;
         }
-        $stream = (bool)preg_match('/^(rtsp|rtsps|rtmp|rtmps):\/\//i', $uri);
+        // поток: rtsp/rtmp-ссылка или $type == 'stream' (камера go2rtc, в том числе http …/api/stream.mp4)
+        $stream = (bool)preg_match('/^(rtsp|rtsps|rtmp|rtmps):\/\//i', $uri) || ($type == 'stream' && preg_match('#^https?://#i', $uri));
         $url = $stream ? $uri : $this->messageUrl($uri);
         if ($url == '') {
             return false;

@@ -154,7 +154,7 @@ function terminalsGo2rtcDeviceBase()
     return (isset($parts['scheme']) ? $parts['scheme'] : 'http') . '://' . $host . (isset($parts['port']) ? ':' . (int)$parts['port'] : ':1984');
 }
 
-// Ссылка на поток для устройства: rtsp, hls, mjpeg, frame (снимок), webrtc (через сервер, по ключу терминала)
+// Ссылка на поток для устройства: rtsp, mp4, hls, mjpeg, frame (снимок), webrtc (через сервер, по ключу терминала)
 function terminalsGo2rtcUrl($name, $format = 'rtsp', $terminal_rec = array())
 {
     if (!terminalsGo2rtcHas($name)) {
@@ -167,6 +167,10 @@ function terminalsGo2rtcUrl($name, $format = 'rtsp', $terminal_rec = array())
         $host = (string)parse_url($base, PHP_URL_HOST);
         $auth = ($cfg['rtsp_user'] != '') ? rawurlencode($cfg['rtsp_user']) . ':' . rawurlencode($cfg['rtsp_password']) . '@' : '';
         return 'rtsp://' . $auth . $host . ':' . $cfg['rtsp_port'] . '/' . $src;
+    }
+    if ($format == 'mp4') {
+        // fMP4 по HTTP: плееры без RTSP (VLC без live555, Chromecast, DLNA)
+        return $base . '/api/stream.mp4?src=' . $src;
     }
     if ($format == 'hls') {
         return $base . '/api/stream.m3u8?src=' . $src . '&mp4';
@@ -258,7 +262,7 @@ function terminalsGo2rtcSnapshot($name)
 }
 
 // Показать поток на терминале на $duration секунд. PiPup — окно видео (RTSP или WebRTC — настройка «Камеры»
-// в озвучке pipup), повторный вызов продлевает то же окно; mediaplayer — плеером через очередь (RTSP),
+// в озвучке pipup), повторный вызов продлевает то же окно; mediaplayer — плеером через очередь (RTSP или HTTP MP4 — поле «Камеры» в озвучке),
 // после показа — остановка или возврат музыки; остальные — снимок и подпись. Возвращает, показано ли
 function terminalsGo2rtcShow($terminal_rec, $name, $duration = 60, $title = '', $level = 0)
 {
@@ -284,9 +288,10 @@ function terminalsGo2rtcShow($terminal_rec, $name, $duration = 60, $title = '', 
             'poster' => $poster));
     }
     if (is_object($tts) && method_exists($tts, 'sendVideo') && method_exists($tts, 'canShowVideo') && $tts->canShowVideo()) {
-        // плеер с экраном: через очередь, держит терминал на время показа
-        $url = terminalsGo2rtcUrl($name, 'rtsp');
-        DebMes('go2rtc: show ' . $name . ' (rtsp) on ' . $terminal_rec['TITLE'] . ' (' . terminalsDeviceLabel($terminal_rec, $tts) . '): '
+        // плеер с экраном: через очередь, держит терминал на время показа (формат — поле «Камеры» mediaplayer)
+        $format = method_exists($tts, 'streamFormat') ? $tts->streamFormat() : 'rtsp';
+        $url = terminalsGo2rtcUrl($name, $format);
+        DebMes('go2rtc: show ' . $name . ' (' . $format . ') on ' . $terminal_rec['TITLE'] . ' (' . terminalsDeviceLabel($terminal_rec, $tts) . '): '
             . terminalsLogSafe($url), 'terminals');
         return (bool)terminalsQueueCall($terminal_rec, 'sendVideo', array($url, '', $title, 'stream', array('duration' => $duration)),
             array('level' => $level, 'busy' => $duration));
