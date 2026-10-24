@@ -2107,7 +2107,7 @@
 		// длительность записи знает страница (в webm-записи браузера её нет)
 		if (seconds) input.tmDurations = [seconds];
 	}
-	function tmCamOpen(kind) {
+	function tmDeskCamOpen(kind) {
 		var status = document.getElementById('tm_status');
 		var input = kind == 'video' ? tmForm.video_camera : tmForm.image_camera;
 		tmMenu.style.display = 'none';
@@ -2192,7 +2192,7 @@
 			// на телефоне — камера через capture, как раньше; нажатие на само поле (input.click() из кода) не перехватываем
 			if (e.target.tagName == 'INPUT' || !tmCamWanted()) return;
 			e.preventDefault();
-			tmCamOpen(item[1]);
+			tmDeskCamOpen(item[1]);
 		});
 	});
 
@@ -2259,11 +2259,15 @@
 		pc.ontrack = function (e) { if (!video.srcObject) video.srcObject = e.streams[0] || new MediaStream([e.track]); };
 		pc.createOffer().then(function (offer) { return pc.setLocalDescription(offer); })
 			.then(function () {
-				// кандидаты — сразу в предложении (без отдельной досылки): ждём их до 2 с
+				// кандидаты — сразу в предложении (без отдельной досылки). Сбор целиком часто не завершается
+				// секундами (лишние сетевые интерфейсы, TCP-кандидаты), а дома хватает адресов устройства — они
+				// приходят первыми, за миллисекунды: ждём 300 мс после первого кандидата, не дольше 2 с
 				return new Promise(function (ok) {
 					if (pc.iceGatheringState == 'complete') { ok(); return; }
-					var t = setTimeout(ok, 2000);
-					pc.addEventListener('icegatheringstatechange', function () { if (pc.iceGatheringState == 'complete') { clearTimeout(t); ok(); } });
+					var t = setTimeout(ok, 2000), first = null;
+					var done = function () { clearTimeout(t); clearTimeout(first); ok(); };
+					pc.addEventListener('icecandidate', function (e) { if (e.candidate && !first) first = setTimeout(done, 300); });
+					pc.addEventListener('icegatheringstatechange', function () { if (pc.iceGatheringState == 'complete') done(); });
 				});
 			})
 			.then(function () {
