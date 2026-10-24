@@ -226,6 +226,7 @@ $dictionary = array(
 	'TERMINALS_LOGOUT_USER_NOTE'          => 'Ключ користувача видаляється з цього браузера; вхід на сайт MajorDoMo це не зачіпає.',
 	'TERMINALS_CAMERAS'                   => 'Камери',
 	'TERMINALS_CAMERA_TITLE'              => 'Камера',
+	'TERMINALS_PORT'                      => 'Порт',
 	'TERMINALS_GO2RTC'                    => 'Камери (go2rtc)',
 	'TERMINALS_GO2RTC_HELP'               => 'Своїх камер у MajorDoMo немає: потоки створюються в go2rtc, а «Повідомлення» і термінали беруть їх звідти за назвою. Адреси й паролі камер залишаються в go2rtc.',
 	'TERMINALS_GO2RTC_URL'                => 'Адреса go2rtc для сервера',

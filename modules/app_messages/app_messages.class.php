@@ -35,11 +35,18 @@ class app_messages extends module
             terminalsLoadLanguage();
             $terminals->getConfig();
             $out = array();
+            // вкладки: «Настройки» (общие, ключи пользователей) и «Камеры (go2rtc)» (настройки go2rtc, права на камеры);
+            // у каждой — своя форма: сохранение одной не трогает поля другой
+            $out['TAB'] = (gr('go2rtc_save') || gr('access_save')) ? 'tab_cameras' : '';
             if (gr('ws_save')) {
                 $terminals->config['MESSAGES_WS_EXTERNAL'] = terminalsWsUrl(gr('ws_external'));
                 $terminals->config['MESSAGES_HISTORY_DAYS'] = (string)max(0, min(3650, (int)gr('history_days')));
                 // прежние общие настройки ключей больше не используются: «Только по ключу» — у каждого терминала
                 unset($terminals->config['MESSAGES_TOKEN_ONLY'], $terminals->config['MESSAGES_USE_TOKENS']);
+                $terminals->saveConfig();
+                $out['SAVED'] = 1;
+            }
+            if (gr('go2rtc_save')) {
                 // камеры go2rtc (terminals_go2rtc.inc.php)
                 foreach (array('GO2RTC_URL', 'GO2RTC_USER', 'GO2RTC_PASSWORD', 'GO2RTC_DEVICE_URL', 'GO2RTC_RTSP_USER', 'GO2RTC_RTSP_PASSWORD') as $key) {
                     $terminals->config[$key] = trim((string)gr(strtolower($key)));
@@ -54,7 +61,7 @@ class app_messages extends module
                 $terminals->config['GO2RTC_WT_MINUTES'] = gr('go2rtc_wt_minutes', 'int') ? (string)max(1, min(1440, gr('go2rtc_wt_minutes', 'int'))) : '';
                 $terminals->config['GO2RTC_WAIT'] = gr('go2rtc_wait', 'int') ? (string)max(2, min(25, gr('go2rtc_wait', 'int'))) : '';
                 $terminals->saveConfig();
-                $out['SAVED'] = 1;
+                $out['GO2RTC_SAVED'] = 1;
             }
             // права на камеры: камера => все / терминалы / пользователи (без записи — только администратору)
             if (gr('access_save')) {

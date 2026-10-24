@@ -1,107 +1,45 @@
-<!-- «Сообщения» в панели управления: адрес страницы, вебсокет, срок истории, ключи пользователей -->
+<!-- «Сообщения» в панели управления: вкладки «Настройки» (адрес страницы, вебсокет, срок истории, ключи пользователей)
+     и «Камеры (go2rtc)» (настройки go2rtc, права на камеры). Раскладка: метка над полем на телефоне, слева — с планшета -->
+<style>
+	@media (max-width: 767px) {
+		.tm-pair > div + div { margin-top: 6px; }
+	}
+	.tm-num { max-width: 140px; }
+	.tm-cam .panel-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; }
+	.tm-cam .panel-heading label { font-weight: normal; margin: 0; }
+	.tm-cam .tm-checks label { font-weight: normal; margin: 0 16px 6px 0; display: inline-flex; align-items: center; gap: 5px; }
+	.tm-cam .tm-checks + .tm-checks { margin-top: 8px; }
+</style>
 <p><#LANG_TERMINALS_APP_PAGE#>: <a href="[#PAGE_URL#]" target="_blank">[#PAGE_URL#]</a></p>
+<ul class="nav nav-tabs" id="msg_tabs">
+	<li class="active"><a href="#tab_general" data-tab="tab_general"><#LANG_TERMINALS_SETTINGS#></a></li>
+	<li><a href="#tab_cameras" data-tab="tab_cameras"><#LANG_TERMINALS_GO2RTC#></a></li>
+</ul>
+<div class="tab-content" style="padding-top:15px">
+
+<div class="tab-pane active" id="tab_general">
 [#if SAVED="1"#]<div class="alert alert-success"><#LANG_DATA_SAVED#></div>[#endif SAVED#]
 [#if KEY_RECREATED="1"#]<div class="alert alert-success"><#LANG_TERMINALS_TOKEN_RECREATED#></div>[#endif KEY_RECREATED#]
 <form action="?" method="post" class="form-horizontal">
 <div class="form-group">
-	<label class="col-lg-4 control-label"><#LANG_TERMINALS_WS_EXTERNAL#>:</label>
-	<div class="col-lg-5">
+	<label class="col-sm-4 col-md-3 control-label"><#LANG_TERMINALS_WS_EXTERNAL#>:</label>
+	<div class="col-sm-8 col-md-6">
 		<input type="text" name="ws_external" class="form-control" value="[#WS_EXTERNAL#]" placeholder="wss://home.example.com/majordomo">
 		<p class="help-block"><#LANG_TERMINALS_WS_EXTERNAL_HELP#></p>
 	</div>
 </div>
 <div class="form-group">
-	<label class="col-lg-4 control-label"><#LANG_TERMINALS_HISTORY_DAYS#>:</label>
-	<div class="col-lg-5">
-		<input type="number" min="0" max="3650" name="history_days" class="form-control" style="max-width:140px" value="[#HISTORY_DAYS#]">
+	<label class="col-sm-4 col-md-3 control-label"><#LANG_TERMINALS_HISTORY_DAYS#>:</label>
+	<div class="col-sm-8 col-md-6">
+		<input type="number" min="0" max="3650" name="history_days" class="form-control tm-num" value="[#HISTORY_DAYS#]">
 		<p class="help-block"><#LANG_TERMINALS_HISTORY_DAYS_HELP#></p>
 	</div>
 </div>
-<h4><#LANG_TERMINALS_GO2RTC#></h4>
-<p class="help-block"><#LANG_TERMINALS_GO2RTC_HELP#></p>
 <div class="form-group">
-	<label class="col-lg-4 control-label"><#LANG_TERMINALS_GO2RTC_URL#>:</label>
-	<div class="col-lg-5">
-		<input type="text" name="go2rtc_url" class="form-control" value="[#GO2RTC_URL#]" placeholder="http://127.0.0.1:1984">
-		<p class="help-block">[#if GO2RTC_STATUS!=""#][#GO2RTC_STATUS#][#else GO2RTC_STATUS#]<#LANG_TERMINALS_GO2RTC_URL_HELP#>[#endif GO2RTC_STATUS#]</p>
-	</div>
-</div>
-<div class="form-group">
-	<label class="col-lg-4 control-label"><#LANG_TERMINALS_GO2RTC_API_LOGIN#>:</label>
-	<div class="col-lg-5">
-		<div class="row">
-			<div class="col-xs-6"><input type="text" name="go2rtc_user" class="form-control" value="[#GO2RTC_USER#]" autocomplete="off" placeholder="<#LANG_TERMINALS_LOGIN#>"></div>
-			<div class="col-xs-6"><input type="password" name="go2rtc_password" class="form-control" value="[#GO2RTC_PASSWORD#]" autocomplete="new-password" placeholder="<#LANG_TERMINALS_PASSWORD#>"></div>
-		</div>
-		<p class="help-block"><#LANG_TERMINALS_GO2RTC_API_LOGIN_HELP#></p>
-	</div>
-</div>
-<div class="form-group">
-	<label class="col-lg-4 control-label"><#LANG_TERMINALS_GO2RTC_DEVICE_URL#>:</label>
-	<div class="col-lg-5">
-		<input type="text" name="go2rtc_device_url" class="form-control" value="[#GO2RTC_DEVICE_URL#]" placeholder="[#GO2RTC_DEVICE_AUTO#]">
-		<p class="help-block"><#LANG_TERMINALS_GO2RTC_DEVICE_URL_HELP#></p>
-	</div>
-</div>
-<div class="form-group">
-	<label class="col-lg-4 control-label">RTSP:</label>
-	<div class="col-lg-5">
-		<div class="row">
-			<div class="col-xs-4"><input type="number" min="1" max="65535" name="go2rtc_rtsp_port" class="form-control" value="[#GO2RTC_RTSP_PORT#]" placeholder="8554"></div>
-			<div class="col-xs-4"><input type="text" name="go2rtc_rtsp_user" class="form-control" value="[#GO2RTC_RTSP_USER#]" autocomplete="off" placeholder="<#LANG_TERMINALS_LOGIN#>"></div>
-			<div class="col-xs-4"><input type="password" name="go2rtc_rtsp_password" class="form-control" value="[#GO2RTC_RTSP_PASSWORD#]" autocomplete="new-password" placeholder="<#LANG_TERMINALS_PASSWORD#>"></div>
-		</div>
-		<p class="help-block"><#LANG_TERMINALS_GO2RTC_RTSP_HELP#></p>
-	</div>
-</div>
-<div class="form-group">
-	<label class="col-lg-4 control-label"><#LANG_TERMINALS_GO2RTC_WAIT#>:</label>
-	<div class="col-lg-5">
-		<input type="number" min="2" max="25" name="go2rtc_wait" class="form-control" style="max-width:140px" value="[#GO2RTC_WAIT#]" placeholder="6">
-		<p class="help-block"><#LANG_TERMINALS_GO2RTC_WAIT_HELP#></p>
-	</div>
-</div>
-<div class="form-group">
-	<div class="col-lg-offset-2 col-lg-5">
-		<div class="checkbox"><label><input type="checkbox" name="go2rtc_webtorrent" value="1"[#if GO2RTC_WEBTORRENT="1"#] checked[#endif#]> <#LANG_TERMINALS_GO2RTC_WEBTORRENT#></label></div>
-		<p class="help-block"><#LANG_TERMINALS_GO2RTC_WEBTORRENT_HELP#></p>
-	</div>
-</div>
-<div class="form-group">
-	<label class="col-lg-4 control-label"><#LANG_TERMINALS_GO2RTC_WT_MINUTES#>:</label>
-	<div class="col-lg-5"><input type="number" min="1" max="1440" name="go2rtc_wt_minutes" class="form-control" style="max-width:140px" value="[#GO2RTC_WT_MINUTES#]" placeholder="10"></div>
-</div>
-<div class="form-group">
-	<div class="col-lg-offset-2 col-lg-5"><button type="submit" class="btn btn-primary"><#LANG_TERMINALS_SAVE#></button></div>
+	<div class="col-sm-offset-4 col-md-offset-3 col-sm-8 col-md-6"><button type="submit" class="btn btn-primary"><#LANG_TERMINALS_SAVE#></button></div>
 </div>
 <input type="hidden" name="ws_save" value="1">
 </form>
-
-[#if HAS_CAMERAS="1"#]
-<!-- права на камеры: администратор видит все; остальным — по отметкам (без отметок — только администратору) -->
-<h4><#LANG_TERMINALS_CAMERA_ACCESS#></h4>
-<p class="help-block"><#LANG_TERMINALS_CAMERA_ACCESS_HELP#></p>
-[#if ACCESS_SAVED="1"#]<div class="alert alert-success"><#LANG_DATA_SAVED#></div>[#endif ACCESS_SAVED#]
-<form action="?" method="post">
-<div class="table-responsive">
-<table class="table table-striped">
-<thead><tr><th><#LANG_TERMINALS_CAMERA_TITLE#></th><th><#LANG_TERMINALS_CAMERA_EVERYONE#></th><th><#LANG_TERMINALS_CAMERA_TERMINALS#></th><th><#LANG_TERMINALS_CAMERA_USERS#></th></tr></thead>
-<tbody>
-[#begin CAMERAS#]
-	<tr>
-		<td><b>[#NAME#]</b></td>
-		<td><input type="checkbox" name="access[[#KEY#]][all]" value="1"[#if ALL="1"#] checked[#endif ALL#] title="<#LANG_TERMINALS_CAMERA_EVERYONE#>"></td>
-		<td>[#begin TERMINALS#]<label class="checkbox-inline" style="margin:0 12px 4px 0"><input type="checkbox" name="access[[#KEY#]][terminals][]" value="[#NAME#]"[#if ON="1"#] checked[#endif ON#]> [#TITLE#]</label>[#end TERMINALS#]</td>
-		<td>[#begin USERS#]<label class="checkbox-inline" style="margin:0 12px 4px 0"><input type="checkbox" name="access[[#KEY#]][users][]" value="[#ID#]"[#if ON="1"#] checked[#endif ON#]> [#TITLE#]</label>[#end USERS#]</td>
-	</tr>
-[#end CAMERAS#]
-</tbody>
-</table>
-</div>
-<button type="submit" class="btn btn-primary"><#LANG_TERMINALS_SAVE#></button>
-<input type="hidden" name="access_save" value="1">
-</form>
-[#endif HAS_CAMERAS#]
 
 <!-- ключи пользователей: вход в «Сообщения» от имени пользователя, без терминала -->
 <h4><#LANG_TERMINALS_USER_KEYS#></h4>
@@ -140,9 +78,124 @@
 </tbody>
 </table>
 </div>
+</div>
+
+<div class="tab-pane" id="tab_cameras">
+[#if GO2RTC_SAVED="1"#]<div class="alert alert-success"><#LANG_DATA_SAVED#></div>[#endif GO2RTC_SAVED#]
+<p class="help-block"><#LANG_TERMINALS_GO2RTC_HELP#></p>
+<form action="?" method="post" class="form-horizontal">
+<div class="form-group">
+	<label class="col-sm-4 col-md-3 control-label"><#LANG_TERMINALS_GO2RTC_URL#>:</label>
+	<div class="col-sm-8 col-md-6">
+		<input type="text" name="go2rtc_url" class="form-control" value="[#GO2RTC_URL#]" placeholder="http://127.0.0.1:1984">
+		<p class="help-block">[#if GO2RTC_STATUS!=""#][#GO2RTC_STATUS#][#else GO2RTC_STATUS#]<#LANG_TERMINALS_GO2RTC_URL_HELP#>[#endif GO2RTC_STATUS#]</p>
+	</div>
+</div>
+<div class="form-group">
+	<label class="col-sm-4 col-md-3 control-label"><#LANG_TERMINALS_GO2RTC_API_LOGIN#>:</label>
+	<div class="col-sm-8 col-md-6">
+		<div class="row tm-pair">
+			<div class="col-sm-6"><input type="text" name="go2rtc_user" class="form-control" value="[#GO2RTC_USER#]" autocomplete="off" placeholder="<#LANG_TERMINALS_LOGIN#>"></div>
+			<div class="col-sm-6"><input type="password" name="go2rtc_password" class="form-control" value="[#GO2RTC_PASSWORD#]" autocomplete="new-password" placeholder="<#LANG_TERMINALS_PASSWORD#>"></div>
+		</div>
+		<p class="help-block"><#LANG_TERMINALS_GO2RTC_API_LOGIN_HELP#></p>
+	</div>
+</div>
+<div class="form-group">
+	<label class="col-sm-4 col-md-3 control-label"><#LANG_TERMINALS_GO2RTC_DEVICE_URL#>:</label>
+	<div class="col-sm-8 col-md-6">
+		<input type="text" name="go2rtc_device_url" class="form-control" value="[#GO2RTC_DEVICE_URL#]" placeholder="[#GO2RTC_DEVICE_AUTO#]">
+		<p class="help-block"><#LANG_TERMINALS_GO2RTC_DEVICE_URL_HELP#></p>
+	</div>
+</div>
+<div class="form-group">
+	<label class="col-sm-4 col-md-3 control-label">RTSP:</label>
+	<div class="col-sm-8 col-md-6">
+		<div class="row tm-pair">
+			<div class="col-sm-3"><input type="number" min="1" max="65535" name="go2rtc_rtsp_port" class="form-control" value="[#GO2RTC_RTSP_PORT#]" placeholder="8554" title="<#LANG_TERMINALS_PORT#>"></div>
+			<div class="col-sm-4"><input type="text" name="go2rtc_rtsp_user" class="form-control" value="[#GO2RTC_RTSP_USER#]" autocomplete="off" placeholder="<#LANG_TERMINALS_LOGIN#>"></div>
+			<div class="col-sm-5"><input type="password" name="go2rtc_rtsp_password" class="form-control" value="[#GO2RTC_RTSP_PASSWORD#]" autocomplete="new-password" placeholder="<#LANG_TERMINALS_PASSWORD#>"></div>
+		</div>
+		<p class="help-block"><#LANG_TERMINALS_GO2RTC_RTSP_HELP#></p>
+	</div>
+</div>
+<div class="form-group">
+	<label class="col-sm-4 col-md-3 control-label"><#LANG_TERMINALS_GO2RTC_WAIT#>:</label>
+	<div class="col-sm-8 col-md-6">
+		<input type="number" min="2" max="25" name="go2rtc_wait" class="form-control tm-num" value="[#GO2RTC_WAIT#]" placeholder="6">
+		<p class="help-block"><#LANG_TERMINALS_GO2RTC_WAIT_HELP#></p>
+	</div>
+</div>
+<div class="form-group">
+	<div class="col-sm-offset-4 col-md-offset-3 col-sm-8 col-md-6">
+		<div class="checkbox"><label><input type="checkbox" name="go2rtc_webtorrent" value="1"[#if GO2RTC_WEBTORRENT="1"#] checked[#endif#]> <#LANG_TERMINALS_GO2RTC_WEBTORRENT#></label></div>
+		<p class="help-block"><#LANG_TERMINALS_GO2RTC_WEBTORRENT_HELP#></p>
+	</div>
+</div>
+<div class="form-group">
+	<label class="col-sm-4 col-md-3 control-label"><#LANG_TERMINALS_GO2RTC_WT_MINUTES#>:</label>
+	<div class="col-sm-8 col-md-6"><input type="number" min="1" max="1440" name="go2rtc_wt_minutes" class="form-control tm-num" value="[#GO2RTC_WT_MINUTES#]" placeholder="10"></div>
+</div>
+<div class="form-group">
+	<div class="col-sm-offset-4 col-md-offset-3 col-sm-8 col-md-6"><button type="submit" class="btn btn-primary"><#LANG_TERMINALS_SAVE#></button></div>
+</div>
+<input type="hidden" name="go2rtc_save" value="1">
+</form>
+
+[#if HAS_CAMERAS="1"#]
+<!-- права на камеры: администратор видит все; остальным — по отметкам (без отметок — только администратору).
+     Карточка на камеру (а не таблица): списки терминалов и пользователей переносятся по ширине — и на телефоне -->
+<h4><#LANG_TERMINALS_CAMERA_ACCESS#></h4>
+<p class="help-block"><#LANG_TERMINALS_CAMERA_ACCESS_HELP#></p>
+[#if ACCESS_SAVED="1"#]<div class="alert alert-success"><#LANG_DATA_SAVED#></div>[#endif ACCESS_SAVED#]
+<form action="?" method="post" class="tm-cam">
+[#begin CAMERAS#]
+<div class="panel panel-default">
+	<div class="panel-heading">
+		<b>📹 [#NAME#]</b>
+		<label><input type="checkbox" name="access[[#KEY#]][all]" value="1"[#if ALL="1"#] checked[#endif ALL#]> <#LANG_TERMINALS_CAMERA_EVERYONE#></label>
+	</div>
+	<div class="panel-body">
+		<div class="tm-checks">
+			<div class="text-muted small"><#LANG_TERMINALS_CAMERA_TERMINALS#>:</div>
+			[#begin TERMINALS#]<label><input type="checkbox" name="access[[#KEY#]][terminals][]" value="[#NAME#]"[#if ON="1"#] checked[#endif ON#]> [#TITLE#]</label>[#end TERMINALS#]
+		</div>
+		<div class="tm-checks">
+			<div class="text-muted small"><#LANG_TERMINALS_CAMERA_USERS#>:</div>
+			[#begin USERS#]<label><input type="checkbox" name="access[[#KEY#]][users][]" value="[#ID#]"[#if ON="1"#] checked[#endif ON#]> [#TITLE#]</label>[#end USERS#]
+		</div>
+	</div>
+</div>
+[#end CAMERAS#]
+<button type="submit" class="btn btn-primary"><#LANG_TERMINALS_SAVE#></button>
+<input type="hidden" name="access_save" value="1">
+</form>
+[#endif HAS_CAMERAS#]
+</div>
+
+</div>
 <script src="<#ROOTHTML#>templates/terminals/js/qrcode.js"></script>
 <script type="text/javascript">
 	(function () {
+		// вкладки: без bootstrap.js; после сохранения — та же вкладка (TAB от сервера), иначе — из адреса (#tab_…)
+		var nav = document.getElementById('msg_tabs');
+		function show(id) {
+			Array.prototype.forEach.call(nav.querySelectorAll('a[data-tab]'), function (a) {
+				var on = a.getAttribute('data-tab') == id;
+				a.parentNode.classList.toggle('active', on);
+				document.getElementById(a.getAttribute('data-tab')).classList.toggle('active', on);
+			});
+		}
+		Array.prototype.forEach.call(nav.querySelectorAll('a[data-tab]'), function (a) {
+			a.addEventListener('click', function (e) {
+				e.preventDefault();
+				show(a.getAttribute('data-tab'));
+				if (window.history && history.replaceState) history.replaceState(null, '', '#' + a.getAttribute('data-tab'));
+			});
+		});
+		var start = '[#TAB#]' || (location.hash || '').substr(1);
+		if (start && document.getElementById(start)) show(start);
+
 		var page = location.protocol + '//' + location.host + '[#PAGE_URL#]';
 		// строка с ссылкой и QR-кодом пользователя: показать или скрыть
 		window.userKeyShow = function (id) {
