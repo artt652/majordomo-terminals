@@ -1787,8 +1787,32 @@
 		if (tmFwdCam) {
 			// камера: показать на терминалах чата или снимок в чат
 			var cam = tmFwdCam;
+			var duration = document.getElementById('tm_fwd_duration').value;
+			if (cam.action == 'cam_show') {
+				// показ: не ждём — окно закрывается, открывается чат; сервер отвечает сразу, сообщение со снимком
+				// появится чуть позже (вебсокет; без него — проверить ещё пару раз). Не ушло — строка под полем ввода
+				tmForwardClose();
+				// чат — после закрытия окна камеры («Назад» в истории браузера срабатывает не сразу)
+				if (tmViewHistory) {
+					window.addEventListener('popstate', function opened() { window.removeEventListener('popstate', opened); tmOpen(key); });
+				}
+				var later = tmViewHistory;
+				tmViewerDone();
+				if (!later) tmOpen(key);
+				tmGroupPost({mode: 'cam_show', name: cam.name, chat: key, duration: duration}, function (res) {
+					if (!res.sent) {
+						document.getElementById('tm_status').textContent = cam.name + ': ' + (res.error == 'no_access' ? tmText.camNoAccess
+							: (res.error == 'camera' ? tmText.camFailed : tmText.notSent));
+						return;
+					}
+					tmRefresh();
+					setTimeout(tmRefresh, 2500);
+					setTimeout(tmRefresh, 7000);
+				});
+				return;
+			}
 			status.textContent = tmText.sending;
-			tmGroupPost({mode: cam.action, name: cam.name, chat: key, duration: document.getElementById('tm_fwd_duration').value}, function (res) {
+			tmGroupPost({mode: cam.action, name: cam.name, chat: key, duration: duration}, function (res) {
 				if (!res.sent) {
 					status.textContent = res.error == 'no_access' ? tmText.camNoAccess : (res.error == 'camera' ? tmText.camFailed : tmText.notSent);
 					return;
@@ -1796,10 +1820,6 @@
 				tmForwardClose();
 				tmViewerDone();
 				tmRefresh(function () { tmOpen(res.chat || key); });
-				// показ камеры: снимок и запись сообщения сервер делает уже после ответа — сообщение появится
-				// чуть позже (вебсокет обновит сразу; без него — проверить ещё пару раз)
-				setTimeout(tmRefresh, 2500);
-				setTimeout(tmRefresh, 7000);
 			});
 			return;
 		}
