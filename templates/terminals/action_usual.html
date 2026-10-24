@@ -247,6 +247,7 @@
 	/* во весь доступный размер, с сохранением пропорций */
 	.tg-viewer-body img, .tg-viewer-body video { width: 100%; height: 100%; object-fit: contain; touch-action: pinch-zoom; }
 	.tg-viewer-body img { cursor: zoom-out; }
+	.tg-viewer-body iframe { width: 100%; height: 100%; border: 0; background: #000; }
 	/* листать фото чата: стрелки по бокам, счётчик сверху; на телефоне — смахнуть влево-вправо */
 	.tg-viewer-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 46px; height: 46px; border-radius: 50%; border: 0; padding: 0;
 		background: rgba(255,255,255,.14); color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 1; }
@@ -2227,6 +2228,11 @@
 	// снимок прямо с go2rtc — свежий кадр (у API нет пароля; frame_base от сервера). tmCamDirect = false — прямой
 	// путь не работает (вне дома, страница по HTTPS): дальше через сервер
 	var tmCamDirect = true;
+	// просмотр в родном интерфейсе go2rtc (stream.html — сам выбирает WebRTC, MSE, HLS или MJPEG); те же условия
+	function tmCamNativeUrl(name) {
+		var base = (tmChat('cameras') || {}).frame_base;
+		return (base && tmCamDirect) ? base + '/stream.html?src=' + encodeURIComponent(name) : '';
+	}
 	function tmCamDirectUrl(name, w) {
 		var base = (tmChat('cameras') || {}).frame_base;
 		return (base && tmCamDirect) ? base + '/api/frame.jpeg?src=' + encodeURIComponent(name) + '&width=' + w + '&t=' + Date.now() : '';
@@ -2373,28 +2379,52 @@
 		var img = document.createElement('img');
 		img.alt = '';
 		img.draggable = false;
-		tmCamRefreshImg(img, name, 1280);
 		video.style.display = 'none';
 		body.appendChild(img);
 		body.appendChild(video);
 		body.classList.remove('tg-cam-off');
 		body.setAttribute('data-off', tmText.camOffline);
 		var count = document.getElementById('tm_viewer_count');
-		count.textContent = name + ' · ' + tmText.camSnapshot;
-		// пока нет живого видео — снимок раз в 2 с
+		// свой просмотр: снимок раз в 2 с, пока нет живого видео WebRTC (через сервер)
 		// (снимок в окне — body.querySelector('img'): новый встаёт на место прошлого)
-		tmCamSnap = setInterval(function () {
-			var shot = body.querySelector('img');
-			if (tmCamName == name && shot && shot.style.display != 'none') tmCamRefreshImg(shot, name, 1280);
-		}, 2000);
-		video.addEventListener('playing', function () {
-			if (tmCamName != name) return;
-			var shot = body.querySelector('img');
-			if (shot) shot.style.display = 'none';
-			video.style.display = '';
+		var own = function () {
+			count.textContent = name + ' · ' + tmText.camSnapshot;
+			tmCamRefreshImg(img, name, 1280);
+			tmCamSnap = setInterval(function () {
+				var shot = body.querySelector('img');
+				if (tmCamName == name && shot && shot.style.display != 'none') tmCamRefreshImg(shot, name, 1280);
+			}, 2000);
+			video.addEventListener('playing', function () {
+				if (tmCamName != name) return;
+				var shot = body.querySelector('img');
+				if (shot) shot.style.display = 'none';
+				video.style.display = '';
+				count.textContent = name + ' · ' + tmText.camLive;
+			});
+			tmCamPc = tmCamLive(name, video, function () { if (tmCamName == name) tmCamPc = null; });
+		};
+		var native = tmCamNativeUrl(name);
+		if (native) {
+			// родной интерфейс go2rtc: браузер сам подключается к go2rtc (у API нет пароля — как и снимки напрямую)
+			var frame = document.createElement('iframe');
+			frame.setAttribute('allow', 'autoplay; fullscreen');
+			frame.src = native;
+			img.style.display = 'none';
+			body.appendChild(frame);
 			count.textContent = name + ' · ' + tmText.camLive;
-		});
-		tmCamPc = tmCamLive(name, video, function () { if (tmCamName == name) tmCamPc = null; });
+			// go2rtc отсюда недоступен (вне дома, страница по HTTPS) — проверка прямым снимком; не загрузился —
+			// свой просмотр через сервер
+			var probe = new Image();
+			probe.onerror = function () {
+				if (tmCamName != name || !frame.parentNode) return;
+				frame.parentNode.removeChild(frame);
+				img.style.display = '';
+				own();
+			};
+			probe.src = tmCamDirectUrl(name, 64);
+		} else {
+			own();
+		}
 		document.getElementById('tm_viewer_open').style.display = 'none';
 		document.getElementById('tm_viewer_fwd').style.display = 'none';
 		document.getElementById('tm_viewer_prev').hidden = true;
