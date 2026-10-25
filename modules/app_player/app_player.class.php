@@ -299,8 +299,15 @@ class app_player extends module
 
                                 } else {
 
-                                    // Execute command
-                                    $result = $player->$command($param);
+                                    // Execute command (while the terminal speaks queued messages, the terminals module
+                                    // may postpone it until they end: terminalsPlayerCommand() in terminals_queue.inc.php)
+                                    include_once(DIR_MODULES . 'terminals/terminals.class.php');
+                                    if (function_exists('terminalsPlayerCommand') && terminalsPlayerCommand($terminal, $command, $param)) {
+                                        $player->success = TRUE;
+                                        $player->message = 'queued';
+                                    } else {
+                                        $result = $player->$command($param);
+                                    }
                                     // Get results
                                     $json['success'] = $player->success;
                                     $json['message'] = $player->message;

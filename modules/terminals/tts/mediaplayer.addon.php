@@ -65,8 +65,10 @@ class mediaplayer extends tts_addon
             return true;
         }
         $this->applyMessageVolume();
-        // очередь, порядок и восстановление плеера ведёт модуль terminals (terminals_queue.inc.php)
-        playMedia($cached_file_url, $this->terminal['TITLE']);
+        // очередь, порядок и восстановление плеера ведёт модуль terminals (terminals_queue.inc.php).
+        // Команда плееру — напрямую, не через playMedia(): тот шлёт её отдельным запросом в фоне, и очередь
+        // приняла бы её за команду пользователя во время сообщения (terminalsPlayerCommand)
+        $this->playerCommand('play', $cached_file_url);
         return true;
     }
 
@@ -194,7 +196,7 @@ class mediaplayer extends tts_addon
             return false;
         }
         $this->applyMessageVolume();
-        playMedia($url, $this->terminal['TITLE']);
+        $this->playerCommand('play', $url);
         // поток (камера) не кончается сам: через duration остановить, если плеер всё ещё играет его
         // (если очередь уже вернула музыку — не трогать)
         if ($stream && !empty($options['duration'])) {
@@ -246,6 +248,13 @@ class mediaplayer extends tts_addon
     public function useQueue()
     {
         return true;
+    }
+
+    // Полосы очереди: голос, ролик и камера — на одном плеере, по очереди (голос останавливает ролик и камеру,
+    // после они запускаются заново). Картинок плеер не показывает
+    public function queueLanes()
+    {
+        return array('voice', 'video', 'camera');
     }
 
     // Что играет плеер: файл, позиция, громкость. Пусто, если не играет или играет сообщение
@@ -371,7 +380,7 @@ class mediaplayer extends tts_addon
             if (!is_array($now) || !isset($now['time']) || abs((int)$now['time'] - (int)$state['time']) > 5) {
                 // в задании нет сессии, а app_player пишет в $session->data (PHP 8 без неё падает)
                 setTimeOut('terminals_restore_seek_' . (int)$this->terminal['ID'],
-                    'global $session; if (!is_object($session)) { $session = new stdClass(); $session->data = array(); } '
+                    'global $session; if (!is_object($session)) { $session = new stdClass(); $session->data = array(); } $GLOBALS["terminals_player_direct"] = true; '
                     . 'seekPlayerPosition(' . var_export($title, true) . ', ' . (int)$state['time'] . ');', 2);
             }
         }
@@ -382,9 +391,12 @@ class mediaplayer extends tts_addon
         return true;
     }
 
-    // Команда плееру через app_player с ожиданием ответа. Возвращает успех
+    // Команда плееру через app_player с ожиданием ответа. Возвращает успех. Очередь её не задерживает
+    // (terminalsPlayerCommand): это команда самого терминала, а не пользователя
     protected function playerCommand($command, $param = '')
     {
+        $direct = !empty($GLOBALS['terminals_player_direct']);
+        $GLOBALS['terminals_player_direct'] = true;
         include_once(DIR_MODULES . 'app_player/app_player.class.php');
         $player = new app_player();
         $player->play_terminal = $this->terminal['NAME'];
@@ -393,6 +405,7 @@ class mediaplayer extends tts_addon
         $player->ajax = TRUE;
         $player->intCall = TRUE;
         $player->usual($out);
+        $GLOBALS['terminals_player_direct'] = $direct;
         return !empty($player->json['success']);
     }
 

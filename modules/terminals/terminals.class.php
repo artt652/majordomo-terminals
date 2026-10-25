@@ -488,6 +488,7 @@ class terminals extends module
 
  terminals_queue: ID int(10) unsigned NOT NULL auto_increment
  terminals_queue: TERMINAL_ID int(10) NOT NULL DEFAULT '0'
+ terminals_queue: LANE char(10) NOT NULL DEFAULT 'voice'
  terminals_queue: KIND char(10) NOT NULL DEFAULT ''
  terminals_queue: MESSAGE text
  terminals_queue: LEVEL int(10) NOT NULL DEFAULT '0'
@@ -499,6 +500,8 @@ class terminals extends module
  terminals_queue: ADDED int(10) NOT NULL DEFAULT '0'
  terminals_queue: STARTED int(10) NOT NULL DEFAULT '0'
  terminals_queue: FINISH int(10) NOT NULL DEFAULT '0'
+ terminals_queue: PAUSED int(3) NOT NULL DEFAULT '0'
+ terminals_queue: CHECKS int(3) NOT NULL DEFAULT '0'
  terminals_queue: INDEX (TERMINAL_ID)
 
  terminals_state: ID int(10) unsigned NOT NULL auto_increment
