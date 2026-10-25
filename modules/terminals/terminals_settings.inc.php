@@ -201,6 +201,76 @@ function terminalsMinLevel($terminal_rec)
     return max(0, $min_level);
 }
 
+// --- Голос терминала (поле TTS_ENGINE): какой генератор речи озвучивает его сообщения ---
+
+// Кто сделал файл голоса: поле события SAY_CACHED_READY tts_engine (yandex_tts — «yandex_tts_v3») или tts (sanotts);
+// '' — генератор о себе не сообщил
+function terminalsVoiceEngine($details)
+{
+    foreach (array('tts_engine', 'tts') as $key) {
+        if (is_array($details) && isset($details[$key]) && is_string($details[$key]) && trim($details[$key]) != '') {
+            return strtolower(trim($details[$key]));
+        }
+    }
+    return '';
+}
+
+// Играть ли терминалу файл этого генератора: голос не выбран или генератор не сообщил о себе — как раньше (играть);
+// выбран — только файлы выбранного (имя модуля: «yandex_tts» подходит и к «yandex_tts_v3»)
+function terminalsVoiceAccepts($terminal_rec, $engine)
+{
+    $selected = isset($terminal_rec['TTS_ENGINE']) ? strtolower(trim((string)$terminal_rec['TTS_ENGINE'])) : '';
+    $engine = strtolower(trim((string)$engine));
+    if ($selected == '' || $engine == '') {
+        return true;
+    }
+    return $engine == $selected || strpos($engine, $selected . '_') === 0;
+}
+
+// Для генераторов речи: нужна ли фраза события от генератора $engine (перед синтезом).
+//   if (function_exists('terminalsVoiceNeeded')) { if (!terminalsVoiceNeeded('sanotts', $event, $details)) return; }
+//   elseif (!empty($details['ignoreVoice'])) return;
+// Да — если среди терминалов-адресатов (SAY — все, кто говорит; SAYTO / ASK — destination) есть выбравший этот
+// генератор, или терминал без выбранного голоса, а фразу ещё никто не озвучил (ignoreVoice). Нет терминалов-адресатов —
+// как раньше: только если ignoreVoice не стоит
+function terminalsVoiceNeeded($engine, $event, $details)
+{
+    $details = is_array($details) ? $details : array();
+    $voiced = !empty($details['ignoreVoice']);
+    if ($event == 'SAY') {
+        $targets = SQLSelect("SELECT * FROM terminals WHERE CANTTS=1 AND TTS_TYPE!=''");
+    } else {
+        $target = isset($details['destination']) ? terminalsFind($details['destination']) : array();
+        $targets = !empty($target['ID']) ? array($target) : array();
+    }
+    if (empty($targets)) {
+        return !$voiced;
+    }
+    foreach ($targets as $terminal_rec) {
+        $selected = isset($terminal_rec['TTS_ENGINE']) ? trim((string)$terminal_rec['TTS_ENGINE']) : '';
+        if ($selected == '' ? !$voiced : terminalsVoiceAccepts($terminal_rec, $engine)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Имя генератора для поля «Голос»: модуль, подписанный на SAY, если поле события начинается с его имени
+// («yandex_tts_v3» → «yandex_tts»), иначе само поле
+function terminalsVoiceEngineName($engine)
+{
+    $engine = strtolower(trim((string)$engine));
+    $rec = SQLSelectOne("SELECT VALUE FROM settings WHERE NAME='HOOK_EVENT_SAY'");
+    $data = !empty($rec['VALUE']) ? json_decode($rec['VALUE'], true) : null;
+    foreach (is_array($data) ? array_keys($data) : array() as $module) {
+        $module = strtolower((string)$module);
+        if ($module != '' && ($engine == $module || strpos($engine, $module . '_') === 0)) {
+            return $module;
+        }
+    }
+    return preg_replace('/[^\w-]/', '', $engine);
+}
+
 // Событие модуля для подписчиков (subscribeToEvent): TERMINAL_DELIVERED, TERMINAL_RENAMED, TERMINAL_DELETED.
 // Сразу, в этом же запросе: подписчиков обычно нет — тогда ничего не происходит
 function terminalsEvent($event, $details)

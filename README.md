@@ -8,12 +8,12 @@
 
 | Файл | Что это |
 |---|---|
-| `modules/terminals/terminals.class.php` | Изменён: очередь для дополнений с `useQueue()`, события `MINUTELY` и `startup`, таблицы `terminals_queue` и `terminals_state`, поля `TTS_SETTINGS` и `PLAYER_SETTINGS`, `terminalSay()` с картинкой, отправителем и номером записи, события `TERMINAL_DELIVERED` / `TERMINAL_RENAMED` / `TERMINAL_DELETED` |
+| `modules/terminals/terminals.class.php` | Изменён: очередь для дополнений с `useQueue()`, события `MINUTELY` и `startup`, таблицы `terminals_queue` и `terminals_state`, поля `TTS_SETTINGS`, `PLAYER_SETTINGS` и `TTS_ENGINE` (голос терминала), `terminalSay()` с картинкой, отправителем и номером записи, события `TERMINAL_DELIVERED` / `TERMINAL_RENAMED` / `TERMINAL_DELETED` |
 | `modules/terminals/terminals_queue.inc.php` | Новый: очередь по полосам, сохранение и восстановление плеера, команды плееру во время сообщений, сторож, пропуск выключенных устройств, журнал с адресами |
 | `modules/terminals/terminals_media.inc.php` | Новый: длительность звука и видео из заголовка файла (MP4/MOV/M4A, WAV, MP3, OGG), иначе ffprobe/ffmpeg |
 | `modules/terminals/terminals_settings.inc.php` | Новый: настройки дополнений TTS и плеера (поля объявляет дополнение), переводы модуля, общие функции |
-| `modules/terminals/terminals_edit.inc.php` | Изменён: поля дополнений в форме терминала и их сохранение; при переименовании — событие |
-| `templates/terminals/terminals_edit.html` | Изменён: поля плеера и TTS строятся по описанию из дополнения |
+| `modules/terminals/terminals_edit.inc.php` | Изменён: поля дополнений и поле «Голос» в форме терминала и их сохранение; при переименовании — событие |
+| `templates/terminals/terminals_edit.html` | Изменён: поля плеера и TTS строятся по описанию из дополнения; поле «Голос» |
 | `modules/terminals/tts/mediaplayer.addon.php` | Изменён: очередь вместо заданий `allsay-target-*`, полосы голос / ролик / камера, команды плееру напрямую, сохранение и восстановление плеера, особенности MPD / LMS / Kodi / Chromecast / DLNA, видео и потоки на плеерах с экраном; исправлен запуск на PHP 8 |
 | `languages/terminals_default.php`, `terminals_ru.php`, `terminals_ua.php` | Новые: переводы полей (английский, русский, украинский) |
 | `modules/app_player/app_player.class.php` | Изменён одним местом: перед выполнением команды плееру спрашивает `terminalsPlayerCommand()` — пока терминал говорит, команда ждёт конца сообщений. Со старыми «Терминалами» (нет функции) — как раньше |
@@ -47,6 +47,29 @@
 - **Выключенные устройства не ждём**: перед обращением — проверка порта устройства (не дольше 1 с, адрес даёт `deviceAddress()` дополнения); не ответило — 60 с к нему не обращаемся.
 - **Старые сообщения** (старше 10 минут) не проигрываются; сторож (`MINUTELY`) перезапускает застрявшую очередь, `startup` сбрасывает «занято».
 - **Журнал** (`cms/debmes/<дата>/terminals.log`) — с адресами устройств; пароли, ключи и подписи в ссылках скрываются.
+
+## Голос терминала
+
+Поле «Голос» в карточке терминала (`TTS_ENGINE`) — какой модуль синтеза речи озвучивает его сообщения, если их несколько (например, кухня — sanotts, MAIN — Яндекс).
+
+- **Пусто** — любой, как раньше.
+- **Имя модуля** — терминал играет только файлы этого модуля из `SAY_CACHED_READY`. Кто сделал файл, «Терминалы» узнают из поля события `tts_engine` (yandex_tts: `yandex_tts_v3` подходит к `yandex_tts`) или `tts` (sanotts).
+- **Модуль, который о себе не сообщает**, — его файлы играют, как раньше, на всех терминалах, в том числе с выбранным голосом.
+- Подсказки в поле — модули, которые уже присылали файлы голоса с полем о себе; можно вписать и своё.
+
+Чтобы генераторы не делали лишних файлов, им предлагается спрашивать «Терминалы» перед синтезом, а после синтеза ставить `ignoreVoice` вместо `BREAK` (`BREAK` обрывает событие и для остальных подписчиков):
+
+```php
+if (function_exists('terminalsVoiceNeeded')) {
+    if (!terminalsVoiceNeeded('sanotts', $event, $details)) return;   // фраза не нужна ни одному терминалу
+} elseif (!empty($details['ignoreVoice'])) {
+    return;                                                           // старые «Терминалы»: как раньше
+}
+// … синтез, SAY_CACHED_READY с 'tts_engine' => 'sanotts' …
+$details['ignoreVoice'] = true;
+```
+
+`terminalsVoiceNeeded($engine, $event, $details)` — да, если среди терминалов-адресатов (`SAY` — все, кто говорит; `SAYTO` / `ASK` — `destination`) есть выбравший этот модуль или терминал без выбранного голоса, а фразу ещё никто не озвучил (`ignoreVoice`). Нет терминалов-адресатов — как раньше: только если `ignoreVoice` не стоит.
 
 ## Для других модулей и сценариев
 
@@ -126,6 +149,6 @@ function settingsFields()
 
 ## Установка
 
-Скопировать файлы поверх MajorDoMo (ветка `alpha`) и переустановить модуль «Терминалы»: создадутся таблицы `terminals_queue`, `terminals_state`, поля `TTS_SETTINGS`, `PLAYER_SETTINGS` и подписки на `MINUTELY` и `startup`; у прежней `terminals_queue` добавятся поля `LANE`, `PAUSED`, `CHECKS`. Существующие поля не меняются.
+Скопировать файлы поверх MajorDoMo (ветка `alpha`) и переустановить модуль «Терминалы»: создадутся таблицы `terminals_queue`, `terminals_state`, поля `TTS_SETTINGS`, `PLAYER_SETTINGS`, `TTS_ENGINE` и подписки на `MINUTELY` и `startup`; у прежней `terminals_queue` добавятся поля `LANE`, `PAUSED`, `CHECKS`. Существующие поля не меняются.
 
 Совместимо с PHP 7 и 8.

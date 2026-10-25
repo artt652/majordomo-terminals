@@ -14,6 +14,9 @@ $dictionary = array(
 	'TERMINALS_SHOW_VIDEO'                => 'Show video from messages (players with a screen: VLC, Kodi, Chromecast, DLNA — mp4 only)',
 	'TERMINALS_PLAYER_CAMERA_FORMAT'      => 'Cameras',
 	'TERMINALS_PLAYER_CAMERA_FORMAT_HINT' => 'How the player gets go2rtc cameras. RTSP is not played by VLC without the live555 module (Debian and Raspberry Pi OS builds) and by Chromecast. HTTP (MP4) — from the go2rtc API over TCP; the device needs access to the API without a password.',
+	'TERMINALS_TTS_ENGINE'                => 'Voice',
+	'TERMINALS_TTS_ENGINE_ANY'            => 'any',
+	'TERMINALS_TTS_ENGINE_HINT'           => 'Speech synthesis module whose files this terminal plays. Empty — any (as before). Files from a module that does not report itself are always played.',
 );
 
 foreach ($dictionary as $key => $value) {

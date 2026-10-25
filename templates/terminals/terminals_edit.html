@@ -158,6 +158,16 @@
             <label class="col-lg-4 control-label" for="min_msg_level"><#LANG_MIN_MSG_LEVEL#>:</label>
             <div class="col-lg-5"><input type="text"  class="form-control" id="min_msg_level"  name="min_msg_level" value="[#MIN_MSG_LEVEL#]"></div>
         </div>
+        <div class="form-group">
+            <label class="col-lg-4 control-label" for="tts_engine"><#LANG_TERMINALS_TTS_ENGINE#>:</label>
+            <div class="col-lg-5">
+                <input type="text" class="form-control" id="tts_engine" name="tts_engine" value="[#TTS_ENGINE#]" list="tts_engine_list" placeholder="<#LANG_TERMINALS_TTS_ENGINE_ANY#>" autocomplete="off">
+                <datalist id="tts_engine_list">
+                    [#begin TTS_ENGINES#]<option value="[#NAME#]">[#end TTS_ENGINES#]
+                </datalist>
+                <small class="form-text text-muted"><#LANG_TERMINALS_TTS_ENGINE_HINT#></small>
+            </div>
+        </div>
         <!-- поля дополнения TTS: строятся по settingsFields() дополнения -->
         <div id="tts_settings"></div>
     </div>

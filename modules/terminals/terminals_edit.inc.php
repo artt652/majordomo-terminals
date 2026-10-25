@@ -53,6 +53,7 @@ if ($this->mode == 'update') {
     }
     
     $rec['TTS_TYPE'] = gr('tts_type');
+    $rec['TTS_ENGINE'] = preg_replace('/[^\w-]/', '', trim(gr('tts_engine')));
     $rec['PLAYER_TYPE'] = gr('player_type');
     // поля выбранных дополнений TTS и плеера (terminals_settings.inc.php): прежние столбцы
     // PLAYER_PORT и др. меняются, только если дополнение их показало
@@ -111,6 +112,14 @@ if (is_array($rec)) {
 outHash($rec, $out);
 
 $out['TTS_ADDONS'] = array();
+// подсказки для поля «Голос»: генераторы речи, которые уже присылали файлы голоса (SAY_CACHED_READY с полем о себе)
+$this->getConfig();
+$out['TTS_ENGINES'] = array();
+$engines = isset($this->config['VOICE_ENGINES']) ? (array)$this->config['VOICE_ENGINES'] : array();
+sort($engines);
+foreach ($engines as $engine) {
+    $out['TTS_ENGINES'][] = array('NAME' => htmlspecialchars((string)$engine));
+}
 $tts_fields = array();
 $player_fields = array('' => terminalsFieldsForForm(terminalsAddonFields(null, 'player')));
 if (is_dir(DIR_MODULES . 'terminals/tts')) {

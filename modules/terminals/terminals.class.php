@@ -324,6 +324,18 @@ class terminals extends module
         } elseif ($event == 'SAY_CACHED_READY') {
             $filename = $details['filename'];
             if (!file_exists($filename)) return false;
+            // кто сделал файл: терминал с выбранным голосом (TTS_ENGINE) играет только файлы своего генератора
+            $engine = terminalsVoiceEngine($details);
+            if ($engine != '') {
+                // запомнить генератор — подсказка для поля «Голос» в карточке терминала
+                $engine_name = terminalsVoiceEngineName($engine);
+                $seen = isset($this->config['VOICE_ENGINES']) ? (array)$this->config['VOICE_ENGINES'] : array();
+                if ($engine_name != '' && !in_array($engine_name, $seen, true)) {
+                    $seen[] = $engine_name;
+                    $this->config['VOICE_ENGINES'] = $seen;
+                    $this->saveConfig();
+                }
+            }
             if ($details['event']) {
                 $source_event = $details['event'];
             } else {
@@ -332,6 +344,9 @@ class terminals extends module
             if ($source_event == 'SAY') {
                 $terminals = SQLSelect("SELECT * FROM terminals WHERE CANTTS=1");
                 foreach ($terminals as $terminal_rec) {
+                    if (!terminalsVoiceAccepts($terminal_rec, $engine)) {
+                        continue; // у терминала выбран другой голос
+                    }
                     //$this->terminalSayByCache($terminal_rec, $filename, $details['level']);
                     $this->terminalSayByCacheQueue($terminal_rec, $details['level'], $filename, $details['message']);
                 }
@@ -344,6 +359,9 @@ class terminals extends module
                 }
                 if (!$terminal_rec['ID']) {
                     return false;
+                }
+                if (!terminalsVoiceAccepts($terminal_rec, $engine)) {
+                    return false; // у терминала выбран другой голос
                 }
                 if ($source_event == 'ASK') {
                     $details['level'] = 9999;
@@ -485,6 +503,7 @@ class terminals extends module
  terminals: LOCATION_ID int(5) NOT NULL DEFAULT '0' 
  terminals: TTS_SETTINGS text
  terminals: PLAYER_SETTINGS text
+ terminals: TTS_ENGINE varchar(255) NOT NULL DEFAULT ''
 
  terminals_queue: ID int(10) unsigned NOT NULL auto_increment
  terminals_queue: TERMINAL_ID int(10) NOT NULL DEFAULT '0'
