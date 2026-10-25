@@ -810,7 +810,7 @@ function terminalsQueueRestoreState($terminal_rec)
 }
 
 // Команда плееру терминала (из app_player::usual()), пока звучат сообщения очереди: не прерывать их.
-// play с файлом — это и включится после сообщений; play без файла и pause — включать ли музыку после;
+// play с файлом — это и включится после сообщений (ролик — в очередь полосы video, если терминал показывает видео); play без файла и pause — включать ли музыку после;
 // stop — после сообщений музыку не возвращать; set_volume — громкость после; next, previous, seek и действия
 // с плейлистом — выполнить после возврата. Остальное (status, pl_get, features…) и команды самой очереди — сразу.
 // Возвращает true, если команда отложена (app_player отвечает «queued»), false — выполнять как обычно
@@ -838,10 +838,21 @@ function terminalsPlayerCommand($terminal_rec, $command, $param = '')
         terminalsQueueUnlock($tid);
         return false;
     }
+    $param = (string)$param;
+    if (($command == 'play' || $command == 'safe_play')
+        && preg_match('/\.(mp4|m4v|mkv|webm|mov|avi)$/i', (string)parse_url($param, PHP_URL_PATH))
+        && method_exists($tts, 'sendVideo') && (!method_exists($tts, 'canShowVideo') || $tts->canShowVideo())) {
+        // ролик — в очередь полосы video (после сообщений, музыка вернётся после него)
+        terminalsQueueUnlock($tid);
+        $local = (defined('BASE_URL') && BASE_URL != '' && strpos($param, BASE_URL . '/') === 0) ? substr($param, strlen(BASE_URL) + 1) : $param;
+        $seconds = preg_match('#^[a-z][a-z0-9+.-]*://#i', $local) ? 0 : terminalsQueueFileSeconds(urldecode($local));
+        DebMes('Player command during messages on ' . $terminal_rec['TITLE'] . " — video queued: $param", 'terminals');
+        terminalsQueueCall($terminal_rec, 'sendVideo', array($param), ($seconds > 0) ? array('busy' => $seconds + 1) : array());
+        return true;
+    }
     $saved = SQLSelectOne("SELECT * FROM terminals_state WHERE TERMINAL_ID=$tid LIMIT 1");
     $state = !empty($saved['ID']) ? json_decode($saved['PLAYER_STATE'], true) : array();
     $state = is_array($state) ? $state : array();
-    $param = (string)$param;
     if (($command == 'play' || $command == 'safe_play') && $param != '') {
         $state['file'] = $param;
         unset($state['time'], $state['track_id'], $state['paused'], $state['commands']);
