@@ -878,7 +878,9 @@ function terminalsPlayerCommand($terminal_rec, $command, $param = '')
         $saved['PLAYER_STATE'] = json_encode($state);
         SQLUpdate('terminals_state', $saved);
     } else {
-        SQLInsert('terminals_state', array('TERMINAL_ID' => $tid, 'PLAYER_STATE' => json_encode($state), 'SAVED' => $now));
+        // SQLInsert() принимает запись по ссылке — только переменная
+        $saved = array('TERMINAL_ID' => $tid, 'PLAYER_STATE' => json_encode($state), 'SAVED' => $now);
+        SQLInsert('terminals_state', $saved);
     }
     DebMes('Player command during messages on ' . $terminal_rec['TITLE'] . " — after them: $command $param", 'terminals');
     terminalsQueueUnlock($tid);
