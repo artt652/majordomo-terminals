@@ -20,19 +20,26 @@
  *   есть isPlaying() и плеер к этому времени ещё играет сообщение, ожидание продлевается по 2 с,
  *   не больше terminals::QUEUE_PLAYING_CHECKS раз. Нет isPlaying() или плеер не ответил —
  *   остаётся расчётное время.
- * - текст без озвучки и картинка (kind text: страница «Сообщения», голос выключен) голос не задерживают: окно висит
+ * - текст без озвучки и картинка (kind text: terminalSay(…, $silent = true)) голос не задерживают: окно висит
  *   своё время (на чтение), но следующие сообщения идут сразу, не дожидаясь его; очередь возвращает то, что
- *   было до сообщений (и гасит экран pipup), только когда и это окно отвисело;
- * - вызовы методов дополнения (terminalsQueueCall(): sendImage, sendSound, sendWebImage, sendVideo
- *   у pipup) встают в ту же очередь: ждут конца текущего сообщения, звук и видео держат терминал своё
+ *   было до сообщений (дополнение — restoreState()), только когда и это окно отвисело;
+ * - вызовы методов дополнения (terminalsQueueCall(): sendImage, sendSound, sendWebImage, sendVideo и методы,
+ *   которые дополнение объявило в queueMethods()) встают в ту же очередь: ждут конца текущего сообщения, звук и видео держат терминал своё
  *   время, картинка — нет (только порядок). Видеопотоки (камеры) в очередь не ставятся — их окно
  *   продлевается повторным вызовом с тем же id, их отправляют напрямую.
+ * - номера записей вызывающего модуля ($refs, через запятую): когда запись отдана устройству — событие
+ *   TERMINAL_DELIVERED (terminal, terminal_id, refs), например «доставлено» в переписке.
  */
 
-// Методы дополнения, которые можно ставить в очередь через terminalsQueueCall()
-function terminalsQueueCallMethods()
+// Методы дополнения, которые можно ставить в очередь через terminalsQueueCall(): общие и те, что дополнение
+// объявило само (необязательный метод queueMethods() — список имён)
+function terminalsQueueCallMethods($tts = null)
 {
-    return array('sendImage', 'sendSound', 'sendWebImage', 'sendVideo');
+    $methods = array('sendImage', 'sendSound', 'sendWebImage', 'sendVideo');
+    if (is_object($tts) && method_exists($tts, 'queueMethods')) {
+        $methods = array_merge($methods, array_values(array_filter((array)$tts->queueMethods(), 'is_string')));
+    }
+    return array_values(array_unique($methods));
 }
 
 // Вызвать метод дополнения TTS терминала через очередь (для сценариев):
@@ -42,17 +49,17 @@ function terminalsQueueCallMethods()
 //           'busy' — сколько секунд терминал занят после вызова (по умолчанию у sendSound —
 //           длительность окна, 4-й аргумент, иначе 15 с; у sendVideo — duration из опций, иначе 60 с;
 //           у картинок 0 — следующее сразу);
-//           'message_ids' — номера сообщений страницы «Сообщения»: отдано устройству — «доставлено».
+//           'refs' — номера записей вызывающего модуля: отдано устройству — событие TERMINAL_DELIVERED.
 // Дополнение без очереди (useQueue) — метод вызывается сразу. Возвращает результат метода
 // (или true — поставлено в очередь), false — нет терминала, дополнения или такого метода.
 function terminalsQueueCall($terminal, $method, $args = array(), $options = array())
 {
-    $terminal_rec = is_array($terminal) ? $terminal : (function_exists('terminalsFind') ? terminalsFind($terminal) : array());
-    if (empty($terminal_rec['ID']) || !in_array($method, terminalsQueueCallMethods(), true)) {
+    $terminal_rec = is_array($terminal) ? $terminal : terminalsFind($terminal);
+    if (empty($terminal_rec['ID'])) {
         return false;
     }
     $tts = terminalsQueueAddon($terminal_rec);
-    if (!is_object($tts) || !method_exists($tts, $method)) {
+    if (!is_object($tts) || !method_exists($tts, $method) || !in_array($method, terminalsQueueCallMethods($tts), true)) {
         return false;
     }
     $args = array_values((array)$args);
@@ -71,7 +78,7 @@ function terminalsQueueCall($terminal, $method, $args = array(), $options = arra
     }
     $call = array('method' => $method, 'args' => $args, 'busy' => max(0, $busy));
     return terminalsQueueAdd($terminal_rec, 'call', $call, isset($options['level']) ? (int)$options['level'] : 0, '',
-        '', '', isset($options['message_ids']) ? (string)$options['message_ids'] : '');
+        '', '', isset($options['refs']) ? (string)$options['refs'] : '');
 }
 
 // Дополнение TTS терминала (или null)
@@ -160,11 +167,11 @@ function terminalsQueueUsed($tts)
     return is_object($tts) && method_exists($tts, 'useQueue') && $tts->useQueue();
 }
 
-// $kind: say, ask, text (текст или картинка без озвучки — терминал не занимает), cached (голос фразы), sound (звуковой файл — terminalsSend), call (метод дополнения —
-// terminalsQueueCall(), $message — массив method/args/busy); $sender — от кого (заголовок окна);
-// $message_ids — номера сообщений страницы «Сообщения» (через запятую): когда запись отдана устройству — «доставлено»;
-// $duration — длительность звукового файла, если известна заранее (страница «Сообщения» присылает её для записей
-// из браузера, в которых её нет), иначе — из файла (terminals_media.inc.php)
+// $kind: say, ask, text (текст или картинка без озвучки — терминал не занимает), cached (голос фразы), sound (звуковой файл),
+// call (метод дополнения — terminalsQueueCall(), $message — массив method/args/busy); $sender — от кого (заголовок окна);
+// $message_ids — номера записей вызывающего модуля (через запятую): когда запись отдана устройству — событие TERMINAL_DELIVERED;
+// $duration — длительность звукового файла, если известна заранее (например, у записей из браузера её часто нет
+// в самом файле), иначе — из файла (terminals_media.inc.php)
 function terminalsQueueAdd($terminal_rec, $kind, $message, $level, $file, $image = '', $sender = '', $message_ids = '', $duration = 0)
 {
     $duration = max(0, min(3600, (int)ceil((float)$duration)));
@@ -174,7 +181,7 @@ function terminalsQueueAdd($terminal_rec, $kind, $message, $level, $file, $image
     if (!$tid || !terminalsQueueLock($tid)) {
         // без ID или очередь занята другим процессом слишком долго — не теряем сообщение
         $played = terminalsQueuePlay($terminal_rec, $kind, $message, $level, $file, $image, $sender, $duration);
-        terminalsQueueDelivered($played[0], $message_ids);
+        terminalsQueueDelivered($terminal_rec, $played[0], $message_ids);
         return $played[0];
     }
     $now = time();
@@ -204,7 +211,7 @@ function terminalsQueueAdd($terminal_rec, $kind, $message, $level, $file, $image
     }
     if ($busy && $current['MESSAGE'] === $key) {
         // та же фраза уже звучит — это сообщение тоже доставлено
-        terminalsQueueDelivered(true, $message_ids);
+        terminalsQueueDelivered($terminal_rec, true, $message_ids);
         if ($kind == 'cached' && $current['FILENAME'] == '') {
             // голос фразы, текст которой уже показан: звучит сразу, терминал занят дольше
             // (с картинкой этой фразы, если она была)
@@ -304,7 +311,7 @@ function terminalsQueueAdd($terminal_rec, $kind, $message, $level, $file, $image
         }
         $rec['STARTED'] = $now;
         $played = terminalsQueuePlay($terminal_rec, $kind, $message, $level, $file, $image, $sender, $duration);
-        terminalsQueueDelivered($played[0], $message_ids);
+        terminalsQueueDelivered($terminal_rec, $played[0], $message_ids);
         $rec['FINISH'] = $now + $played[1];
         SQLInsert('terminals_queue', $rec);
         $result = $played[0];
@@ -371,7 +378,7 @@ function terminalsQueueNext($tid, $check = 0)
         }
         $played = terminalsQueuePlay($terminal_rec, $next['KIND'], $message, (int)$next['LEVEL'], $next['FILENAME'], (string)$next['IMAGE'],
             (string)$next['SENDER'], isset($next['DURATION']) ? (int)$next['DURATION'] : 0);
-        terminalsQueueDelivered($played[0], isset($next['MESSAGE_IDS']) ? $next['MESSAGE_IDS'] : '');
+        terminalsQueueDelivered($terminal_rec, $played[0], isset($next['MESSAGE_IDS']) ? $next['MESSAGE_IDS'] : '');
         $next['STARTED'] = $now;
         $next['FINISH'] = $now + $played[1];
         SQLUpdate('terminals_queue', $next);
@@ -406,11 +413,13 @@ function terminalsQueueIds($a, $b)
     return substr(implode(',', $ids), 0, 255);
 }
 
-// Дополнение приняло запись очереди — её сообщения страницы «Сообщения» доставлены
-function terminalsQueueDelivered($played, $message_ids)
+// Дополнение приняло запись — событие TERMINAL_DELIVERED для вызывающего модуля (номера его записей)
+function terminalsQueueDelivered($terminal_rec, $played, $refs)
 {
-    if ($played && $message_ids != '' && function_exists('terminalsMessagesDelivered')) {
-        terminalsMessagesDelivered($message_ids);
+    $refs = implode(',', array_filter(array_map('intval', explode(',', (string)$refs))));
+    if ($played && $refs != '') {
+        terminalsEvent('TERMINAL_DELIVERED', array('terminal' => isset($terminal_rec['NAME']) ? $terminal_rec['NAME'] : '',
+            'terminal_id' => isset($terminal_rec['ID']) ? (int)$terminal_rec['ID'] : 0, 'refs' => $refs));
     }
 }
 
@@ -429,7 +438,7 @@ function terminalsQueuePlay($terminal_rec, $kind, $message, $level, $file, $imag
     if ($kind == 'call') {
         // метод дополнения из сценария (terminalsQueueCall)
         $method = (is_array($message) && isset($message['method'])) ? (string)$message['method'] : '';
-        if (in_array($method, terminalsQueueCallMethods(), true) && method_exists($tts, $method)) {
+        if (in_array($method, terminalsQueueCallMethods($tts), true) && method_exists($tts, $method)) {
             DebMes('Calling ' . $method . ' on ' . $terminal_rec['TITLE'] . " ($addr): "
                 . terminalsLogSafe(json_encode($message['args'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)), 'terminals');
             $result = call_user_func_array(array($tts, $method), isset($message['args']) ? array_values((array)$message['args']) : array());
@@ -440,10 +449,10 @@ function terminalsQueuePlay($terminal_rec, $kind, $message, $level, $file, $imag
         return terminalsQueuePlayed($terminal_rec, $addr, $kind, $result, $busy);
     }
     if ($kind == 'sound') {
-        // звуковой файл (terminalsSend): дополнению, которое умеет playFile()
+        // звуковой файл: дополнению, которое умеет playFile()
         if (method_exists($tts, 'playFile')) {
             DebMes("Playing sound to " . $terminal_rec['TITLE'] . " ($addr, level $level): $file", 'terminals');
-            // длительность — 4-м аргументом: pipup держит окно (и звук) не меньше; остальные дополнения его не берут
+            // длительность — 4-м аргументом: дополнение с окном (pipup) держит его не меньше; остальные его не берут
             $result = $tts->playFile($file, $level, $sender, $duration);
             if ($result) {
                 $seconds = ($duration > 0) ? $duration : terminalsQueueFileSeconds($file);
@@ -595,7 +604,7 @@ function terminalsQueueSaveState($terminal_rec)
     DebMes('Player state saved for ' . $terminal_rec['TITLE'] . ': ' . $rec['PLAYER_STATE'], 'terminals');
 }
 
-// Дописать значение в сохранённое состояние серии (pipup: «экран будил модуль»); нет состояния — ничего
+// Дописать значение в сохранённое состояние серии (например, pipup: «экран будил модуль»); нет состояния — ничего
 function terminalsQueueStateMark($tid, $key, $value)
 {
     $saved = SQLSelectOne("SELECT * FROM terminals_state WHERE TERMINAL_ID=" . (int)$tid . " LIMIT 1");

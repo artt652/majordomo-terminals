@@ -13,9 +13,12 @@
 include_once(DIR_MODULES . 'terminals/terminals_media.inc.php');
 include_once(DIR_MODULES . 'terminals/terminals_queue.inc.php');
 include_once(DIR_MODULES . 'terminals/terminals_settings.inc.php');
-include_once(DIR_MODULES . 'terminals/terminals_send.inc.php');
-include_once(DIR_MODULES . 'terminals/terminals_auth.inc.php');
-include_once(DIR_MODULES . 'terminals/terminals_go2rtc.inc.php');
+
+// Версия возможностей модуля для других модулей и дополнений: очередь, настройки дополнений, события
+// TERMINAL_DELIVERED / TERMINAL_RENAMED / TERMINAL_DELETED (README, «Для других модулей»)
+if (!defined('TERMINALS_API')) {
+    define('TERMINALS_API', 1);
+}
 
 class terminals extends module
 {
@@ -171,8 +174,7 @@ class terminals extends module
      */
     function usual(&$out)
     {
-        // страница «Сообщения»: обмен сообщениями между терминалами (terminals_messages.inc.php)
-        include DIR_MODULES . 'terminals/terminals_messages.inc.php';
+        $this->admin($out);
     }
 
     /**
@@ -206,7 +208,8 @@ class terminals extends module
             SQLExec('DELETE FROM `terminals` WHERE `ID` = ' . $rec['ID']);
             SQLExec('DELETE FROM `terminals_queue` WHERE `TERMINAL_ID` = ' . (int)$rec['ID']);
             SQLExec('DELETE FROM `terminals_state` WHERE `TERMINAL_ID` = ' . (int)$rec['ID']);
-            SQLExec('DELETE FROM `terminals_tokens` WHERE `TERMINAL_ID` = ' . (int)$rec['ID']);
+            // другие модули убирают своё (переписка, ключи, права на камеры)
+            terminalsEvent('TERMINAL_DELETED', array('terminal' => $rec['NAME'], 'terminal_id' => (int)$rec['ID']));
         }
     }
 
@@ -241,9 +244,10 @@ class terminals extends module
         }
     }
 
-    // $message_id — номер сообщения страницы «Сообщения» (terminals_messages): отметка «доставлено»;
+    // $image — картинка, $sender — от кого (заголовок окна) — дополнениям с showMessage();
+    // $ref — номер записи вызывающего модуля: когда сообщение отдано устройству — событие TERMINAL_DELIVERED;
     // $silent — текст или картинка без озвучки: в очереди не задерживает следующие сообщения
-    function terminalSay($terminal_rec, $message, $level, $image = '', $sender = '', $message_id = 0, $silent = false)
+    function terminalSay($terminal_rec, $message, $level, $image = '', $sender = '', $ref = 0, $silent = false)
     {
         $asking = 0;
         if ($level === 'ask') {
@@ -258,7 +262,7 @@ class terminals extends module
             return false;
         }
         if (terminalsQueueUsed(terminalsQueueAddon($terminal_rec))) {
-            return terminalsQueueAdd($terminal_rec, $asking ? 'ask' : ($silent ? 'text' : 'say'), $message, $level, '', $image, $sender, $message_id);
+            return terminalsQueueAdd($terminal_rec, $asking ? 'ask' : ($silent ? 'text' : 'say'), $message, $level, '', $image, $sender, $ref);
         }
         DebMes("Saying to " . $terminal_rec['TITLE'] . ' (level ' . $level . '): ' . $message, 'terminals');
         include_once DIR_MODULES . 'terminals/tts_addon.class.php';
@@ -275,9 +279,7 @@ class terminals extends module
                 $result = $tts->say($message, $level);
             }
             // дополнение без очереди приняло сообщение — доставлено
-            if ($message_id && $result !== false && function_exists('terminalsMessagesDelivered')) {
-                terminalsMessagesDelivered($message_id);
-            }
+            terminalsQueueDelivered($terminal_rec, $result !== false, (string)(int)$ref);
         } else {
             DebMes("Could not find $addon_file", 'terminals');
         }
@@ -315,10 +317,10 @@ class terminals extends module
             if ($event == 'ASK') {
                 $details['level'] = 'ask';
             }
-            // картинка и отправитель — от terminalsSend()
+            // необязательные поля события: картинка, от кого, номер записи вызывающего модуля
             $this->terminalSay($terminal_rec, $details['message'], $details['level'],
                 isset($details['image']) ? (string)$details['image'] : '', isset($details['from']) ? (string)$details['from'] : '',
-                isset($details['message_id']) ? (int)$details['message_id'] : 0);
+                isset($details['ref']) ? (int)$details['ref'] : 0);
         } elseif ($event == 'SAY_CACHED_READY') {
             $filename = $details['filename'];
             if (!file_exists($filename)) return false;
@@ -363,14 +365,6 @@ class terminals extends module
             SQLExec('UPDATE terminals SET IS_ONLINE=0 WHERE LATEST_ACTIVITY < (NOW() - INTERVAL 90 MINUTE)'); //
         } elseif ($event == 'MINUTELY') {
             terminalsQueueWatchdog();
-            // ссылки внешнего просмотра камер (WebTorrent), срок которых вышел
-            terminalsGo2rtcSharesCleanup();
-            // переписка страницы «Сообщения»: чистка раз в сутки
-            if (!isset($this->config['MESSAGES_CLEANUP_DAY']) || $this->config['MESSAGES_CLEANUP_DAY'] != date('Y-m-d')) {
-                $this->config['MESSAGES_CLEANUP_DAY'] = date('Y-m-d');
-                $this->saveConfig();
-                terminalsMessagesCleanup(terminalsHistoryDays($this->config));
-            }
         } elseif ($event == 'startup') {
             terminalsQueueReset();
         } elseif ($event == 'SAYREPLY') {
@@ -444,10 +438,6 @@ class terminals extends module
         SQLDropTable('terminals');
         SQLDropTable('terminals_queue');
         SQLDropTable('terminals_state');
-        SQLDropTable('terminals_messages');
-        SQLDropTable('terminals_groups');
-        SQLDropTable('terminals_colors');
-        SQLDropTable('terminals_tokens');
         unsubscribeFromEvent($this->name, 'SAY');
         unsubscribeFromEvent($this->name, 'SAYTO');
         unsubscribeFromEvent($this->name, 'ASK');
@@ -516,56 +506,6 @@ class terminals extends module
  terminals_state: PLAYER_STATE text
  terminals_state: SAVED int(10) NOT NULL DEFAULT '0'
  terminals_state: INDEX (TERMINAL_ID)
-
- terminals_messages: ID int(10) unsigned NOT NULL auto_increment
- terminals_messages: FROM_NAME varchar(255) NOT NULL DEFAULT ''
- terminals_messages: TO_NAME varchar(255) NOT NULL DEFAULT ''
- terminals_messages: MESSAGE text
- terminals_messages: IMAGE varchar(255) NOT NULL DEFAULT ''
- terminals_messages: SOUND varchar(255) NOT NULL DEFAULT ''
- terminals_messages: ADDED int(10) NOT NULL DEFAULT '0'
- terminals_messages: VIDEO varchar(255) NOT NULL DEFAULT ''
- terminals_messages: FILE varchar(255) NOT NULL DEFAULT ''
- terminals_messages: FILE_NAME varchar(255) NOT NULL DEFAULT ''
- terminals_messages: FORWARDED varchar(255) NOT NULL DEFAULT ''
- terminals_messages: CHAT varchar(50) NOT NULL DEFAULT ''
- terminals_messages: SEND_ID varchar(32) NOT NULL DEFAULT ''
- terminals_messages: STREAM varchar(100) NOT NULL DEFAULT ''
- terminals_messages: LINK varchar(32) NOT NULL DEFAULT ''
- terminals_messages: DELIVERED int(10) NOT NULL DEFAULT '0'
- terminals_messages: READ_AT int(10) NOT NULL DEFAULT '0'
- terminals_messages: FROM_ID int(10) NOT NULL DEFAULT '0'
- terminals_messages: TO_ID int(10) NOT NULL DEFAULT '0'
- terminals_messages: FROM_USER int(10) NOT NULL DEFAULT '0'
- terminals_messages: TO_USER int(10) NOT NULL DEFAULT '0'
- terminals_messages: HIDE_FROM int(3) NOT NULL DEFAULT '0'
- terminals_messages: HIDE_TO int(3) NOT NULL DEFAULT '0'
- terminals_messages: INDEX (TO_NAME)
- terminals_messages: INDEX (TO_ID)
- terminals_messages: INDEX (FROM_ID)
- terminals_messages: INDEX (TO_USER)
-
- terminals_tokens: ID int(10) unsigned NOT NULL auto_increment
- terminals_tokens: TERMINAL_ID int(10) NOT NULL DEFAULT '0'
- terminals_tokens: USER_ID int(10) NOT NULL DEFAULT '0'
- terminals_tokens: TOKEN varchar(64) NOT NULL DEFAULT ''
- terminals_tokens: REQUIRED int(3) NOT NULL DEFAULT '0'
- terminals_tokens: CREATED int(10) NOT NULL DEFAULT '0'
- terminals_tokens: LAST_USED int(10) NOT NULL DEFAULT '0'
- terminals_tokens: INDEX (TERMINAL_ID)
- terminals_tokens: INDEX (USER_ID)
- terminals_tokens: INDEX (TOKEN)
-
- terminals_colors: ID int(10) unsigned NOT NULL auto_increment
- terminals_colors: CHAT_KEY varchar(100) NOT NULL DEFAULT ''
- terminals_colors: COLOR varchar(10) NOT NULL DEFAULT ''
- terminals_colors: EMOJI varchar(100) NOT NULL DEFAULT ''
-
- terminals_groups: ID int(10) unsigned NOT NULL auto_increment
- terminals_groups: TITLE varchar(255) NOT NULL DEFAULT ''
- terminals_groups: MEMBERS text
- terminals_groups: NOTE text
- terminals_groups: ADDED int(10) NOT NULL DEFAULT '0'
 EOD;
         parent::dbInstall($data);
 
@@ -579,31 +519,6 @@ EOD;
             SQLUpdate('terminals', $terminal);
         }
 
-        // Отдельные типы TTS для плееров (mpd_tts, lms_tts, kodi_tts, chromecast_tts, dnla_tts) объединены
-        // в mediaplayer: он сам учитывает тип плеера. Терминалам — mediaplayer с их прежними настройками,
-        // файлы прежних типов (только эти, наследники mediaplayer) — удалить, чтобы не было в списке типов
-        $merged = array('mpd_tts', 'lms_tts', 'kodi_tts', 'chromecast_tts', 'dnla_tts');
-        foreach (SQLSelect("SELECT ID, TTS_TYPE, TTS_SETTINGS FROM terminals WHERE TTS_TYPE IN ('" . implode("','", $merged) . "')") as $terminal) {
-            $settings = json_decode((string)$terminal['TTS_SETTINGS'], true);
-            $settings = is_array($settings) ? $settings : array();
-            if (!isset($settings['mediaplayer']) && isset($settings[$terminal['TTS_TYPE']])) {
-                $settings['mediaplayer'] = $settings[$terminal['TTS_TYPE']];
-            }
-            SQLUpdate('terminals', array('ID' => (int)$terminal['ID'], 'TTS_TYPE' => 'mediaplayer', 'TTS_SETTINGS' => json_encode($settings)));
-        }
-        foreach ($merged as $name) {
-            $file = DIR_MODULES . 'terminals/tts/' . $name . '.addon.php';
-            if (is_file($file) && strpos((string)@file_get_contents($file), 'class ' . $name . ' extends mediaplayer') !== false) {
-                @unlink($file);
-            }
-        }
-
-        // ключ доступа к странице «Сообщения» — каждому терминалу (terminals_auth.inc.php)
-        terminalsTokenEnsureAll();
-        // переписка «Сообщений» узнаёт терминалы по ID (переименование не теряет историю): прежним записям —
-        // ID по имени терминала
-        SQLExec("UPDATE terminals_messages m JOIN terminals t ON t.NAME=m.TO_NAME SET m.TO_ID=t.ID WHERE m.TO_ID=0");
-        SQLExec("UPDATE terminals_messages m JOIN terminals t ON t.NAME=m.FROM_NAME SET m.FROM_ID=t.ID WHERE m.FROM_ID=0");
     }
 // --------------------------------------------------------------------
 }

@@ -74,8 +74,9 @@ if ($this->mode == 'update') {
     if ($ok) {
         if ($rec['ID']) {
             SQLUpdate($table_name, $rec); // update
+            // другие модули хранят имя терминала (переписка, права на камеры) — переносят на новое
             if ($old_name != '' && $old_name != $rec['NAME']) {
-                terminalsRenamed($old_name, $rec['NAME'], (int)$rec['ID']);
+                terminalsEvent('TERMINAL_RENAMED', array('old' => $old_name, 'new' => $rec['NAME'], 'terminal_id' => (int)$rec['ID']));
             }
         } else {
             $new_rec = 1;
@@ -84,72 +85,6 @@ if ($this->mode == 'update') {
         $out['OK'] = 1;
     } else {
         $out['ERR'] = 1;
-    }
-}
-
-// отправка сообщения на этот терминал (форма «Отправить сообщение», terminals_send.inc.php)
-if ($this->mode == 'send' && is_array($rec) && !empty($rec['ID'])) {
-    $send_options = array(
-        'from' => gr('send_from'),
-        'image' => gr('send_image'),
-        'sound' => gr('send_sound'),
-        'voice' => gr('send_voice', 'int'),
-    );
-    if (gr('send_level') !== '') {
-        $send_options['level'] = gr('send_level', 'int');
-    }
-    $out['SENT'] = terminalsSend($rec['NAME'], gr('send_message'), $send_options) ? 1 : 0;
-    $out['SEND_FAILED'] = $out['SENT'] ? 0 : 1;
-}
-// ключ доступа к странице «Сообщения»: всегда есть (нет — создаётся), «Пересоздать» — новый
-if (is_array($rec) && !empty($rec['ID'])) {
-    if ($this->mode == 'token_create') {
-        terminalsTokenCreate($rec['ID']);
-        $out['TOKEN_RECREATED'] = 1;
-    } elseif ($this->mode == 'token_required') {
-        terminalsTokenSetRequired($rec['ID'], gr('token_required', 'int'));
-        $out['TOKEN_SAVED'] = 1;
-    }
-    $out['TOKEN'] = terminalsTokenGet($rec['ID']);
-    $token_row = terminalsTokenRow($rec['ID']);
-    $out['TOKEN_CREATED'] = !empty($token_row['CREATED']) ? date('d.m.Y H:i', (int)$token_row['CREATED']) : '';
-    $out['TOKEN_LAST_USED'] = !empty($token_row['LAST_USED']) ? date('d.m.Y H:i', (int)$token_row['LAST_USED']) : '';
-    $out['TOKEN_PAGE'] = ROOTHTML . 'popup/app_messages.html';
-    $out['TOKEN_REQUIRED'] = !empty($token_row['REQUIRED']) ? 1 : 0;
-}
-
-// экран устройства PiPup (форк >= 0.28): состояние и кнопки на вкладке «Отправить сообщение»
-if (is_array($rec) && !empty($rec['ID']) && ($rec['TTS_TYPE'] == 'pipup' || $rec['PLAYER_TYPE'] == 'pipup_play')
-    && is_file(DIR_MODULES . 'terminals/tts/pipup.addon.php')) {
-    include_once DIR_MODULES . 'terminals/tts_addon.class.php';
-    include_once DIR_MODULES . 'terminals/tts/pipup.addon.php';
-    $pipup = new pipup($rec);
-    if ($this->mode == 'screen') {
-        $ok = $pipup->screen(gr('screen_state'));
-        $out[$ok ? 'SCREEN_DONE' : 'SCREEN_FAILED'] = 1;
-    }
-    $screen = $pipup->screenState(true);
-    $out['SCREEN_SHOW'] = 1;
-    $out['SCREEN_TEXT'] = terminalsScreenText($screen);
-    $out['SCREEN_KNOWN'] = is_array($screen) ? 1 : 0;
-    $out['SCREEN_CAN_SLEEP'] = (is_array($screen) && $screen['can_sleep']) ? 1 : 0;
-}
-
-// открыть вкладку той формы, кнопку которой нажали. Через $this->tab: после admin() модуль
-// записывает $out['TAB'] = $this->tab (terminals.class.php), прямое $out['TAB'] затиралось
-if (strpos((string)$this->mode, 'token_') === 0) {
-    $this->tab = 'tab_access';
-} elseif ($this->mode == 'send' || $this->mode == 'screen') {
-    $this->tab = 'tab_send';
-}
-$out['TAB'] = isset($this->tab) ? $this->tab : '';
-
-$out['SEND_TERMINALS'] = SQLSelect("SELECT NAME, TITLE FROM terminals WHERE ID!=" . (int)(is_array($rec) ? $rec['ID'] : 0) . " ORDER BY TITLE");
-$out['SEND_SOUNDS'] = array();
-$sound_files = is_dir(ROOT . 'cms/sounds') ? scandir(ROOT . 'cms/sounds') : array();
-foreach ((array)$sound_files as $sound_file) {
-    if (preg_match('/\.(mp3|wav|ogg)$/i', $sound_file)) {
-        $out['SEND_SOUNDS'][] = array('FILE' => 'cms/sounds/' . $sound_file, 'TITLE' => $sound_file);
     }
 }
 

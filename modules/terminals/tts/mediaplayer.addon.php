@@ -129,7 +129,7 @@ class mediaplayer extends tts_addon
             terminalsSignalField(),
             array('NAME' => 'SHOW_VIDEO', 'TITLE' => terminalsLang('TERMINALS_SHOW_VIDEO'), 'TYPE' => 'checkbox',
                 'DEFAULT' => $this->showVideoDefault() ? '1' : '0'),
-            // камеры go2rtc (terminals_go2rtc.inc.php): RTSP — VLC без модуля live555 (сборки Debian, Raspberry Pi OS)
+            // камеры (модуль go2rtc): RTSP — VLC без модуля live555 (сборки Debian, Raspberry Pi OS)
             // и Chromecast его не играют; HTTP (MP4) — с API go2rtc, по TCP, нужен доступ к нему без пароля
             array('NAME' => 'CAMERA_FORMAT', 'TITLE' => terminalsLang('TERMINALS_PLAYER_CAMERA_FORMAT'), 'TYPE' => 'select',
                 'OPTIONS' => array('rtsp' => 'RTSP', 'mp4' => 'HTTP (MP4)'), 'DEFAULT' => $this->streamFormatDefault(),
