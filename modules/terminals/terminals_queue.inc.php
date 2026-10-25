@@ -269,7 +269,7 @@ function terminalsQueueUrgentSql()
 function terminalsQueueAdd($terminal_rec, $kind, $message, $level, $file, $image = '', $sender = '', $message_ids = '', $duration = 0)
 {
     $duration = max(0, min(3600, (int)ceil((float)$duration)));
-    $message_ids = implode(',', array_filter(array_map('intval', explode(',', (string)$message_ids))));
+    $message_ids = terminalsQueueIds($message_ids, '');
     $tid = isset($terminal_rec['ID']) ? (int)$terminal_rec['ID'] : 0;
     $urgent = ($kind == 'ask' || (int)$level >= terminals::QUEUE_URGENT_LEVEL);
     if (!$tid || !terminalsQueueLock($tid)) {
@@ -545,17 +545,24 @@ function terminalsQueueScheduleNext($tid)
 }
 
 
-// Объединить списки номеров сообщений («1,2» + «3» = «1,2,3»)
+// Объединить списки меток записей («1,2» + «3» = «1,2,3»). Метка — номер или «модуль:номер» (app_messages:15):
+// с именем модуля подписчик TERMINAL_DELIVERED отличает свои записи от чужих. Остальное отбрасывается
 function terminalsQueueIds($a, $b)
 {
-    $ids = array_unique(array_filter(array_map('intval', array_merge(explode(',', (string)$a), explode(',', (string)$b)))));
-    return substr(implode(',', $ids), 0, 255);
+    $ids = array();
+    foreach (array_merge(explode(',', (string)$a), explode(',', (string)$b)) as $ref) {
+        $ref = trim($ref);
+        if (preg_match('/^(?:[a-z][a-z0-9_]{0,40}:)?[1-9]\d{0,18}$/i', $ref)) {
+            $ids[] = $ref;
+        }
+    }
+    return substr(implode(',', array_unique($ids)), 0, 255);
 }
 
 // Дополнение приняло запись — событие TERMINAL_DELIVERED для вызывающего модуля (номера его записей)
 function terminalsQueueDelivered($terminal_rec, $played, $refs)
 {
-    $refs = implode(',', array_filter(array_map('intval', explode(',', (string)$refs))));
+    $refs = terminalsQueueIds($refs, '');
     if ($played && $refs != '') {
         terminalsEvent('TERMINAL_DELIVERED', array('terminal' => isset($terminal_rec['NAME']) ? $terminal_rec['NAME'] : '',
             'terminal_id' => isset($terminal_rec['ID']) ? (int)$terminal_rec['ID'] : 0, 'refs' => $refs));

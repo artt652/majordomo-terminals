@@ -77,8 +77,8 @@ $details['ignoreVoice'] = true;
 
 **Отправка на терминал**
 - `terminalSay($terminal_rec, $message, $level, $image = '', $sender = '', $ref = 0, $silent = false)` — метод класса `terminals`.
-- Событие `SAYTO` принимает необязательные поля `image`, `from` и `ref` (номер записи вызывающего модуля).
-- `terminalsQueueCall($terminal, $method, $args, $options)` — метод дополнения через очередь (для сценариев). Общие методы: `sendImage`, `sendSound`, `sendWebImage`, `sendVideo`; дополнение может объявить свои методом `queueMethods()`. `$options`: `level`, `busy` (сколько секунд полоса занята), `lane` (полоса, если не подходит выбранная по методу: `sendImage` / `sendWebImage` — картинка, `sendVideo` — ролик, поток (`rtsp://…` или тип `stream`) — камера, остальное — голос), `refs` (номера записей).
+- Событие `SAYTO` принимает необязательные поля `image`, `from` и `ref` — метка записи вызывающего модуля: номер или «модуль:номер» (`app_messages:15`). С именем модуля подписчик `TERMINAL_DELIVERED` отличает свои записи от чужих.
+- `terminalsQueueCall($terminal, $method, $args, $options)` — метод дополнения через очередь (для сценариев). Общие методы: `sendImage`, `sendSound`, `sendWebImage`, `sendVideo`; дополнение может объявить свои методом `queueMethods()`. `$options`: `level`, `busy` (сколько секунд полоса занята), `lane` (полоса, если не подходит выбранная по методу: `sendImage` / `sendWebImage` — картинка, `sendVideo` — ролик, поток (`rtsp://…` или тип `stream`) — камера, остальное — голос), `refs` (метки записей).
 
   ```php
   include_once(DIR_MODULES . 'terminals/terminals.class.php');
@@ -90,7 +90,7 @@ $details['ignoreVoice'] = true;
 
 | Событие | Когда | Поля |
 |---|---|---|
-| `TERMINAL_DELIVERED` | сообщение с номером записи отдано устройству | `terminal`, `terminal_id`, `refs` (через запятую) |
+| `TERMINAL_DELIVERED` | сообщение с меткой записи отдано устройству | `terminal`, `terminal_id`, `refs` — метки через запятую (номера или «модуль:номер») |
 | `TERMINAL_RENAMED` | терминал переименован в карточке | `old`, `new`, `terminal_id` |
 | `TERMINAL_DELETED` | терминал удалён | `terminal`, `terminal_id` |
 

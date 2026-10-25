@@ -245,7 +245,7 @@ class terminals extends module
     }
 
     // $image — картинка, $sender — от кого (заголовок окна) — дополнениям с showMessage();
-    // $ref — номер записи вызывающего модуля: когда сообщение отдано устройству — событие TERMINAL_DELIVERED;
+    // $ref — метка записи вызывающего модуля (номер или «модуль:номер», например app_messages:15): когда сообщение отдано устройству — событие TERMINAL_DELIVERED;
     // $silent — текст или картинка без озвучки: в очереди не задерживает следующие сообщения
     function terminalSay($terminal_rec, $message, $level, $image = '', $sender = '', $ref = 0, $silent = false)
     {
@@ -279,7 +279,7 @@ class terminals extends module
                 $result = $tts->say($message, $level);
             }
             // дополнение без очереди приняло сообщение — доставлено
-            terminalsQueueDelivered($terminal_rec, $result !== false, (string)(int)$ref);
+            terminalsQueueDelivered($terminal_rec, $result !== false, (string)$ref);
         } else {
             DebMes("Could not find $addon_file", 'terminals');
         }
@@ -317,10 +317,10 @@ class terminals extends module
             if ($event == 'ASK') {
                 $details['level'] = 'ask';
             }
-            // необязательные поля события: картинка, от кого, номер записи вызывающего модуля
+            // необязательные поля события: картинка, от кого, метка записи вызывающего модуля
             $this->terminalSay($terminal_rec, $details['message'], $details['level'],
                 isset($details['image']) ? (string)$details['image'] : '', isset($details['from']) ? (string)$details['from'] : '',
-                isset($details['ref']) ? (int)$details['ref'] : 0);
+                isset($details['ref']) ? (string)$details['ref'] : '');
         } elseif ($event == 'SAY_CACHED_READY') {
             $filename = $details['filename'];
             if (!file_exists($filename)) return false;
